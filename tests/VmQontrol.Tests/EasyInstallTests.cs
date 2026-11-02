@@ -33,6 +33,7 @@ public sealed class EasyInstallTests
         Assert.Equal("p<&>\"'", doc.SelectSingleNode("//u:LocalAccount/u:Password/u:Value", ns)!.InnerText);
         Assert.Contains(doc.SelectNodes("//u:PathAndCredentials/u:Path", ns)!.Cast<XmlNode>(), n => n.InnerText == @"E:\viostor\w11\amd64");
         Assert.Contains("virtio-win-guest-tools.exe", doc.SelectSingleNode("//u:FirstLogonCommands", ns)!.InnerText, StringComparison.Ordinal);
+        Assert.Contains("NewNetworkWindowOff", doc.SelectSingleNode("//u:settings[@pass='specialize']", ns)!.InnerText, StringComparison.Ordinal);
     }
 
     [Fact]

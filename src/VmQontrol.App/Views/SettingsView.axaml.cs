@@ -10,6 +10,12 @@ public partial class SettingsView : UserControl
     public SettingsView()
     {
         InitializeComponent();
+        this.FindControl<Button>("AddShare")!.Click += async (_, _) =>
+        {
+            if (TopLevel.GetTopLevel(this)?.StorageProvider is not { } storage || DataContext is not SettingsViewModel vm) return;
+            var folders = await storage.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = "Choose a folder to share with the machine" });
+            if (folders.Count > 0 && folders[0].TryGetLocalPath() is { } path) vm.AddShare(path);
+        };
         // "Change disc…" buttons inside the disc list: pick a file, then the view model puts it in the drive.
         AddHandler(Button.ClickEvent, async (_, e) =>
         {

@@ -61,8 +61,18 @@ public partial class MainWindow : Window
         }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         KeyDown += (_, e) =>
         {
-            // Escape closes the folder prompt, or a notice the way its Cancel/OK button does.
-            if (e.Key == Key.Escape && DataContext is ShellViewModel { FolderPrompt: { } prompt })
+            // Escape closes a prompt, the USB panel, the folder prompt, or a notice the way its Cancel/OK button does.
+            if (e.Key == Key.Escape && DataContext is ShellViewModel { Prompt: { Busy: false } open })
+            {
+                open.CancelCommand.Execute(null);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape && DataContext is ShellViewModel { UsbPanel: { } usb })
+            {
+                usb.CloseCommand.Execute(null);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape && DataContext is ShellViewModel { FolderPrompt: { } prompt })
             {
                 prompt.CancelCommand.Execute(null);
                 e.Handled = true;

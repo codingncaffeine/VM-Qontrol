@@ -172,6 +172,11 @@
             <TextBox Text="{Binding Bridge}" Width="200" HorizontalAlignment="Left" />
             <TextBlock Text="The name of a network bridge on this computer (e.g. br0). Bridging needs a one-time setup that the host check explains." Classes="help" />
           </StackPanel>
+          <StackPanel IsVisible="{Binding IsSegment}">
+            <TextBlock Text="Segment name" Classes="field" />
+            <TextBox Text="{Binding Segment}" Width="200" HorizontalAlignment="Left" />
+            <TextBlock Text="Machines with the same segment name see each other and nothing else, like computers on their own switch. Give each machine a fixed address (e.g. 10.10.0.1, 10.10.0.2…): the segment has no DHCP server yet." Classes="help" />
+          </StackPanel>
           <TextBlock Text="Adapter" Classes="field" />
           <ComboBox ItemsSource="{Binding NicModels}" SelectedItem="{Binding NicModel}" />
           <TextBlock Text="MAC address" Classes="field" />
@@ -273,6 +278,59 @@
           <Border Classes="badge-next"><TextBlock Text="Applies at next power on" /></Border>
           <ComboBox ItemsSource="{Binding SerialOptions}" SelectedItem="{Binding Serial}" Margin="0,10,0,0" />
           <TextBlock Text="Linux and BSD print their boot messages and a login prompt on it, shown in the machine's Console tab." Classes="help" />
+        </StackPanel>
+
+        <StackPanel IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=boot}" Spacing="2">
+          <TextBlock Text="Boot and devices" Classes="h1" />
+          <Border Classes="badge-next"><TextBlock Text="Applies at next power on" /></Border>
+          <TextBlock Text="Boot order" Classes="field" />
+          <ComboBox ItemsSource="{Binding BootOrders}" SelectedItem="{Binding BootOrder}" IsEnabled="{Binding !Uefi}" />
+          <TextBlock Text="For BIOS machines. A UEFI machine keeps its boot order in its firmware: use Power on to firmware setup (Ctrl+K) to change it there." Classes="help" />
+          <CheckBox Content="Show the boot menu for a few seconds at every power on" IsChecked="{Binding BootMenu}" Margin="0,10,0,0" />
+          <TextBlock Text="Lets you pick a device to start from with Esc. Power on to firmware setup does the same once." Classes="help" />
+          <CheckBox Content="Random-number generator" IsChecked="{Binding Rng}" Margin="0,14,0,0" />
+          <TextBlock Text="Gives the system a fast source of randomness for its encryption keys; keep it on." Classes="help" />
+          <CheckBox Content="Choose memory ballooning myself" IsChecked="{Binding !BalloonAuto}" Margin="0,14,0,0" />
+          <CheckBox Content="Memory ballooning" IsChecked="{Binding Balloon}" IsEnabled="{Binding !BalloonAuto}" Margin="24,4,0,0" />
+          <TextBlock Text="Lets the system give unused memory back to this computer. Automatic leaves it on except for older macOS releases." Classes="help" />
+          <TextBlock Text="Watchdog" Classes="field" />
+          <ComboBox ItemsSource="{Binding WatchdogOptions}" SelectedItem="{Binding Watchdog}" />
+          <TextBlock Text="A timer the system must keep resetting; if it hangs and stops, the machine is restarted (or powered off, or paused). Linux and Windows servers can use it." Classes="help" />
+          <CheckBox Content="Report crashes (pvpanic)" IsChecked="{Binding CrashReporting}" Margin="0,14,0,0" />
+          <TextBlock Text="The system tells VM Qontrol when it crashes, so the machine shows Crashed at once instead of looking frozen. Linux supports it; Windows needs the VirtIO drivers." Classes="help" />
+        </StackPanel>
+
+        <StackPanel IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=shares}" Spacing="8">
+          <TextBlock Text="Shared folders" Classes="h1" />
+          <Border Classes="badge-next"><TextBlock Text="Applies at next power on" /></Border>
+          <TextBlock Classes="muted" TextWrapping="Wrap"
+                     Text="A folder of this computer the machine can use like its own: files saved on either side are there on the other at once. Fast (virtiofs)." />
+          <ItemsControl ItemsSource="{Binding Shares}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ShareRow">
+                <Border Classes="card" Margin="0,0,0,10">
+                  <StackPanel Spacing="8">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <TextBlock Text="{Binding Path}" FontFamily="monospace" TextWrapping="Wrap" />
+                      <Button Grid.Column="1" Classes="tool danger" Content="Stop sharing" Command="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).RemoveShareCommand}" CommandParameter="{Binding}" />
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                      <TextBlock Text="Name in the machine" VerticalAlignment="Center" />
+                      <TextBox Text="{Binding Tag}" Width="180" />
+                      <CheckBox Content="Read only" IsChecked="{Binding ReadOnly}" />
+                    </StackPanel>
+                    <TextBlock Text="In Linux, mount it with:" Classes="help" />
+                    <Border Classes="code"><SelectableTextBlock Text="{Binding MountHint}" FontFamily="monospace" FontSize="12" /></Border>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <Button x:Name="AddShare" Classes="tool" Content="Share a folder…" HorizontalAlignment="Left" />
+          <Border Classes="card" IsVisible="{Binding IsWindowsGuest}">
+            <TextBlock TextWrapping="Wrap" Classes="help"
+                       Text="Windows needs two things once: the VirtIO drivers (virtio-win, with its virtio-fs service) and WinFsp from winfsp.dev. Then start the &quot;VirtIO-FS Service&quot; in Services, and the folder appears as drive Z:." />
+          </Border>
         </StackPanel>
 
         <StackPanel IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=advanced}" Spacing="2">

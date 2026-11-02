@@ -83,7 +83,7 @@ public static class Doctor
 
     /// <summary>Runs every check. <paramref name="onPath"/> and <paramref name="exists"/> are the system's unless a test supplies its own.</summary>
     public static IReadOnlyList<DoctorCheck> Run(HostCapabilities host, DistroFamily distro, string libraryRoot,
-        Func<string, bool>? onPath = null, Func<string, bool>? exists = null, Func<string, long?>? freeBytes = null)
+        Func<string, bool>? onPath = null, Func<string, bool>? exists = null, Func<string, long?>? freeBytes = null, Func<string, bool>? setuid = null)
     {
         onPath ??= OnPath;
         exists ??= p => File.Exists(p) || Directory.Exists(p);
@@ -147,6 +147,17 @@ public static class Doctor
                 distro == DistroFamily.Alpine ? "quickemu is not packaged for Alpine; use your own installer discs, or install quickemu from its project page." : "Without it you supply installer discs yourself.",
                 distro == DistroFamily.Alpine ? null : InstallCommand(distro, "quickemu")));
 
+        // Bridged networking: QEMU's setuid helper, and a bridge it is allowed to use.
+        var helper = new[] { "/usr/lib/qemu/qemu-bridge-helper", "/usr/libexec/qemu-bridge-helper" }.FirstOrDefault(exists);
+        if (helper is null)
+            checks.Add(new("Bridged networking", CheckStatus.Optional, "Machines can share this computer's connection (NAT) without it; putting them on your network directly needs QEMU's bridge helper.", InstallCommand(distro, "qemu")));
+        else if (!(setuid ?? IsSetuid)(helper))
+            checks.Add(new("Bridged networking", CheckStatus.Optional, "QEMU's bridge helper is installed but not allowed to set up a bridge for you. Run once:", $"sudo chmod u+s {helper}"));
+        else if (!exists("/etc/qemu/bridge.conf"))
+            checks.Add(new("Bridged networking", CheckStatus.Optional, "No bridge is allowed yet. Allow one (br0 here; use your bridge's name) once:", "echo 'allow br0' | sudo tee -a /etc/qemu/bridge.conf"));
+        else
+            checks.Add(new("Bridged networking", CheckStatus.Ok, "Machines can be put on your network through an allowed bridge (/etc/qemu/bridge.conf)."));
+
         if (freeBytes(libraryRoot) is { } free && free < 20L * 1024 * 1024 * 1024)
             checks.Add(new("Free disk space", CheckStatus.Warning, $"Only {free / (1024 * 1024 * 1024)} GB free where machines are kept ({libraryRoot}); a Windows machine needs about 64 GB."));
         return checks;
@@ -166,6 +177,18 @@ public static class Doctor
 
     private static bool OnPath(string name) =>
         (Environment.GetEnvironmentVariable("PATH") ?? "/usr/bin").Split(':', StringSplitOptions.RemoveEmptyEntries).Any(d => File.Exists(Path.Combine(d, name)));
+
+    private static bool IsSetuid(string file)
+    {
+        try
+        {
+            return (File.GetUnixFileMode(file) & UnixFileMode.SetUser) != 0;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+    }
 
     private static long? FreeBytes(string path)
     {

@@ -62,6 +62,18 @@ public sealed partial class DiskRow(DiskConfig disk, string machineDirectory) : 
     public DiskConfig ToConfig() => Original with { SizeGiB = (long)SizeGb, Bus = Enum.Parse<DiskBus>(Bus.Value!) };
 }
 
+/// <summary>A shared folder in the settings.</summary>
+public sealed partial class ShareRow(ShareConfig share) : ObservableObject
+{
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(MountHint))] private string _path = share.Path;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(MountHint))] private string _tag = share.Tag;
+    [ObservableProperty] private bool _readOnly = share.ReadOnly;
+
+    public string MountHint => $"sudo mkdir -p /mnt/{Tag} && sudo mount -t virtiofs {Tag} /mnt/{Tag}";
+
+    public ShareConfig ToConfig() => new() { Path = Path, Tag = Tag.Trim().Length > 0 ? Tag.Trim() : "share", ReadOnly = ReadOnly };
+}
+
 /// <summary>A forwarded port: a port on this computer that reaches a port in the machine.</summary>
 public sealed partial class ForwardRow(PortForward forward) : ObservableObject
 {
@@ -110,6 +122,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         new("input", "Keyboard and mouse", "Hardware"),
         new("firmware", "Firmware and TPM", "Hardware"),
         new("serial", "Serial port", "Hardware"),
+        new("boot", "Boot and devices", "Hardware"),
+        new("shares", "Shared folders", "Options"),
         new("advanced", "Advanced", "Options"),
         new("history", "Change history", "Options"),
     ];
@@ -121,6 +135,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         new("User", "NAT: share this computer's connection (recommended)"),
         new("Restricted", "NAT without internet: this computer only"),
         new("Bridge", "Bridged: a device on your own network"),
+        new("Segment", "Private network between machines (a LAN segment)"),
         new("None", "No network"),
     ];
 
@@ -164,6 +179,14 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public IReadOnlyList<Option> SerialOptions { get; } = [new(null, "Automatic (off for Windows and macOS)"), new("on", "On: shown in the Console tab"), new("off", "Off")];
 
+    public IReadOnlyList<Option> WatchdogOptions { get; } = [new(null, "None"), new("reset", "Restart the machine"), new("poweroff", "Power the machine off"), new("pause", "Pause the machine")];
+
+    public IReadOnlyList<Option> BootOrders { get; } =
+    [
+        new(null, "Automatic (CD/DVD while installing, then the disk)"), new("c", "Disk only"), new("dc", "CD/DVD, then disk"),
+        new("cd", "Disk, then CD/DVD"), new("ncd", "Network, then disk, then CD/DVD"),
+    ];
+
     public IReadOnlyList<Option> ViewerOptions { get; } = [new("auto", "Automatic"), new("remote-viewer", "remote-viewer"), new("spicy", "spicy")];
 
     private readonly MachineViewModel _machine;
@@ -193,9 +216,11 @@ public sealed partial class SettingsViewModel : ObservableObject
         NicModel = NicModels.FirstOrDefault(o => o.Value == nic.Model) ?? new Option(nic.Model, nic.Model ?? "Automatic");
         Mac = nic.Mac ?? "";
         Bridge = nic.Bridge ?? "br0";
+        Segment = nic.Segment ?? "lab";
         SshForward = nic.SshForward;
         SshPort = nic.SshHostPort ?? 0;
         foreach (var f in nic.Forwards) Forwards.Add(new ForwardRow(f));
+        foreach (var sh in m.Shares) Shares.Add(new ShareRow(sh));
         UsbController = UsbControllers.FirstOrDefault(o => o.Value == m.Usb.Controller) ?? UsbControllers[0];
         UsbDevices = string.Join('\n', m.Usb.Passthrough.Select(u => $"{u.VendorId}:{u.ProductId}"));
         SoundCard = SoundCards.FirstOrDefault(o => o.Value == m.Audio.Device) ?? SoundCards[0];
@@ -210,6 +235,13 @@ public sealed partial class SettingsViewModel : ObservableObject
         Layout = m.Input.Layout;
         Serial = SerialOptions.First(o => o.Value == m.Serial switch { true => "on", false => "off", _ => null });
         ExtraArgs = string.Join('\n', m.ExtraArgs);
+        Rng = m.Devices.Rng ?? true;
+        Balloon = m.Devices.Balloon ?? true;
+        BalloonAuto = m.Devices.Balloon is null;
+        Watchdog = WatchdogOptions.FirstOrDefault(o => o.Value == m.Devices.Watchdog) ?? WatchdogOptions[0];
+        CrashReporting = m.Devices.CrashReporting;
+        BootOrder = BootOrders.FirstOrDefault(o => o.Value == m.Devices.BootOrder) ?? BootOrders[0];
+        BootMenu = m.Devices.BootMenu;
         Section = Sections[0];
         LoadHistory();
     }
@@ -263,14 +295,21 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private decimal _newDiskGb = 32;
 
     // Network
-    [ObservableProperty] [NotifyPropertyChangedFor(nameof(IsBridged), nameof(IsNat))] private Option _netMode;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(IsBridged), nameof(IsNat), nameof(IsSegment))] private Option _netMode;
     [ObservableProperty] private Option _nicModel;
     [ObservableProperty] private string _mac;
     [ObservableProperty] private string _bridge;
+    [ObservableProperty] private string _segment;
+
+    public bool IsSegment => NetMode.Value == "Segment";
     [ObservableProperty] private bool _sshForward;
     [ObservableProperty] private decimal _sshPort;
 
     public ObservableCollection<ForwardRow> Forwards { get; } = [];
+
+    public ObservableCollection<ShareRow> Shares { get; } = [];
+
+    public bool IsWindowsGuest => _machine.Machine.Guest.Os is "windows" or "windows-server";
 
     public bool IsBridged => NetMode.Value == "Bridge";
 
@@ -290,6 +329,15 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private Option _pointer;
     [ObservableProperty] private string _layout;
     [ObservableProperty] private Option _serial;
+
+    // Boot and devices
+    [ObservableProperty] private bool _rng;
+    [ObservableProperty] private bool _balloon;
+    [ObservableProperty] private bool _balloonAuto;
+    [ObservableProperty] private Option _watchdog;
+    [ObservableProperty] private bool _crashReporting;
+    [ObservableProperty] private Option _bootOrder;
+    [ObservableProperty] private bool _bootMenu;
 
     // Advanced
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(CommandPreview))] private string _extraArgs;
@@ -317,6 +365,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             Model = NicModel.Value,
             Mac = Mac.Trim().Length > 0 ? Mac.Trim() : null,
             Bridge = IsBridged ? Bridge.Trim() : null,
+            Segment = IsSegment ? Segment.Trim() : null,
             SshForward = SshForward,
             SshHostPort = SshPort > 0 ? (int)SshPort : null,
             Forwards = Forwards.Select(f => f.ToConfig()).ToList(),
@@ -353,6 +402,16 @@ public sealed partial class SettingsViewModel : ObservableObject
             Input = new InputConfig { Keyboard = Keyboard.Value, Mouse = Pointer.Value, Layout = Layout.Trim().Length > 0 ? Layout.Trim() : "en-us" },
             Serial = Serial.Value switch { "on" => true, "off" => false, _ => null },
             ExtraArgs = ExtraArgs.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList(),
+            Shares = Shares.Where(x => x.Path.Trim().Length > 0).Select(x => x.ToConfig()).ToList(),
+            Devices = new DevicesConfig
+            {
+                Rng = Rng ? null : false,
+                Balloon = BalloonAuto ? null : Balloon,
+                Watchdog = Watchdog.Value,
+                CrashReporting = CrashReporting,
+                BootOrder = BootOrder.Value,
+                BootMenu = BootMenu,
+            },
         };
     }
 
@@ -481,6 +540,18 @@ public sealed partial class SettingsViewModel : ObservableObject
             Ui.Post(() => SaveNote = $"The disc could not be ejected ({ex.Message}).");
         }
     }
+
+    /// <summary>Adds a folder chosen by the person (the view picks it).</summary>
+    public void AddShare(string path)
+    {
+        var tag = new string(System.IO.Path.GetFileName(path.TrimEnd('/')).ToLowerInvariant().Select(c => char.IsAsciiLetterOrDigit(c) ? c : '-').ToArray()).Trim('-');
+        if (tag.Length == 0) tag = "share";
+        while (Shares.Any(x => x.Tag == tag)) tag += "-2";
+        Shares.Add(new ShareRow(new ShareConfig { Path = path, Tag = tag }));
+    }
+
+    [RelayCommand]
+    private void RemoveShare(ShareRow row) => Shares.Remove(row);
 
     [RelayCommand]
     private void AddForward() => Forwards.Add(new ForwardRow(new PortForward("tcp", 8080, 80)));

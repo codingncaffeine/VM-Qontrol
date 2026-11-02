@@ -28,6 +28,7 @@ public sealed partial class MachineViewModel : ObservableObject
         Problems = LibraryScanner.MissingFiles(entry);
         Logs = new LogViewModel(shell.Paths, Machine);
         Console.CopyRequested = text => shell.CopyToClipboard(text, "The console output is on the clipboard.");
+        Snapshots = new SnapshotsViewModel(this, shell);
     }
 
     public PerformanceViewModel Performance { get; } = new();
@@ -36,10 +37,12 @@ public sealed partial class MachineViewModel : ObservableObject
 
     public LogViewModel Logs { get; }
 
+    public SnapshotsViewModel Snapshots { get; }
+
     private int _cores = 1;
     private long _memoryMiB = 1024;
 
-    /// <summary>0 Summary, 1 Performance, 2 Console, 3 Log: work for a tab runs only while it is open.</summary>
+    /// <summary>0 Summary, 1 Snapshots, 2 Performance, 3 Console, 4 Log: work for a tab runs only while it is open.</summary>
     [ObservableProperty]
     private int _tab;
 
@@ -47,10 +50,11 @@ public sealed partial class MachineViewModel : ObservableObject
 
     private void UpdateTabWork()
     {
-        if (Tab == 1 && IsSelected && _watcher is { } w) Performance.Start(w, _cores, _memoryMiB);
+        if (Tab == 1) _ = Snapshots.LoadAsync();
+        if (Tab == 2 && IsSelected && _watcher is { } w) Performance.Start(w, _cores, _memoryMiB);
         else Performance.Stop();
-        if (Tab == 2 && IsSelected && _watcher?.Machine is { } r) _ = Console.ConnectAsync(r);
-        if (Tab == 3) _ = Logs.LoadAsync();
+        if (Tab == 3 && IsSelected && _watcher?.Machine is { } r) _ = Console.ConnectAsync(r);
+        if (Tab == 4) _ = Logs.LoadAsync();
     }
 
     public LibraryEntry Entry { get; private set; }
@@ -184,6 +188,104 @@ public sealed partial class MachineViewModel : ObservableObject
     [RelayCommand]
     private void OpenSettings() => _shell.OpenSettings(this);
 
+    [RelayCommand]
+    private void OpenUsb() => _shell.OpenUsb(this);
+
+    /// <summary>Ctrl+Alt+Del for the machine (Windows' sign-in screen asks for it; the desktop would take the keys itself).</summary>
+    [RelayCommand]
+    private Task SendCtrlAltDelAsync() => ControlAsync("got Ctrl+Alt+Del", (r, ct) => MachineRunner.SendKeysAsync(r, ["ctrl", "alt", "delete"], ct));
+
+    /// <summary>Saves the machine's screen as a picture in the Pictures folder.</summary>
+    [RelayCommand]
+    private async Task SaveScreenshotAsync()
+    {
+        if (_watcher is not { } watcher) return;
+        var pictures = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures) is { Length: > 0 } p ? p : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var file = Path.Combine(pictures, $"{Name} {DateTime.Now:yyyy-MM-dd HH.mm.ss}.png");
+        try
+        {
+            Directory.CreateDirectory(pictures);
+            await watcher.ScreenshotAsync(file).ConfigureAwait(false);
+            Ui.Post(() => _shell.Note($"Saved the screen to {file}."));
+        }
+        catch (Exception ex) when (ex is QmpException or IOException or UnauthorizedAccessException)
+        {
+            Ui.Post(() => _shell.Show(new NoticeViewModel("The screen could not be saved", [ex.Message], isError: true)));
+        }
+    }
+
+    [RelayCommand]
+    private async Task CloneAsync()
+    {
+        if (IsActive)
+        {
+            _shell.Show(new NoticeViewModel($"Power {Name} off first", ["A clone copies the machine's disks, which must not change while they are copied."], isError: true));
+            return;
+        }
+
+        var prompt = new PromptViewModel($"Clone {Name}",
+            ["A clone is a separate machine with copies of this one's disks, firmware settings and TPM; changes to either never touch the other.", "It needs as much free space as this machine's disks use."],
+            "Name of the new machine", $"{Name} (clone)", "Clone", t => t.Trim().Length > 0);
+        _shell.ShowPrompt(prompt);
+        if (await prompt.Answer.ConfigureAwait(false) is not { } name) return;
+        Ui.Post(() => prompt.Busy = true);
+        try
+        {
+            var progress = new Progress<string>(p => Ui.Post(() => prompt.Progress = p));
+            var (_, dir) = await Task.Run(() => MachineLifecycle.CloneAsync(Machine, Entry.Directory, _shell.LibraryRoot, name, progress)).ConfigureAwait(false);
+            Ui.Post(() =>
+            {
+                prompt.Finish();
+                _shell.Note($"{name} is a clone of {Name}.");
+            });
+            await _shell.AfterLifecycleAsync(dir).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Ui.Post(() =>
+            {
+                prompt.Finish();
+                _shell.Show(new NoticeViewModel("The clone could not be made", [ex.Message], isError: true));
+            });
+        }
+    }
+
+    [RelayCommand]
+    private async Task DeleteMachineAsync()
+    {
+        if (IsActive)
+        {
+            _shell.Show(new NoticeViewModel($"Power {Name} off first", ["A running machine's files cannot be deleted."], isError: true));
+            return;
+        }
+
+        var conf = IsQuickemu ? Entry.Path : null;
+        var files = MachineLifecycle.FilesToDelete(Machine, Entry.Directory, conf);
+        var prompt = new PromptViewModel($"Delete {Name}?",
+            ["This deletes the machine and everything in it, for good:", .. files.Select(f => "    " + f), "Installer discs kept elsewhere are not touched.", $"Type the machine's name to confirm."],
+            "Machine name", "", "Delete for good", t => t.Trim() == Name, isDanger: true);
+        _shell.ShowPrompt(prompt);
+        if (await prompt.Answer.ConfigureAwait(false) is null) return;
+        try
+        {
+            await Task.Run(() => MachineLifecycle.Delete(Entry.Directory, conf)).ConfigureAwait(false);
+            Ui.Post(() =>
+            {
+                prompt.Finish();
+                _shell.Note($"{Name} was deleted.");
+            });
+            await _shell.AfterLifecycleAsync(null).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Ui.Post(() =>
+            {
+                prompt.Finish();
+                _shell.Show(new NoticeViewModel("The machine could not be deleted", [ex.Message], isError: true));
+            });
+        }
+    }
+
     /// <summary>Reads the machine's live state and figures (worker thread); posts the results.</summary>
     public async Task LoadAsync(HostCapabilities? host)
     {
@@ -220,6 +322,7 @@ public sealed partial class MachineViewModel : ObservableObject
             NetMode.User => "NAT (shares this computer's connection)",
             NetMode.Restricted => "NAT, no internet",
             NetMode.Bridge => $"Bridged to {nic.Bridge}",
+            NetMode.Segment => $"Private network \"{nic.Segment}\"",
             _ => "None",
         }));
         rows.Add(new("Firmware", Machine.Firmware.Kind == FirmwareKind.Bios ? "BIOS" : Machine.Firmware.SecureBoot ? "UEFI with Secure Boot" : "UEFI"));
@@ -330,7 +433,13 @@ public sealed partial class MachineViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task PowerOnAsync()
+    private Task PowerOnAsync() => StartAsync(new StartOptions());
+
+    /// <summary>Power on into the firmware's setup screen (UEFI) or boot menu (BIOS), as a computer's F2 or Esc does.</summary>
+    [RelayCommand]
+    private Task PowerOnToFirmwareAsync() => StartAsync(new StartOptions { FirmwareSetup = true });
+
+    private async Task StartAsync(StartOptions options)
     {
         if (Busy || State != PowerState.Off) return;
         Busy = true;
@@ -338,7 +447,7 @@ public sealed partial class MachineViewModel : ObservableObject
         try
         {
             var host = await _shell.HostAsync().ConfigureAwait(false);
-            var running = await Task.Run(() => MachineRunner.StartAsync(Machine, Entry.Directory, _shell.Paths, host, new StartOptions())).ConfigureAwait(false);
+            var running = await Task.Run(() => MachineRunner.StartAsync(Machine, Entry.Directory, _shell.Paths, host, options)).ConfigureAwait(false);
             await AttachAsync(running).ConfigureAwait(false);
             Ui.Post(() => _shell.Note($"{Name} is running."));
             if (Machine.Display.Backend == DisplayBackend.Spice) OpenScreen();

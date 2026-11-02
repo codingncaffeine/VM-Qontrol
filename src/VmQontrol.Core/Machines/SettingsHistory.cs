@@ -45,6 +45,13 @@ public static class SettingsHistory
         Diff("USB controller", before.Usb.Controller, after.Usb.Controller, v => v?.ToString() ?? "automatic");
         Diff("USB devices", string.Join(", ", before.Usb.Passthrough.Select(u => u.Name ?? $"{u.VendorId}:{u.ProductId}")), string.Join(", ", after.Usb.Passthrough.Select(u => u.Name ?? $"{u.VendorId}:{u.ProductId}")));
         Diff("Serial port", before.Serial, after.Serial, v => v is bool b ? (b ? "on" : "off") : "automatic");
+        Diff("Random-number generator", before.Devices.Rng ?? true, after.Devices.Rng ?? true, v => (bool?)v == true ? "on" : "off");
+        Diff("Memory ballooning", before.Devices.Balloon, after.Devices.Balloon, v => v is bool b ? (b ? "on" : "off") : "automatic");
+        Diff("Watchdog", before.Devices.Watchdog, after.Devices.Watchdog, v => v?.ToString() ?? "none");
+        Diff("Crash reporting", before.Devices.CrashReporting, after.Devices.CrashReporting, v => (bool?)v == true ? "on" : "off");
+        Diff("Boot order", before.Devices.BootOrder, after.Devices.BootOrder, v => v?.ToString() ?? "automatic");
+        Diff("Boot menu", before.Devices.BootMenu, after.Devices.BootMenu, v => (bool?)v == true ? "on" : "off");
+        Diff("Shared folders", string.Join(", ", before.Shares.Select(x => $"{x.Tag}={x.Path}{(x.ReadOnly ? " (read only)" : "")}")), string.Join(", ", after.Shares.Select(x => $"{x.Tag}={x.Path}{(x.ReadOnly ? " (read only)" : "")}")), v => (v as string) is { Length: > 0 } t ? t : "none");
         Diff("Extra QEMU arguments", string.Join(' ', before.ExtraArgs), string.Join(' ', after.ExtraArgs), v => (v as string) is { Length: > 0 } s ? s : "none");
         return changes;
     }

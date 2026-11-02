@@ -169,7 +169,7 @@ public static class QemuCommandBuilder
         var usbController = m.Usb.Controller ?? (os.EndsWith("solaris", StringComparison.Ordinal) || (os == "macos" && macVirtio) ? "xhci" : "ehci");
         var passthroughController = os == "macos" ? (macVirtio ? "nec-usb-xhci" : "usb-ehci") : "qemu-xhci";
         if (os == "macos" && macVirtio) tweaks.AddRange(["-global", "nec-usb-xhci.msi=off"]);
-        var balloon = os != "macos" || macVirtio;
+        var balloon = m.Devices.Balloon ?? (os != "macos" || macVirtio);
         var macDisk = macVirtio || release == "catalina" ? "virtio-blk-pci" : "ide-hd,bus=ahci.2";
 
         // ── configure_display
@@ -232,6 +232,13 @@ public static class QemuCommandBuilder
         else args.AddRange(["-accel", $"tcg,tb-size={(host.MemoryGB >= 16 ? 512 : 256)},thread=multi", "-machine", $"{machineType},smm={smm},vmport=off"]);
         args.AddRange(tweaks);
         args.AddRange(["-cpu", cpu.ToString(), "-smp", smp, "-m", MemoryArg(memory)]);
+        // Shared folders (virtiofs) need the machine's memory shared with virtiofsd.
+        var shares = new List<VirtiofsdLaunch>();
+        if (m.Shares.Count > 0)
+        {
+            if (ctx.Virtiofsd is null) errors.Add("Shared folders need virtiofsd, which is not installed. The host check names its package.");
+            args.AddRange(["-object", $"memory-backend-memfd,id=mem,size={MemoryArg(memory)},share=on", "-numa", "node,memdev=mem"]);
+        }
         if (balloon) args.AddRange(["-device", "virtio-balloon"]);
         args.AddRange(["-pidfile", ctx.Runtime.Pid]);
         args.AddRange(os is "windows" or "windows-server" or "reactos" or "freedos"
@@ -258,7 +265,7 @@ public static class QemuCommandBuilder
                 "-device", "virtserialport,chardev=agent0,name=org.qemu.guest_agent.0"]);
         }
 
-        args.AddRange(["-device", "virtio-rng-pci,rng=rng0", "-object", "rng-random,id=rng0,filename=/dev/urandom"]);
+        if (m.Devices.Rng ?? true) args.AddRange(["-device", "virtio-rng-pci,rng=rng0", "-object", "rng-random,id=rng0,filename=/dev/urandom"]);
         if (!ctx.Headless)
         {
             args.AddRange(["-device", $"{passthroughController},id=spicepass"]);
@@ -300,6 +307,16 @@ public static class QemuCommandBuilder
             case NetMode.Restricted:
                 args.AddRange(["-device", $"{nicModel},netdev=nic", "-netdev", $"{net},restrict=y,id=nic"]);
                 break;
+            case NetMode.Segment:
+            {
+                // Machines on one segment share a multicast group on this computer only; each needs its own MAC.
+                var segment = nic.Segment ?? "default";
+                var port = 20000 + (int)(Fnv(segment) % 20000);
+                var segmentMac = nic.Mac ?? MacFor(m.Id);
+                args.AddRange(["-device", $"{nicModel},netdev=nic,mac={segmentMac}", "-netdev", $"socket,id=nic,mcast=230.0.0.1:{port},localaddr=127.0.0.1"]);
+                break;
+            }
+
             case NetMode.Bridge:
                 args.AddRange(["-nic", $"bridge,br={nic.Bridge},model={nicModel}{(nic.Mac is { } mac ? ",mac=" + mac : "")}"]);
                 break;
@@ -330,6 +347,9 @@ public static class QemuCommandBuilder
         else if (installerPath is not null && os == "windows"
                  && m.Media.FirstOrDefault(x => x.Role == MediaRole.Unattended) is { } answers && ctx.FileExists(File(answers.File)))
             args.AddRange(["-drive", $"media=cdrom,index=2,file={File(answers.File)}"]);
+        else if (os != "windows" && m.Media.FirstOrDefault(x => x.Role == MediaRole.Unattended && Attached(x)) is { } linuxAnswers)
+            // A Linux answer-file disc (Ubuntu's cidata seed, a kickstart volume) rides beside the installer while it installs.
+            args.AddRange(["-drive", $"media=cdrom,index=2,file={File(linuxAnswers.File)}"]);
 
         foreach (var floppy in m.Media.Where(x => x.Role == MediaRole.Floppy && Attached(x)))
             args.AddRange(["-drive", $"if=floppy,format=raw,file={File(floppy.File)}"]);
@@ -378,6 +398,16 @@ public static class QemuCommandBuilder
                 args.AddRange(["-device", $"usb-host,bus=hostpass.0,vendorid=0x{u.VendorId},productid=0x{u.ProductId}"]);
         }
 
+        for (var i = 0; i < m.Shares.Count && ctx.Virtiofsd is { } virtiofsd; i++)
+        {
+            var share = m.Shares[i];
+            var socket = ctx.Runtime.Share(i);
+            var fsArgs = new List<string> { $"--socket-path={socket}", $"--shared-dir={share.Path}", "--cache=auto", "--sandbox=namespace" };
+            if (share.ReadOnly) fsArgs.Add("--readonly");
+            shares.Add(new VirtiofsdLaunch([virtiofsd, .. fsArgs], socket));
+            args.AddRange(["-chardev", $"socket,id=fs{i},path={socket}", "-device", $"vhost-user-fs-pci,chardev=fs{i},tag={share.Tag}"]);
+        }
+
         SwtpmLaunch? swtpm = null;
         if (m.Tpm)
         {
@@ -386,6 +416,13 @@ public static class QemuCommandBuilder
             swtpm = new SwtpmLaunch(["socket", "--ctrl", $"type=unixio,path={ctx.Runtime.Tpm}", "--terminate", "--tpmstate", $"dir={state}", "--tpm2"], ctx.Runtime.Tpm, state);
             args.AddRange(["-chardev", $"socket,id=chrtpm,path={ctx.Runtime.Tpm}", "-tpmdev", "emulator,id=tpm0,chardev=chrtpm", "-device", "tpm-tis,tpmdev=tpm0"]);
         }
+
+        var boot = new List<string>();
+        if (m.Devices.BootOrder is { Length: > 0 } order && !uefi) boot.Add($"order={order}");
+        if (m.Devices.BootMenu || ctx.FirmwareMenu) boot.Add("menu=on,splash-time=5000");
+        if (boot.Count > 0) args.AddRange(["-boot", string.Join(',', boot)]);
+        if (m.Devices.Watchdog is { } watchdogAction) args.AddRange(["-device", "i6300esb", "-action", $"watchdog={watchdogAction}"]);
+        if (m.Devices.CrashReporting) args.AddRange(["-device", "pvpanic"]);
 
         if (m.KernelBoot is { } kb && kb.Connect switch { Connect.Never => false, Connect.UntilInstalled => !ctx.SystemDiskUsed, _ => true })
         {
@@ -404,6 +441,7 @@ public static class QemuCommandBuilder
         {
             Args = args,
             Swtpm = swtpm,
+            Shares = shares,
             VarsToCreate = varsToCreate,
             Errors = errors,
             Warnings = warnings,
@@ -449,6 +487,20 @@ public static class QemuCommandBuilder
     }
 
     private static string OnOff(bool b) => b ? "on" : "off";
+
+    private static uint Fnv(string text)
+    {
+        var hash = 2166136261u;
+        foreach (var c in text) hash = (hash ^ c) * 16777619u;
+        return hash;
+    }
+
+    /// <summary>A stable MAC for a machine (from its id), in QEMU's 52:54:00 block, so machines on one segment never clash.</summary>
+    public static string MacFor(string machineId)
+    {
+        var h = Fnv(machineId);
+        return $"52:54:00:{(h >> 16) & 0xFF:x2}:{(h >> 8) & 0xFF:x2}:{h & 0xFF:x2}";
+    }
 
     /// <summary>"16G" when the size is whole gigabytes (as quickemu writes it), otherwise megabytes.</summary>
     public static string MemoryArg(long mib) => mib % 1024 == 0 ? $"{mib / 1024}G" : $"{mib}M";

@@ -154,7 +154,10 @@ public static class WindowsAnswerFile
                 new XAttribute(XNamespace.Xmlns + "wcm", Wcm.NamespaceName),
                 E("settings", new XAttribute("pass", "windowsPE"), windowsPe),
                 E("settings", new XAttribute("pass", "specialize"),
-                    Component("Microsoft-Windows-Shell-Setup", E("ComputerName", c.ComputerName), E("TimeZone", c.TimeZone))),
+                    Component("Microsoft-Windows-Shell-Setup", E("ComputerName", c.ComputerName), E("TimeZone", c.TimeZone)),
+                    // No "Do you want to allow your PC to be discoverable?" question at the first sign-in.
+                    Component("Microsoft-Windows-Deployment", E("RunSynchronous",
+                        Added("RunSynchronousCommand", 1, E("Path", @"reg add HKLM\SYSTEM\CurrentControlSet\Control\Network\NewNetworkWindowOff /f"))))),
                 E("settings", new XAttribute("pass", "oobeSystem"),
                     Component("Microsoft-Windows-International-Core", E("InputLocale", input), E("SystemLocale", locale), E("UILanguage", locale), E("UserLocale", locale)),
                     Component("Microsoft-Windows-Shell-Setup", shellOobe))));

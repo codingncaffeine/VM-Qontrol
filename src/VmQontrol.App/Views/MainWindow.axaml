@@ -110,6 +110,84 @@
       </Grid>
     </DockPanel>
 
+    <!-- A question with a typed answer (clone, delete). -->
+    <Panel x:Name="PromptLayer" IsVisible="{Binding Prompt, Converter={x:Static ObjectConverters.IsNotNull}}" Background="{DynamicResource QScrim}">
+      <Border Classes="card" Width="560" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="22,18"
+              DataContext="{Binding Prompt}" x:DataType="vm:PromptViewModel" BoxShadow="0 12 40 0 #60000000">
+        <StackPanel Spacing="12">
+          <TextBlock x:Name="PromptTitle" Text="{Binding Title}" Classes="h1" TextWrapping="Wrap" />
+          <ItemsControl ItemsSource="{Binding Lines}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="x:String"><SelectableTextBlock Text="{Binding}" TextWrapping="Wrap" Margin="0,2" /></DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock Text="{Binding Field}" FontWeight="SemiBold" />
+          <TextBox x:Name="PromptText" Text="{Binding Text}">
+            <TextBox.KeyBindings>
+              <KeyBinding Gesture="Enter" Command="{Binding ConfirmCommand}" />
+            </TextBox.KeyBindings>
+          </TextBox>
+          <TextBlock Text="{Binding Progress}" Classes="muted" IsVisible="{Binding Busy}" />
+          <ProgressBar IsIndeterminate="True" IsVisible="{Binding Busy}" Height="4" />
+          <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
+            <Button Classes="secondary" Content="Cancel" Command="{Binding CancelCommand}" IsEnabled="{Binding !Busy}" />
+            <Button x:Name="PromptConfirm" Classes="primary" Classes.danger="{Binding IsDanger}" Content="{Binding ConfirmText}" Command="{Binding ConfirmCommand}" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+    </Panel>
+
+    <!-- USB devices for one machine. -->
+    <Panel x:Name="UsbLayer" IsVisible="{Binding UsbPanel, Converter={x:Static ObjectConverters.IsNotNull}}" Background="{DynamicResource QScrim}">
+      <Border Classes="card" Width="720" MaxHeight="720" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="22,18"
+              DataContext="{Binding UsbPanel}" x:DataType="vm:UsbPanelViewModel" BoxShadow="0 12 40 0 #60000000">
+        <DockPanel>
+          <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,12">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="{Binding Title}" Classes="h1" />
+              <Button Grid.Column="1" Classes="icononly" Command="{Binding RefreshCommand}" ToolTip.Tip="Look again (after plugging something in)">
+                <Path Classes="icon" Data="{StaticResource IconRefresh}" />
+              </Button>
+            </Grid>
+            <TextBlock Text="{Binding Explain}" Classes="muted" TextWrapping="Wrap" />
+          </StackPanel>
+          <StackPanel DockPanel.Dock="Bottom" Spacing="10" Margin="0,12,0,0">
+            <TextBlock x:Name="UsbNote" Text="{Binding Note}" TextWrapping="Wrap" />
+            <Button Classes="secondary" Content="Done" Command="{Binding CloseCommand}" HorizontalAlignment="Right" />
+          </StackPanel>
+          <ScrollViewer>
+            <ItemsControl x:Name="UsbDevices" ItemsSource="{Binding Devices}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:UsbRow">
+                  <Border BorderBrush="{DynamicResource QBorder}" BorderThickness="0,0,0,1" Padding="0,10">
+                    <Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="12">
+                      <StackPanel>
+                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding Detail}" Classes="muted" FontSize="{DynamicResource QFontSmall}" />
+                        <TextBlock Text="{Binding Where}" FontSize="{DynamicResource QFontSmall}" Classes.warn="{Binding InMachine}" />
+                      </StackPanel>
+                      <CheckBox Grid.Column="1" Content="At every power on" IsChecked="{Binding Automatic}" VerticalAlignment="Center"
+                                ToolTip.Tip="Connect this device to the machine each time it starts" />
+                      <Button Grid.Column="2" Classes="tool" Content="{Binding ActionText}" Command="{Binding ToggleCommand}" VerticalAlignment="Center" />
+                      <Grid Grid.Row="1" Grid.ColumnSpan="3" ColumnDefinitions="*,Auto" Margin="0,8,0,0" IsVisible="{Binding NeedsPermission}">
+                        <StackPanel Spacing="4">
+                          <TextBlock Text="Your account may not hand this device over yet. Run once:" Classes="warn" FontSize="{DynamicResource QFontSmall}" TextWrapping="Wrap" />
+                          <Border Classes="code"><SelectableTextBlock Text="{Binding PermissionFix}" FontFamily="monospace" FontSize="11" TextWrapping="Wrap" /></Border>
+                        </StackPanel>
+                        <Button Grid.Column="1" Classes="icononly" Margin="6,0,0,0" VerticalAlignment="Bottom" Command="{Binding CopyFixCommand}" ToolTip.Tip="Copy the command">
+                          <Path Classes="icon" Data="{StaticResource IconCopy}" />
+                        </Button>
+                      </Grid>
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </DockPanel>
+      </Border>
+    </Panel>
+
     <!-- Move to folder: a name, or one of the folders that exist. -->
     <Panel x:Name="FolderLayer" IsVisible="{Binding FolderPrompt, Converter={x:Static ObjectConverters.IsNotNull}}" Background="{DynamicResource QScrim}">
       <Border Classes="card" Width="440" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="22,18"

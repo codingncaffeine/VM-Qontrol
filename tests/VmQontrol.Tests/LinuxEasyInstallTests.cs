@@ -68,4 +68,19 @@ public sealed class LinuxEasyInstallTests
         Assert.Equal("autoinstall ds=nocloud quiet ---", installing[installing.IndexOf("-append") + 1]);
         Assert.DoesNotContain("-kernel", QemuCommandBuilder.Build(m, Ctx(true)).Args);
     }
+
+    [Fact]
+    public void A_Linux_answer_disc_is_attached_while_installing_and_not_after()
+    {
+        var m = new MachineConfig
+        {
+            Name = "u",
+            Disks = [new DiskConfig { File = "disk0.qcow2" }],
+            Media = [new MediaConfig { Role = MediaRole.Installer, File = "ubuntu.iso", Connect = Connect.UntilInstalled },
+                     new MediaConfig { Role = MediaRole.Unattended, File = "autoinstall.iso", Connect = Connect.UntilInstalled }],
+        };
+        LaunchContext Ctx(bool used) => new() { Host = RecordedHost.Load(), MachineDirectory = "/vms/u", Runtime = new RuntimePaths("/run/u"), SystemDiskUsed = used, FileExists = _ => false, FirmwareFormat = _ => "raw" };
+        Assert.Contains("media=cdrom,index=2,file=/vms/u/autoinstall.iso", QemuCommandBuilder.Build(m, Ctx(false)).Args);
+        Assert.DoesNotContain(QemuCommandBuilder.Build(m, Ctx(true)).Args, a => a.Contains("autoinstall.iso", StringComparison.Ordinal));
+    }
 }

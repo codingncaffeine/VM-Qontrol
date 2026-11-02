@@ -25,7 +25,8 @@ internal static class Commands
           create NAME [--iso FILE] [--os OS] [--disk-gib N] [--memory-mib N] [--cores N] [--bios] [--tpm]
                  [--easy-install --user NAME [--password P] [--edition N] [--key KEY] [--drivers virtio-win.iso] [--first-logon CMD]]
                               Make a new machine in the library (the system is detected from --iso when --os is left out).
-                              --easy-install installs Windows with no questions.
+                              --easy-install installs Windows, Ubuntu, Fedora/RHEL or Debian with no questions
+                              (Linux needs --password; --power-off-when-done stops the machine after installing).
           start MACHINE [--headless] [--paused]
                               Power the machine on. With a screen, the viewer opens.
           status MACHINE      Whether the machine is running, its process and its SSH port.
@@ -258,11 +259,35 @@ internal static class Commands
 
         var isWindows = guest.Os is "windows" or "windows-server";
         WindowsInstallChoices? easy = null;
-        if (args.Contains("--easy-install"))
+        LinuxInstallChoices? linuxEasy = null;
+        if (args.Contains("--easy-install") && !isWindows)
         {
-            if (!isWindows || Option("--user") is not { } user)
+            if (iso is null || Option("--user") is not { } linuxUser || Option("--password") is not { Length: > 0 } linuxPassword)
             {
-                error.WriteLine("vmq create: --easy-install needs a Windows disc and --user NAME.");
+                error.WriteLine("vmq create: Linux Easy Install needs --iso, --user NAME and --password P (the installers make no account without one).");
+                return 2;
+            }
+
+            if (LinuxEasyInstall.Detect(iso) == LinuxInstaller.None)
+            {
+                error.WriteLine("vmq create: Easy Install does not know this disc's installer (it knows Ubuntu, the Fedora/RHEL family and Debian).");
+                return 2;
+            }
+
+            linuxEasy = new LinuxInstallChoices
+            {
+                UserName = linuxUser,
+                Password = linuxPassword,
+                HostName = LinuxEasyInstall.HostName(name),
+                TimeZone = TimeZoneInfo.Local.Id.Contains('/') ? TimeZoneInfo.Local.Id : "UTC",
+                PowerOffWhenDone = args.Contains("--power-off-when-done"),
+            };
+        }
+        else if (args.Contains("--easy-install"))
+        {
+            if (Option("--user") is not { } user)
+            {
+                error.WriteLine("vmq create: --easy-install needs --user NAME.");
                 return 2;
             }
 
@@ -298,6 +323,7 @@ internal static class Commands
             Tpm = args.Contains("--tpm") || (isWindows && guest.Release == "11"),
             DiskGiB = Number("--disk-gib") ?? (isWindows ? 64 : guest.Os == "macos" ? 128 : 32),
             WindowsEasyInstall = easy,
+            LinuxEasyInstall = linuxEasy,
         });
         output.WriteLine($"Created {name} in {dir}.");
         return 0;

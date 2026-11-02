@@ -1,0 +1,191 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using VmQontrol.Core.Machines;
+using VmQontrol.Core.Runtime;
+
+namespace VmQontrol.Core.Snapshots;
+
+/// <summary>A snapshot: its name, what the person wrote about it, when, whether it holds the running state, and its parent.</summary>
+public sealed record Snapshot
+{
+    public required string Tag { get; init; }
+
+    public required string Name { get; init; }
+
+    public string Description { get; init; } = "";
+
+    public DateTimeOffset Taken { get; init; }
+
+    /// <summary>Taken while the machine ran: restoring returns to that running moment, programs and all.</summary>
+    public bool WithMemory { get; init; }
+
+    /// <summary>The snapshot this one was taken after (the tree's parent); <c>null</c> for the first.</summary>
+    public string? Parent { get; init; }
+
+    /// <summary>A screenshot of the moment, beside the list (file name).</summary>
+    public string? Screenshot { get; init; }
+}
+
+/// <summary>The snapshot list and which one the machine stands on now ("You are here").</summary>
+public sealed record SnapshotList
+{
+    public List<Snapshot> Snapshots { get; init; } = [];
+
+    public string? Current { get; init; }
+}
+
+/// <summary>
+/// Snapshots stored inside the machine's qcow2 disks (QEMU's internal snapshots, as virt-manager uses). With the machine
+/// off, qemu-img takes, restores and deletes them; while it runs, QMP's snapshot jobs do, memory included. The list,
+/// with names, descriptions, screenshots and the tree, is kept in snapshots.json in a folder VM Qontrol owns.
+/// </summary>
+public sealed class SnapshotStore(MachineConfig machine, string machineDirectory, string metadataDirectory)
+{
+    public const string FileName = "snapshots.json";
+    private static readonly JsonSerializerOptions Json = new() { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+
+    private string MetadataFile => Path.Combine(metadataDirectory, FileName);
+
+    public string ScreenshotDirectory => Path.Combine(metadataDirectory, "snapshots");
+
+    private IEnumerable<string> Disks => machine.Disks.Where(d => d.Format == "qcow2").Select(d => Path.IsPathRooted(d.File) ? d.File : Path.Combine(machineDirectory, d.File));
+
+    public SnapshotList Load()
+    {
+        try
+        {
+            return File.Exists(MetadataFile) ? JsonSerializer.Deserialize<SnapshotList>(File.ReadAllText(MetadataFile), Json) ?? new SnapshotList() : new SnapshotList();
+        }
+        catch (JsonException)
+        {
+            return new SnapshotList();
+        }
+    }
+
+    private void Save(SnapshotList list)
+    {
+        Directory.CreateDirectory(metadataDirectory);
+        var temp = MetadataFile + ".new";
+        File.WriteAllText(temp, JsonSerializer.Serialize(list, Json));
+        File.Move(temp, MetadataFile, overwrite: true);
+    }
+
+    /// <summary>Takes a snapshot; <paramref name="watcher"/> is the running machine's connection, or <c>null</c> when it is off.</summary>
+    public async Task<Snapshot> TakeAsync(string name, string description, MachineWatcher? watcher, CancellationToken ct = default)
+    {
+        if (machine.Disks.Any(d => d.Format != "qcow2"))
+            throw new InvalidOperationException("Snapshots need every disk in qcow2 format; this machine has a raw disk.");
+        var list = Load();
+        var tag = $"vmq-{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Guid.NewGuid().ToString("N")[..4]}";
+        string? screenshot = null;
+        if (watcher is not null)
+        {
+            Directory.CreateDirectory(ScreenshotDirectory);
+            screenshot = tag + ".png";
+            try
+            {
+                await watcher.ScreenshotAsync(Path.Combine(ScreenshotDirectory, screenshot), ct).ConfigureAwait(false);
+            }
+            catch (QmpException)
+            {
+                screenshot = null;
+            }
+
+            var nodes = await WritableNodesAsync(watcher, ct).ConfigureAwait(false);
+            await RunJobAsync(watcher, "snapshot-save", new JsonObject
+            {
+                ["tag"] = tag,
+                ["vmstate"] = nodes[0],
+                ["devices"] = new JsonArray(nodes.Select(n => (JsonNode)n).ToArray()),
+            }, ct).ConfigureAwait(false);
+        }
+        else
+        {
+            foreach (var disk in Disks) await QemuImg.RunAsync(ct, "snapshot", "-c", tag, disk).ConfigureAwait(false);
+        }
+
+        var snapshot = new Snapshot { Tag = tag, Name = name, Description = description, Taken = DateTimeOffset.Now, WithMemory = watcher is not null, Parent = list.Current, Screenshot = screenshot };
+        Save(list with { Snapshots = [.. list.Snapshots, snapshot], Current = tag });
+        return snapshot;
+    }
+
+    /// <summary>Returns the machine to a snapshot. A running machine needs a snapshot taken while running (its memory).</summary>
+    public async Task RestoreAsync(Snapshot snapshot, MachineWatcher? watcher, CancellationToken ct = default)
+    {
+        if (watcher is not null)
+        {
+            if (!snapshot.WithMemory)
+                throw new InvalidOperationException("This snapshot was taken with the machine off. Power the machine off to restore it.");
+            var nodes = await WritableNodesAsync(watcher, ct).ConfigureAwait(false);
+            await RunJobAsync(watcher, "snapshot-load", new JsonObject
+            {
+                ["tag"] = snapshot.Tag,
+                ["vmstate"] = nodes[0],
+                ["devices"] = new JsonArray(nodes.Select(n => (JsonNode)n).ToArray()),
+            }, ct).ConfigureAwait(false);
+        }
+        else
+        {
+            foreach (var disk in Disks) await QemuImg.RunAsync(ct, "snapshot", "-a", snapshot.Tag, disk).ConfigureAwait(false);
+        }
+
+        var list = Load();
+        Save(list with { Current = snapshot.Tag });
+    }
+
+    /// <summary>Deletes a snapshot; its children take its parent, so the tree stays whole.</summary>
+    public async Task DeleteAsync(Snapshot snapshot, MachineWatcher? watcher, CancellationToken ct = default)
+    {
+        if (watcher is not null)
+        {
+            var nodes = await WritableNodesAsync(watcher, ct).ConfigureAwait(false);
+            await RunJobAsync(watcher, "snapshot-delete", new JsonObject { ["tag"] = snapshot.Tag, ["devices"] = new JsonArray(nodes.Select(n => (JsonNode)n).ToArray()) }, ct).ConfigureAwait(false);
+        }
+        else
+        {
+            foreach (var disk in Disks) await QemuImg.RunAsync(ct, "snapshot", "-d", snapshot.Tag, disk).ConfigureAwait(false);
+        }
+
+        var list = Load();
+        var kept = list.Snapshots.Where(s => s.Tag != snapshot.Tag).Select(s => s.Parent == snapshot.Tag ? s with { Parent = snapshot.Parent } : s).ToList();
+        Save(list with { Snapshots = kept, Current = list.Current == snapshot.Tag ? snapshot.Parent : list.Current });
+        if (snapshot.Screenshot is { } shot && File.Exists(Path.Combine(ScreenshotDirectory, shot))) File.Delete(Path.Combine(ScreenshotDirectory, shot));
+    }
+
+    /// <summary>The block nodes of the machine's writable qcow2 disks (the first also stores the running state).</summary>
+    private static async Task<List<string>> WritableNodesAsync(MachineWatcher watcher, CancellationToken ct)
+    {
+        var nodes = new List<string>();
+        if (await watcher.ExecuteAsync("query-block", ct: ct).ConfigureAwait(false) is JsonArray blocks)
+        {
+            foreach (var b in blocks.OfType<JsonObject>())
+            {
+                if (b["inserted"] is not JsonObject inserted || inserted["ro"]?.GetValue<bool>() == true) continue;
+                if (inserted["drv"]?.GetValue<string>() != "qcow2") continue;
+                if (inserted["node-name"]?.GetValue<string>() is { } node) nodes.Add(node);
+            }
+        }
+
+        return nodes.Count > 0 ? nodes : throw new InvalidOperationException("The running machine has no qcow2 disk to keep a snapshot in.");
+    }
+
+    /// <summary>Runs a QMP snapshot job to the end and turns its failure into an exception with QEMU's reason.</summary>
+    private static async Task RunJobAsync(MachineWatcher watcher, string command, JsonObject arguments, CancellationToken ct)
+    {
+        var id = $"vmq-{Guid.NewGuid():N}"[..20];
+        arguments["job-id"] = id;
+        await watcher.ExecuteAsync(command, arguments, ct).ConfigureAwait(false);
+        while (true)
+        {
+            await Task.Delay(100, ct).ConfigureAwait(false);
+            var jobs = await watcher.ExecuteAsync("query-jobs", ct: ct).ConfigureAwait(false) as JsonArray;
+            var job = jobs?.OfType<JsonObject>().FirstOrDefault(j => j["id"]?.GetValue<string>() == id);
+            if (job is null) return;
+            if (job["status"]?.GetValue<string>() != "concluded") continue;
+            var error = job["error"]?.GetValue<string>();
+            await watcher.ExecuteAsync("job-dismiss", new JsonObject { ["id"] = id }, ct).ConfigureAwait(false);
+            if (error is not null) throw new QmpException(command, "JobFailed", error);
+            return;
+        }
+    }
+}

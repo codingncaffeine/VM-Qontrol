@@ -68,6 +68,46 @@ public sealed partial class ShellViewModel : ObservableObject
 
     public bool ShowSettings => SettingsPage is not null && Wizard is null;
 
+    /// <summary>A typed-answer question while it is open (clone, delete).</summary>
+    [ObservableProperty]
+    private PromptViewModel? _prompt;
+
+    public void ShowPrompt(PromptViewModel prompt)
+    {
+        prompt.Closed += () => Ui.Post(() =>
+        {
+            if (Prompt == prompt) Prompt = null;
+        });
+        Prompt = prompt;
+    }
+
+    /// <summary>The library folder machines are made in.</summary>
+    public string LibraryRoot => Settings.LibraryRoots[0];
+
+    /// <summary>After a clone or a delete: the library is read again and, for a clone, the new machine selected.</summary>
+    public async Task AfterLifecycleAsync(string? selectDirectory)
+    {
+        await RefreshAsync().ConfigureAwait(false);
+        Ui.Post(() =>
+        {
+            if (selectDirectory is not null) Selected = _all.FirstOrDefault(m => m.Folder == selectDirectory);
+        });
+    }
+
+    /// <summary>The USB panel while it is open.</summary>
+    [ObservableProperty]
+    private UsbPanelViewModel? _usbPanel;
+
+    public void OpenUsb(MachineViewModel machine)
+    {
+        var panel = new UsbPanelViewModel(machine, this);
+        panel.Closed += () => Ui.Post(() =>
+        {
+            if (UsbPanel == panel) UsbPanel = null;
+        });
+        UsbPanel = panel;
+    }
+
     public void OpenSettings(MachineViewModel machine) => _ = Task.Run(async () =>
     {
         var host = await HostAsync().ConfigureAwait(false);

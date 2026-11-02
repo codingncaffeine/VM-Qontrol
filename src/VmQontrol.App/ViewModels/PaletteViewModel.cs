@@ -89,6 +89,7 @@ public sealed partial class PaletteViewModel(ShellViewModel shell) : ObservableO
             }
 
             Add("Power on", s.PowerOnCommand, s.IsOff);
+            Add("Power on to firmware setup", s.PowerOnToFirmwareCommand, s.IsOff);
             Add("Open screen", s.OpenScreenCommand, s.IsActive);
             Add("Shut down", s.ShutDownCommand, s.IsRunning);
             Add("Pause", s.PauseCommand, s.CanPause);
@@ -96,13 +97,19 @@ public sealed partial class PaletteViewModel(ShellViewModel shell) : ObservableO
             Add("Reset", s.ResetCommand, s.IsActive);
             Add("Power off", s.PowerOffCommand, s.IsActive);
             Add("Open settings", s.OpenSettingsCommand);
+            Add("USB devices", s.OpenUsbCommand);
+            Add("Send Ctrl+Alt+Del", s.SendCtrlAltDelCommand, s.IsActive);
+            Add("Save a screenshot", s.SaveScreenshotCommand, s.IsActive);
+            Add("Clone", s.CloneCommand, s.IsOff);
+            Add("Delete machine", s.DeleteMachineCommand, s.IsOff);
             Add("Open folder", s.OpenFolderCommand);
             Add("Copy command line", s.CopyCommandLineCommand);
             Add(s.IsFavourite ? "Remove from favourites" : "Add to favourites", s.ToggleFavouriteCommand);
             items.Add(new("Show summary", s.Name, () => s.Tab = 0));
-            items.Add(new("Show performance", s.Name, () => s.Tab = 1));
-            items.Add(new("Show console", s.Name, () => s.Tab = 2));
-            items.Add(new("Show log", s.Name, () => s.Tab = 3));
+            items.Add(new("Show snapshots", s.Name, () => s.Tab = 1));
+            items.Add(new("Show performance", s.Name, () => s.Tab = 2));
+            items.Add(new("Show console", s.Name, () => s.Tab = 3));
+            items.Add(new("Show log", s.Name, () => s.Tab = 4));
         }
 
         return items;

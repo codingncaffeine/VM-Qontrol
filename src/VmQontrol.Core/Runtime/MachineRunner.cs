@@ -27,8 +27,11 @@ public sealed record StartOptions
     /// <summary>No screen and no sound (background work and tests).</summary>
     public bool Headless { get; init; }
 
-    /// <summary>Start paused, before the firmware runs (power on to firmware setup, tests).</summary>
+    /// <summary>Start paused, before the firmware runs (tests).</summary>
     public bool Paused { get; init; }
+
+    /// <summary>Open the firmware's setup screen (UEFI) or boot menu (BIOS) instead of starting the system.</summary>
+    public bool FirmwareSetup { get; init; }
 }
 
 /// <summary>
@@ -83,6 +86,7 @@ public static class MachineRunner
             SshHostPort = ssh ?? 22220,
             SystemDiskUsed = m.Disks.Count > 0 && DiskState.IsUsed(Full(m.Disks[0].File)),
             Headless = options.Headless,
+            FirmwareMenu = options.FirmwareSetup && m.Firmware.Kind == FirmwareKind.Bios && m.Guest.Os != "macos",
         });
         if (launch.Errors.Count > 0) throw new StartRefusedException(launch.Errors);
         foreach (var w in launch.Warnings) Log.Warn($"{m.Name}: {w}");
@@ -104,6 +108,19 @@ public static class MachineRunner
             swtpmPid = ReadPid(pidFile);
         }
 
+        // Each shared folder's virtiofsd, in a session of its own so it outlives this process; it ends with the machine.
+        var shareProcesses = new List<int>();
+        foreach (var share in launch.Shares)
+        {
+            var start = new ProcessStartInfo("setsid") { UseShellExecute = false, RedirectStandardError = true, RedirectStandardOutput = true };
+            foreach (var a in share.Args) start.ArgumentList.Add(a);
+            var process = Process.Start(start) ?? throw new StartRefusedException(["virtiofsd could not be started."]);
+            shareProcesses.Add(process.Id);
+            await WaitForAsync(() => File.Exists(share.Socket) || process.HasExited, TimeSpan.FromSeconds(5), "virtiofsd did not open its socket", ct).ConfigureAwait(false);
+            if (process.HasExited)
+                throw new StartRefusedException([$"A shared folder could not be shared: {(await process.StandardError.ReadToEndAsync(ct).ConfigureAwait(false)).Trim()}"]);
+        }
+
         var args = new List<string>(launch.Args);
         if (options.Paused) args.Add("-S");
         // QEMU detaches once it is ready; until then its errors come back on stderr and the exit code says whether it started.
@@ -116,6 +133,7 @@ public static class MachineRunner
         catch
         {
             if (swtpmPid is { } p) TryKill(p);
+            foreach (var sharePid in shareProcesses) TryKill(sharePid);
             // QEMU opens its sockets before it can fail on a device; a refused start leaves nothing behind.
             TryDelete(runtime.Directory);
             throw;
@@ -124,9 +142,11 @@ public static class MachineRunner
         var pid = ReadPid(runtime.Pid) ?? throw new StartRefusedException(["QEMU started but wrote no process id."]);
         var installing = !(m.Disks.Count > 0 && DiskState.IsUsed(Full(m.Disks[0].File)))
                          && m.Media.Any(x => x.Role == MediaRole.Installer && x.Connect != Connect.Never);
-        var assist = installing && m.Guest.Os is "windows" or "windows-server" && m.Firmware.Kind == FirmwareKind.Uefi && !options.Paused
-            ? PressKeyToBootTheDiscAsync(runtime, m.Name)
-            : Task.CompletedTask;
+        var assist = options.FirmwareSetup && !options.Paused
+            ? PressKeysAsync(runtime, m.Name, "esc", 24, "open the firmware screen")
+            : installing && m.Guest.Os is "windows" or "windows-server" && m.Firmware.Kind == FirmwareKind.Uefi && !options.Paused
+                ? PressKeysAsync(runtime, m.Name, "ret", 40, "start the installer")
+                : Task.CompletedTask;
         var running = new RunningMachine(m.Id, m.Name, pid, runtime.Directory, machineDirectory, DateTimeOffset.Now, ssh) { BootAssist = assist };
         await File.WriteAllTextAsync(runtime.Lock, JsonSerializer.Serialize(new JsonObject
         {
@@ -142,25 +162,26 @@ public static class MachineRunner
     }
 
     /// <summary>
-    /// Microsoft's installation discs wait a few seconds for "Press any key to boot from CD or DVD" when they start on UEFI
-    /// firmware; with nobody there the machine falls through to network boot. While a Windows machine installs, Enter is
-    /// pressed every half second for the first twenty seconds: only the firmware and the boot manager see it.
+    /// Presses a key every half second while the machine starts. Microsoft's installation discs wait a few seconds for
+    /// "Press any key to boot from CD or DVD" on UEFI (with nobody there the machine falls through to network boot), so
+    /// Enter is pressed while a Windows machine installs; Esc opens the firmware's setup screen or boot menu. Only the
+    /// firmware and the boot manager see the keys.
     /// </summary>
-    private static async Task PressKeyToBootTheDiscAsync(RuntimePaths runtime, string name)
+    private static async Task PressKeysAsync(RuntimePaths runtime, string name, string key, int times, string purpose)
     {
         try
         {
             await using var qmp = await QmpClient.ConnectAsync(runtime.Control, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
-            var key = new JsonObject { ["keys"] = new JsonArray(new JsonObject { ["type"] = "qcode", ["data"] = "ret" }) };
-            for (var i = 0; i < 40; i++)
+            var press = new JsonObject { ["keys"] = new JsonArray(new JsonObject { ["type"] = "qcode", ["data"] = key }) };
+            for (var i = 0; i < times; i++)
             {
-                await qmp.ExecuteAsync("send-key", (JsonObject)key.DeepClone()).ConfigureAwait(false);
+                await qmp.ExecuteAsync("send-key", (JsonObject)press.DeepClone()).ConfigureAwait(false);
                 await Task.Delay(500).ConfigureAwait(false);
             }
         }
         catch (Exception ex) when (ex is IOException or QmpException or System.Net.Sockets.SocketException)
         {
-            Log.Warn($"{name}: could not press a key to start the installer ({ex.Message}); press any key in the viewer if it waits.");
+            Log.Warn($"{name}: could not press a key to {purpose} ({ex.Message}).");
         }
     }
 
@@ -221,6 +242,14 @@ public static class MachineRunner
     {
         await using var qmp = await ControlAsync(running, ct).ConfigureAwait(false);
         await qmp.ExecuteExpectingExitAsync("quit", ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Presses keys together in the machine, e.g. ["ctrl", "alt", "delete"] (QEMU key codes).</summary>
+    public static async Task SendKeysAsync(RunningMachine running, IReadOnlyList<string> keys, CancellationToken ct = default)
+    {
+        await using var qmp = await ControlAsync(running, ct).ConfigureAwait(false);
+        var list = new JsonArray(keys.Select(k => (JsonNode)new JsonObject { ["type"] = "qcode", ["data"] = k }).ToArray());
+        await qmp.ExecuteAsync("send-key", new JsonObject { ["keys"] = list }, ct).ConfigureAwait(false);
     }
 
     /// <summary>Saves the machine's screen as a PNG.</summary>

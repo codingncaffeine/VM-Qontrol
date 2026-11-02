@@ -102,4 +102,32 @@ public sealed class CommandBuilderTests
         Assert.Contains("-accel", launch.Args);
         Assert.Contains(launch.Warnings, w => w.Contains("KVM", StringComparison.Ordinal));
     }
+
+    [Fact]
+    public void Boot_and_device_options_reach_the_command_and_their_defaults_add_nothing()
+    {
+        var plain = Build(Linux).Args.ToList();
+        Assert.DoesNotContain("-boot", plain);
+        Assert.Contains("virtio-rng-pci,rng=rng0", plain);
+
+        var m = Linux with
+        {
+            Firmware = new FirmwareConfig { Kind = FirmwareKind.Bios },
+            Devices = new DevicesConfig { Rng = false, Balloon = false, Watchdog = "reset", CrashReporting = true, BootOrder = "dc", BootMenu = true },
+        };
+        var args = Build(m).Args.ToList();
+        Assert.Equal("order=dc,menu=on,splash-time=5000", args[args.IndexOf("-boot") + 1]);
+        Assert.DoesNotContain("virtio-rng-pci,rng=rng0", args);
+        Assert.DoesNotContain("virtio-balloon", args);
+        Assert.Contains("i6300esb", args);
+        Assert.Equal("watchdog=reset", args[args.IndexOf("-action") + 1]);
+        Assert.Contains("pvpanic", args);
+    }
+
+    [Fact]
+    public void A_UEFI_machine_ignores_a_BIOS_boot_order()
+    {
+        var args = Build(Linux with { Devices = new DevicesConfig { BootOrder = "dc" } }).Args;
+        Assert.DoesNotContain("-boot", args);
+    }
 }

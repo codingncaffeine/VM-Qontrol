@@ -49,6 +49,12 @@ public sealed record MachineConfig
     /// <summary>Serial port as a socket for the console tab; <c>null</c> = the profile's choice (off for Windows and macOS).</summary>
     public bool? Serial { get; set; }
 
+    /// <summary>Folders of this computer shared with the machine (virtiofs).</summary>
+    public List<ShareConfig> Shares { get; set; } = [];
+
+    /// <summary>Boot order, boot menu and extra devices; every default is quickemu's.</summary>
+    public DevicesConfig Devices { get; set; } = new();
+
     /// <summary>Boot a kernel directly (an installer's kernel with its answer-file options); <c>null</c> = boot normally.</summary>
     public KernelBootConfig? KernelBoot { get; set; }
 
@@ -97,6 +103,38 @@ public sealed record CpuConfig
 
     /// <summary>A QEMU CPU model; <c>null</c> = the profile's choice (host passthrough for most guests).</summary>
     public string? Model { get; set; }
+}
+
+/// <summary>A folder of this computer the machine sees; <see cref="Tag"/> is the name the guest mounts it by.</summary>
+public sealed record ShareConfig
+{
+    public required string Path { get; set; }
+
+    public required string Tag { get; set; }
+
+    public bool ReadOnly { get; set; }
+}
+
+/// <summary>Devices and boot behaviour beyond the main hardware. <c>null</c> = quickemu's choice.</summary>
+public sealed record DevicesConfig
+{
+    /// <summary>A random-number generator the guest can draw on (faster boots and key generation); on by default.</summary>
+    public bool? Rng { get; set; }
+
+    /// <summary>Memory ballooning (the guest can hand unused memory back); the profile decides by default.</summary>
+    public bool? Balloon { get; set; }
+
+    /// <summary>A watchdog and what it does when the guest stops answering it: reset, poweroff, pause; <c>null</c> = none.</summary>
+    public string? Watchdog { get; set; }
+
+    /// <summary>The guest reports its crashes (pvpanic), so the machine shows "Crashed" instead of hanging silently.</summary>
+    public bool CrashReporting { get; set; }
+
+    /// <summary>BIOS boot order as letters: c disk, d CD/DVD, n network (UEFI machines keep their order in the firmware).</summary>
+    public string? BootOrder { get; set; }
+
+    /// <summary>Show the firmware's boot menu for a few seconds at every power on.</summary>
+    public bool BootMenu { get; set; }
 }
 
 /// <summary>A kernel, initrd and kernel command line to boot instead of the firmware's boot order.</summary>
@@ -184,6 +222,9 @@ public enum NetMode
     /// <summary>On the host's own network through a bridge.</summary>
     Bridge,
 
+    /// <summary>A private network between machines (a LAN segment), with no route to anything else.</summary>
+    Segment,
+
     None,
 }
 
@@ -199,6 +240,9 @@ public sealed record NicConfig
     public string? Mac { get; set; }
 
     public string? Bridge { get; set; }
+
+    /// <summary>The private network's name: machines with the same name are on the same segment.</summary>
+    public string? Segment { get; set; }
 
     /// <summary>Forward a host port to the guest's SSH port; the first free one from 22220 when <see cref="SshHostPort"/> is unset.</summary>
     public bool SshForward { get; set; } = true;

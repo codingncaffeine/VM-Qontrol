@@ -82,23 +82,33 @@
             <TextBlock Text="Power off" />
           </StackPanel>
         </Button>
+        <Button x:Name="OpenUsb" Classes="tool" Command="{Binding OpenUsbCommand}" ToolTip.Tip="Hand USB devices plugged into this computer to the machine">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Path Classes="icon" Data="{StaticResource IconUsb}" />
+            <TextBlock Text="USB devices" />
+          </StackPanel>
+        </Button>
         <Button x:Name="OpenSettings" Classes="tool" Command="{Binding OpenSettingsCommand}" ToolTip.Tip="Memory, processors, disks, discs, network, display and everything else">
           <StackPanel Orientation="Horizontal" Spacing="8">
             <Path Classes="icon" Data="{StaticResource IconSettings}" />
             <TextBlock Text="Settings" />
           </StackPanel>
         </Button>
-        <Button Classes="tool" Command="{Binding OpenFolderCommand}" ToolTip.Tip="Open the folder that holds this machine's files">
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <Path Classes="icon" Data="{StaticResource IconFolder}" />
-            <TextBlock Text="Open folder" />
-          </StackPanel>
-        </Button>
-        <Button Classes="tool" Command="{Binding CopyCommandLineCommand}" ToolTip.Tip="Copy the exact QEMU command this machine starts with">
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <Path Classes="icon" Data="{StaticResource IconCopy}" />
-            <TextBlock Text="Copy command line" />
-          </StackPanel>
+        <Button x:Name="More" Classes="tool" ToolTip.Tip="More: power on to firmware, open the folder, copy the command line">
+          <TextBlock Text="⋯  More" />
+          <Button.Flyout>
+            <MenuFlyout Placement="BottomEdgeAlignedLeft">
+              <MenuItem Header="Power on to firmware setup" Command="{Binding PowerOnToFirmwareCommand}" IsVisible="{Binding IsOff}" />
+              <MenuItem Header="Send Ctrl+Alt+Del" Command="{Binding SendCtrlAltDelCommand}" IsVisible="{Binding IsActive}" />
+              <MenuItem Header="Save a screenshot" Command="{Binding SaveScreenshotCommand}" IsVisible="{Binding IsActive}" />
+              <MenuItem Header="Clone…" Command="{Binding CloneCommand}" />
+              <MenuItem Header="Open the machine's folder" Command="{Binding OpenFolderCommand}" />
+              <MenuItem Header="Copy the QEMU command line" Command="{Binding CopyCommandLineCommand}" />
+              <MenuItem Header="{Binding IsFavourite, Converter={x:Static vm:Text.FavouriteToggle}}" Command="{Binding ToggleFavouriteCommand}" />
+              <Separator />
+              <MenuItem Header="Delete…" Command="{Binding DeleteMachineCommand}" />
+            </MenuFlyout>
+          </Button.Flyout>
         </Button>
       </WrapPanel>
 
@@ -174,6 +184,55 @@
               </StackPanel>
             </Border>
           </Grid>
+        </TabItem>
+
+        <!-- Snapshots: take one at any moment, go back to any of them. -->
+        <TabItem x:Name="SnapshotsTab" Header="Snapshots">
+          <StackPanel Spacing="14" DataContext="{Binding Snapshots}" x:DataType="vm:SnapshotsViewModel">
+            <Border Classes="card">
+              <StackPanel Spacing="8">
+                <TextBlock Text="Take a snapshot" FontWeight="SemiBold" />
+                <TextBlock Classes="muted" TextWrapping="Wrap"
+                           Text="A snapshot keeps this moment so you can come back to it: before an update, before trying something risky. Taken while the machine runs, it keeps the open programs too." />
+                <Grid ColumnDefinitions="*,*,Auto" ColumnSpacing="10">
+                  <TextBox x:Name="SnapshotName" Text="{Binding NewName}" PlaceholderText="Name" />
+                  <TextBox Grid.Column="1" Text="{Binding NewDescription}" PlaceholderText="What is special about this moment (optional)" />
+                  <Button x:Name="TakeSnapshot" Grid.Column="2" Classes="primary" Content="Take snapshot" Command="{Binding TakeCommand}" />
+                </Grid>
+                <TextBlock x:Name="SnapshotNote" Text="{Binding Note}" Classes="muted" TextWrapping="Wrap" />
+              </StackPanel>
+            </Border>
+            <TextBlock Text="No snapshots yet." Classes="muted" IsVisible="{Binding IsEmpty}" />
+            <ItemsControl x:Name="SnapshotTree" ItemsSource="{Binding Rows}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate><StackPanel Spacing="8" /></ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:SnapshotRow">
+                  <Border Classes="card" Margin="{Binding Indent}" Padding="14,12">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+                      <Border Width="128" Height="80" CornerRadius="6" Background="{DynamicResource QScreen}" ClipToBounds="True">
+                        <Image Source="{Binding Picture}" Stretch="UniformToFill" />
+                      </Border>
+                      <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                          <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                          <Border Classes="pill ok" IsVisible="{Binding IsCurrent}"><TextBlock Text="You are here" /></Border>
+                        </StackPanel>
+                        <TextBlock Text="{Binding When}" Classes="muted" FontSize="{DynamicResource QFontSmall}" />
+                        <TextBlock Text="{Binding Kind}" Classes="muted" FontSize="{DynamicResource QFontSmall}" />
+                        <TextBlock Text="{Binding Description}" TextWrapping="Wrap" IsVisible="{Binding HasDescription}" />
+                      </StackPanel>
+                      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <Button Classes="tool" Content="Go back to this" Command="{Binding $parent[ItemsControl].((vm:SnapshotsViewModel)DataContext).RestoreCommand}" CommandParameter="{Binding}" />
+                        <Button Classes="tool danger" Content="Delete" Command="{Binding $parent[ItemsControl].((vm:SnapshotsViewModel)DataContext).DeleteCommand}" CommandParameter="{Binding}" />
+                      </StackPanel>
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
         </TabItem>
 
         <!-- The last minute, sampled once a second while this tab is open. -->
