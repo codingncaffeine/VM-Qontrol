@@ -1,0 +1,40 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="VmQontrol.App.Views.MainWindow"
+        Title="VM Qontrol"
+        Icon="avares://vmqontrol/Assets/icon-256.png"
+        Width="1280" Height="800" MinWidth="900" MinHeight="560"
+        WindowStartupLocation="CenterScreen">
+  <Grid ColumnDefinitions="272,*">
+    <!-- Library sidebar: the machines, their folders and the search box live here. -->
+    <Border Grid.Column="0" Background="{DynamicResource QSidebar}" BorderBrush="{DynamicResource QBorder}" BorderThickness="0,0,1,0">
+      <DockPanel Margin="16,18">
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="4,0,0,18">
+          <Image Source="avares://vmqontrol/Assets/logo-64.png" Width="34" Height="34" />
+          <TextBlock Text="VM Qontrol" Classes="h1" VerticalAlignment="Center" />
+        </StackPanel>
+        <TextBox x:Name="Search" DockPanel.Dock="Top" Classes="search" PlaceholderText="Search machines" Margin="0,0,0,18" />
+        <TextBlock DockPanel.Dock="Top" Text="LIBRARY" Classes="section" Margin="4,0,0,8" />
+        <TextBlock x:Name="LibraryEmpty" Text="No machines yet." Classes="muted" Margin="4,0" TextWrapping="Wrap" />
+      </DockPanel>
+    </Border>
+
+    <!-- The selected machine's page; with none, the welcome page. -->
+    <ScrollViewer Grid.Column="1">
+      <StackPanel x:Name="Welcome" Margin="{DynamicResource QPagePadding}" MaxWidth="760" HorizontalAlignment="Left" Spacing="22">
+        <StackPanel Spacing="6">
+          <TextBlock Text="Welcome to VM Qontrol" Classes="hero" />
+          <TextBlock Classes="muted" TextWrapping="Wrap"
+                     Text="Create, run and fine-tune virtual machines on this computer. Every setting is explained where you change it, with the recommended value beside it." />
+        </StackPanel>
+        <Border Classes="card">
+          <StackPanel Spacing="6">
+            <TextBlock Text="Your machines will appear here" FontWeight="SemiBold" />
+            <TextBlock Classes="muted" TextWrapping="Wrap"
+                       Text="Machines you already made with quickemu are found in your VMs folder and listed in the library." />
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</Window>

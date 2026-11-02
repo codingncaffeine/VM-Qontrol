@@ -28,3 +28,7 @@ publish/
 
 # Test output
 TestResults/
+
+# The source art as supplied (the repo carries the processed copies under assets/)
+/icon.jpg
+/github_banner.jpg

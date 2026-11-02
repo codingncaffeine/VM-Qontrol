@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=VM Qontrol
+GenericName=Virtual Machine Manager
+Comment=Create, run and fine-tune QEMU/KVM virtual machines
+Exec=vmqontrol
+Icon=io.github.codingncaffeine.VMQontrol
+StartupWMClass=io.github.codingncaffeine.VMQontrol
+Terminal=false
+Categories=System;Emulator;
+Keywords=VM;virtual;machine;QEMU;KVM;quickemu;virtualization;

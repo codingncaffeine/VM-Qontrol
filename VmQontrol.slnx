@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/VmQontrol.Core/VmQontrol.Core.csproj" />
+    <Project Path="src/VmQontrol.App/VmQontrol.App.csproj" />
+    <Project Path="src/VmQontrol.Cli/VmQontrol.Cli.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/VmQontrol.Tests/VmQontrol.Tests.csproj" />
+  </Folder>
+</Solution>

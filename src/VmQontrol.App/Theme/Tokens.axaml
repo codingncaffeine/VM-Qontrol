@@ -1,0 +1,64 @@
+<!-- VM Qontrol's design tokens: every colour, radius and spacing the views use comes from here, in light and dark.
+     The accent is the logo's blue; surfaces are a cool slate so the machines' screenshots carry the colour. -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ResourceDictionary.ThemeDictionaries>
+    <ResourceDictionary x:Key="Dark">
+      <Color x:Key="QBackgroundColor">#0E1117</Color>
+      <Color x:Key="QSidebarColor">#121721</Color>
+      <Color x:Key="QSurfaceColor">#161C27</Color>
+      <Color x:Key="QSurfaceRaisedColor">#1C2432</Color>
+      <Color x:Key="QBorderColor">#263043</Color>
+      <Color x:Key="QTextColor">#E6EBF3</Color>
+      <Color x:Key="QTextMutedColor">#8D99AD</Color>
+      <Color x:Key="QAccentColor">#2F95FF</Color>
+      <Color x:Key="QAccentHoverColor">#58ABFF</Color>
+      <Color x:Key="QAccentSoftColor">#1A2F4D</Color>
+      <Color x:Key="QOnAccentColor">#FFFFFF</Color>
+      <Color x:Key="QSuccessColor">#3DD68C</Color>
+      <Color x:Key="QWarningColor">#F5B83D</Color>
+      <Color x:Key="QDangerColor">#FF5D5D</Color>
+    </ResourceDictionary>
+    <ResourceDictionary x:Key="Light">
+      <Color x:Key="QBackgroundColor">#F4F6FA</Color>
+      <Color x:Key="QSidebarColor">#EBEFF5</Color>
+      <Color x:Key="QSurfaceColor">#FFFFFF</Color>
+      <Color x:Key="QSurfaceRaisedColor">#FFFFFF</Color>
+      <Color x:Key="QBorderColor">#D7DEE8</Color>
+      <Color x:Key="QTextColor">#141A24</Color>
+      <Color x:Key="QTextMutedColor">#5A667A</Color>
+      <Color x:Key="QAccentColor">#1673E0</Color>
+      <Color x:Key="QAccentHoverColor">#0F5FBF</Color>
+      <Color x:Key="QAccentSoftColor">#E1EDFC</Color>
+      <Color x:Key="QOnAccentColor">#FFFFFF</Color>
+      <Color x:Key="QSuccessColor">#16A365</Color>
+      <Color x:Key="QWarningColor">#B7790A</Color>
+      <Color x:Key="QDangerColor">#D93636</Color>
+    </ResourceDictionary>
+  </ResourceDictionary.ThemeDictionaries>
+
+  <SolidColorBrush x:Key="QBackground" Color="{DynamicResource QBackgroundColor}" />
+  <SolidColorBrush x:Key="QSidebar" Color="{DynamicResource QSidebarColor}" />
+  <SolidColorBrush x:Key="QSurface" Color="{DynamicResource QSurfaceColor}" />
+  <SolidColorBrush x:Key="QSurfaceRaised" Color="{DynamicResource QSurfaceRaisedColor}" />
+  <SolidColorBrush x:Key="QBorder" Color="{DynamicResource QBorderColor}" />
+  <SolidColorBrush x:Key="QText" Color="{DynamicResource QTextColor}" />
+  <SolidColorBrush x:Key="QTextMuted" Color="{DynamicResource QTextMutedColor}" />
+  <SolidColorBrush x:Key="QAccent" Color="{DynamicResource QAccentColor}" />
+  <SolidColorBrush x:Key="QAccentHover" Color="{DynamicResource QAccentHoverColor}" />
+  <SolidColorBrush x:Key="QAccentSoft" Color="{DynamicResource QAccentSoftColor}" />
+  <SolidColorBrush x:Key="QOnAccent" Color="{DynamicResource QOnAccentColor}" />
+  <SolidColorBrush x:Key="QSuccess" Color="{DynamicResource QSuccessColor}" />
+  <SolidColorBrush x:Key="QWarning" Color="{DynamicResource QWarningColor}" />
+  <SolidColorBrush x:Key="QDanger" Color="{DynamicResource QDangerColor}" />
+
+  <CornerRadius x:Key="QRadiusSmall">6</CornerRadius>
+  <CornerRadius x:Key="QRadius">10</CornerRadius>
+  <CornerRadius x:Key="QRadiusLarge">14</CornerRadius>
+  <x:Double x:Key="QFontSmall">12</x:Double>
+  <x:Double x:Key="QFontBody">14</x:Double>
+  <x:Double x:Key="QFontTitle">20</x:Double>
+  <x:Double x:Key="QFontHero">28</x:Double>
+  <Thickness x:Key="QPagePadding">32,28</Thickness>
+  <Thickness x:Key="QCardPadding">20,16</Thickness>
+</ResourceDictionary>

@@ -1,0 +1,56 @@
+<!-- Named styles over the tokens. A view picks a class (h1, muted, primary, card) and never sets a colour itself. -->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Style Selector="Window">
+    <Setter Property="Background" Value="{DynamicResource QBackground}" />
+    <Setter Property="Foreground" Value="{DynamicResource QText}" />
+    <Setter Property="FontSize" Value="{DynamicResource QFontBody}" />
+  </Style>
+  <Style Selector="TextBlock.hero">
+    <Setter Property="FontSize" Value="{DynamicResource QFontHero}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.h1">
+    <Setter Property="FontSize" Value="{DynamicResource QFontTitle}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.section">
+    <Setter Property="FontSize" Value="{DynamicResource QFontSmall}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource QTextMuted}" />
+    <Setter Property="LetterSpacing" Value="0.6" />
+  </Style>
+  <Style Selector="TextBlock.muted">
+    <Setter Property="Foreground" Value="{DynamicResource QTextMuted}" />
+  </Style>
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{DynamicResource QSurface}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource QBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource QRadiusLarge}" />
+    <Setter Property="Padding" Value="{DynamicResource QCardPadding}" />
+  </Style>
+  <Style Selector="Button.primary">
+    <Setter Property="Background" Value="{DynamicResource QAccent}" />
+    <Setter Property="Foreground" Value="{DynamicResource QOnAccent}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource QRadius}" />
+    <Setter Property="Padding" Value="18,10" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource QAccentHover}" />
+    <Setter Property="Foreground" Value="{DynamicResource QOnAccent}" />
+  </Style>
+  <Style Selector="Button.secondary">
+    <Setter Property="Background" Value="{DynamicResource QSurfaceRaised}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource QBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource QRadius}" />
+    <Setter Property="Padding" Value="18,10" />
+  </Style>
+  <Style Selector="TextBox.search">
+    <Setter Property="CornerRadius" Value="{DynamicResource QRadius}" />
+    <Setter Property="Background" Value="{DynamicResource QSurface}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource QBorder}" />
+  </Style>
+</Styles>

@@ -1,0 +1,42 @@
+name: CI
+
+# Every push to main and every pull request: build with warnings as errors and run the push tier (every test but the
+# Window and Integration tiers, which need a desktop-less X server or QEMU and run locally through tools/gate.sh --full).
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'global.json') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Build (warnings are errors)
+        run: dotnet build VmQontrol.slnx -c Release -warnaserror
+
+      - name: Tests (push tier)
+        run: dotnet test tests/VmQontrol.Tests -c Release --no-build --filter "Tier!=Window&Tier!=Integration"
