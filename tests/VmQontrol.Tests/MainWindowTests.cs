@@ -85,6 +85,46 @@ public sealed class MainWindowTests
         Assert.Equal(1, seen.tab);
     }
 
+    /// <summary>Right-click a machine, Move to folder, type a name: the sidebar files it under that heading, and it is remembered.</summary>
+    [Trait("Tier", "Window")]
+    [Fact]
+    public async Task A_machine_moved_to_a_folder_is_filed_under_it_and_remembered()
+    {
+        using var profile = new TestProfile("folders");
+        var lib = profile.Paths.DefaultLibrary;
+        Directory.CreateDirectory(lib);
+        foreach (var n in new[] { "linux", "freebsd", "haiku" })
+            File.Copy(Path.Combine(RecordedHost.FixtureDirectory, n + ".conf"), Path.Combine(lib, n + ".conf"));
+
+        var seen = await Ui.Run(() =>
+        {
+            var (window, shell) = Open(profile);
+            Ui.PumpUntil(() => shell.Machines.Count == 3, "the library");
+            var item = Named<ListBox>(window, "Library").GetVisualDescendants().OfType<ListBoxItem>().First(i => (i.DataContext as MachineViewModel)?.Name == "haiku");
+            Ui.Click(window, item, Avalonia.Input.MouseButton.Right);
+            Ui.Pump(0.3);
+            var menu = item.GetVisualDescendants().OfType<Grid>().Select(g => g.ContextMenu).First(c => c is not null)!
+                .Items.OfType<MenuItem>().First(m => (m.Header as string) == "Move to folder…");
+            Assert.True(menu.IsEffectivelyVisible, "the context menu did not open");
+            Ui.Click(window, menu);
+            Ui.PumpUntil(() => shell.FolderPrompt is not null, "the folder prompt");
+            Ui.Pump(0.2);
+            var box = Named<TextBox>(window, "FolderName");
+            box.Focus();
+            window.KeyTextInput("Retro");
+            Ui.Click(window, Named<Button>(window, "FolderMove"));
+            Ui.PumpUntil(() => shell.FolderPrompt is null, "the prompt to close");
+            Ui.Pump(0.3);
+            Ui.Capture(window, "phase3", "folders");
+            var order = shell.Machines.Select(m => $"{(m.ShowFolderHeader ? "[" + m.FolderHeader + "] " : "")}{m.Name}").ToList();
+            window.Close();
+            return order;
+        });
+
+        Assert.Equal(["freebsd", "linux", "[RETRO] haiku"], seen);
+        Assert.Equal("Retro", VmQontrol.Core.AppSettings.Load(profile.Paths).Folders.Single().Value);
+    }
+
     /// <summary>A real machine, started headless and silent before the window opens: its page finds it running and shows its screen.</summary>
     [Trait("Tier", "Integration")]
     [Fact]

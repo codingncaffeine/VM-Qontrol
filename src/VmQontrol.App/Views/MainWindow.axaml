@@ -42,10 +42,23 @@
             </Grid>
             <TextBlock x:Name="LibraryEmpty" DockPanel.Dock="Top" Text="No machines yet." Classes="muted" Margin="4,0" TextWrapping="Wrap"
                        IsVisible="{Binding LibraryEmpty}" />
-            <ListBox x:Name="Library" Classes="library" ItemsSource="{Binding Machines}" SelectedItem="{Binding Selected}">
-              <ListBox.ItemTemplate>
+            <ListBox x:Name="Library" Classes="library" ItemsSource="{Binding SidebarItems}" SelectedItem="{Binding SidebarSelection}">
+              <ListBox.DataTemplates>
+                <DataTemplate x:DataType="vm:FolderHeading">
+                  <TextBlock Text="{Binding Header}" Classes="section" Margin="2,10,0,0" IsHitTestVisible="False" />
+                </DataTemplate>
                 <DataTemplate x:DataType="vm:MachineViewModel">
-                  <Grid ColumnDefinitions="Auto,*,Auto">
+                  <Grid ColumnDefinitions="Auto,*,Auto" Background="Transparent">
+                    <Grid.ContextMenu>
+                      <ContextMenu>
+                        <MenuItem Header="Move to folder…" Command="{Binding MoveToFolderCommand}" />
+                        <MenuItem Header="Remove from folder" Command="{Binding RemoveFromFolderCommand}" IsVisible="{Binding HasFolder}" />
+                        <MenuItem Header="{Binding IsFavourite, Converter={x:Static vm:Text.FavouriteToggle}}" Command="{Binding ToggleFavouriteCommand}" />
+                        <Separator />
+                        <MenuItem Header="Open folder" Command="{Binding OpenFolderCommand}" />
+                        <MenuItem Header="Copy command line" Command="{Binding CopyCommandLineCommand}" />
+                      </ContextMenu>
+                    </Grid.ContextMenu>
                     <Border Classes="badge" Classes.windows="{Binding FamilyWindows}" Classes.linux="{Binding FamilyLinux}" Classes.apple="{Binding FamilyApple}" Classes.bsd="{Binding FamilyBsd}"
                             Width="34" Height="34">
                       <TextBlock Text="{Binding Badge}" FontSize="13" />
@@ -60,7 +73,7 @@
                     </StackPanel>
                   </Grid>
                 </DataTemplate>
-              </ListBox.ItemTemplate>
+              </ListBox.DataTemplates>
             </ListBox>
           </DockPanel>
         </Border>
@@ -78,6 +91,36 @@
         </Panel>
       </Grid>
     </DockPanel>
+
+    <!-- Move to folder: a name, or one of the folders that exist. -->
+    <Panel x:Name="FolderLayer" IsVisible="{Binding FolderPrompt, Converter={x:Static ObjectConverters.IsNotNull}}" Background="{DynamicResource QScrim}">
+      <Border Classes="card" Width="440" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="22,18"
+              DataContext="{Binding FolderPrompt}" x:DataType="vm:FolderPromptViewModel" BoxShadow="0 12 40 0 #60000000">
+        <StackPanel Spacing="12">
+          <TextBlock Text="{Binding Title}" Classes="h1" TextWrapping="Wrap" />
+          <TextBlock Text="Folders group machines in the library. Type a new folder's name, or pick one below." Classes="muted" TextWrapping="Wrap" />
+          <TextBox x:Name="FolderName" Text="{Binding Name}" PlaceholderText="Folder name, e.g. Work or Testing">
+            <TextBox.KeyBindings>
+              <KeyBinding Gesture="Enter" Command="{Binding MoveCommand}" />
+            </TextBox.KeyBindings>
+          </TextBox>
+          <ItemsControl ItemsSource="{Binding Existing}" IsVisible="{Binding HasExisting}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate><WrapPanel ItemSpacing="6" LineSpacing="6" /></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="x:String">
+                <Button Classes="tool" Content="{Binding}" Command="{Binding $parent[ItemsControl].((vm:FolderPromptViewModel)DataContext).PickCommand}" CommandParameter="{Binding}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
+            <Button Classes="secondary" Content="Cancel" Command="{Binding CancelCommand}" />
+            <Button x:Name="FolderMove" Classes="primary" Content="Move" Command="{Binding MoveCommand}" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+    </Panel>
 
     <!-- Ctrl+K: every action in one search box. -->
     <Panel x:Name="PaletteLayer" IsVisible="{Binding Palette.IsOpen}" Background="{DynamicResource QScrim}">

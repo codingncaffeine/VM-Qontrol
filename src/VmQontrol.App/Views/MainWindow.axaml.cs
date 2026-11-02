@@ -10,6 +10,17 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        // A folder heading row takes no pointer and no focus (containers are recycled, so set both ways).
+        if (this.FindControl<ListBox>("Library") is { } library)
+        {
+            library.ContainerPrepared += (_, e) =>
+            {
+                var heading = e.Container.DataContext is FolderHeading;
+                e.Container.IsHitTestVisible = !heading;
+                e.Container.Focusable = !heading;
+            };
+        }
+
         // Every Opened, not once: a window shown again gets a new Wayland toplevel that needs its app id again.
         Opened += (_, _) =>
         {
@@ -50,8 +61,13 @@ public partial class MainWindow : Window
         }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         KeyDown += (_, e) =>
         {
-            // Escape closes a notice the way its Cancel/OK button does.
-            if (e.Key == Key.Escape && DataContext is ShellViewModel { Notice: { } notice })
+            // Escape closes the folder prompt, or a notice the way its Cancel/OK button does.
+            if (e.Key == Key.Escape && DataContext is ShellViewModel { FolderPrompt: { } prompt })
+            {
+                prompt.CancelCommand.Execute(null);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape && DataContext is ShellViewModel { Notice: { } notice })
             {
                 notice.DismissCommand.Execute(null);
                 e.Handled = true;

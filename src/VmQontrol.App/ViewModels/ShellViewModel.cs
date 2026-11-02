@@ -34,6 +34,26 @@ public sealed partial class ShellViewModel : ObservableObject
     /// <summary>The machines the sidebar shows: favourites first, then by name, filtered by the search box.</summary>
     public ObservableCollection<MachineViewModel> Machines { get; } = [];
 
+    /// <summary>What the sidebar lists: folder headings and machines, in order.</summary>
+    public ObservableCollection<object> SidebarItems { get; } = [];
+
+    /// <summary>The sidebar's selection: a machine selects it; a heading cannot be selected.</summary>
+    public object? SidebarSelection
+    {
+        get => Selected;
+        set
+        {
+            if (value is MachineViewModel m) Selected = m;
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>A machine to open when the library has loaded (vmqontrol NAME).</summary>
+    public string? OpenOnStart { get; set; }
+
+    [ObservableProperty]
+    private FolderPromptViewModel? _folderPrompt;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowWelcome), nameof(ShowMachine))]
     private MachineViewModel? _selected;
@@ -93,7 +113,11 @@ public sealed partial class ShellViewModel : ObservableObject
             _all.Clear();
             foreach (var entry in entries)
             {
-                var vm = new MachineViewModel(this, entry) { IsFavourite = Settings.Favourites.Contains(entry.Machine!.Id) };
+                var vm = new MachineViewModel(this, entry)
+                {
+                    IsFavourite = Settings.Favourites.Contains(entry.Machine!.Id),
+                    FolderName = Settings.Folders.GetValueOrDefault(entry.Machine!.Id, ""),
+                };
                 _all.Add(vm);
                 models.Add(vm);
             }
@@ -102,6 +126,12 @@ public sealed partial class ShellViewModel : ObservableObject
             MachineCount = _all.Count;
             Scanning = false;
             Selected = _all.FirstOrDefault(m => m.Id == selectedId);
+            if (OpenOnStart is { } open)
+            {
+                Selected = _all.FirstOrDefault(m => string.Equals(m.Name, open, StringComparison.OrdinalIgnoreCase)) ?? Selected;
+                if (Selected is null) Note($"No machine called '{open}' in the library.");
+                OpenOnStart = null;
+            }
             Note(_all.Count == 0 ? "No machines yet." : $"{_all.Count} machine{(_all.Count == 1 ? "" : "s")} in the library.");
             foreach (var m in models) _ = m.LoadAsync(host);
         });
@@ -111,6 +141,7 @@ public sealed partial class ShellViewModel : ObservableObject
 
     partial void OnSelectedChanged(MachineViewModel? oldValue, MachineViewModel? newValue)
     {
+        OnPropertyChanged(nameof(SidebarSelection));
         if (oldValue is not null) oldValue.IsSelected = false;
         if (newValue is not null) newValue.IsSelected = true;
     }
@@ -123,7 +154,19 @@ public sealed partial class ShellViewModel : ObservableObject
             .OrderByDescending(m => m.IsFavourite).ThenBy(m => m.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
         var keep = Selected;
         Machines.Clear();
-        foreach (var m in shown) Machines.Add(m);
+        foreach (var m in shown.OrderBy(m => m.FolderName.Length == 0 ? "" : "\u0001" + m.FolderName, StringComparer.CurrentCultureIgnoreCase)) Machines.Add(m);
+        // Unfiled machines first, then each folder under its heading.
+        string? previous = null;
+        SidebarItems.Clear();
+        foreach (var m in Machines)
+        {
+            m.ShowFolderHeader = m.FolderName.Length > 0 && m.FolderName != previous;
+            if (m.ShowFolderHeader) SidebarItems.Add(new FolderHeading(m.FolderName));
+            SidebarItems.Add(m);
+            previous = m.FolderName;
+        }
+
+        OnPropertyChanged(nameof(SidebarSelection));
         if (keep is not null && shown.Contains(keep)) Selected = keep;
     }
 
@@ -141,6 +184,33 @@ public sealed partial class ShellViewModel : ObservableObject
 
     [RelayCommand]
     private void ShowHome() => Selected = null;
+
+    public IReadOnlyList<string> FolderNames => _all.Select(m => m.FolderName).Where(f => f.Length > 0).Distinct().Order(StringComparer.CurrentCultureIgnoreCase).ToList();
+
+    public void AskFolder(MachineViewModel machine)
+    {
+        var prompt = new FolderPromptViewModel(machine, FolderNames);
+        prompt.Done += name =>
+        {
+            FolderPrompt = null;
+            if (name is not null) SetFolder(machine, name);
+        };
+        FolderPrompt = prompt;
+    }
+
+    public void SetFolder(MachineViewModel machine, string folder)
+    {
+        folder = folder.Trim();
+        machine.FolderName = folder;
+        var folders = new Dictionary<string, string>(Settings.Folders);
+        if (folder.Length == 0) folders.Remove(machine.Id);
+        else folders[machine.Id] = folder;
+        Settings = Settings with { Folders = folders };
+        var settings = Settings;
+        _ = Task.Run(() => settings.Save(Paths));
+        ApplyFilter();
+        Note(folder.Length == 0 ? $"{machine.Name} is no longer in a folder." : $"{machine.Name} is in {folder}.");
+    }
 
     public void Show(NoticeViewModel notice)
     {
@@ -170,4 +240,10 @@ public sealed partial class ShellViewModel : ObservableObject
     {
         if (command is not null) CopyToClipboard(command, "The command is on the clipboard. Paste it into a terminal.");
     }
+}
+
+/// <summary>A folder's heading in the sidebar.</summary>
+public sealed record FolderHeading(string Name)
+{
+    public string Header => Name.ToUpperInvariant();
 }

@@ -96,6 +96,14 @@
         </Button>
       </WrapPanel>
 
+      <!-- The machine's notes (written in Settings). -->
+      <Border Classes="card" IsVisible="{Binding HasNotes}">
+        <StackPanel Spacing="6">
+          <TextBlock Text="NOTES" Classes="section" />
+          <SelectableTextBlock Text="{Binding Notes}" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+
       <!-- Anything that stops the machine starting, in plain words. -->
       <Border x:Name="Problems" Classes="card problem" IsVisible="{Binding HasProblems}">
         <StackPanel Spacing="8">

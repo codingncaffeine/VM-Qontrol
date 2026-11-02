@@ -19,7 +19,9 @@ internal static class Program
         if (args.Any(a => a is "--help" or "-h"))
         {
             Console.WriteLine($"""
-                Usage: vmqontrol [options]
+                Usage: vmqontrol [options] [MACHINE]
+
+                  MACHINE             Open on this machine's page (its name in the library).
 
                   --version           Print the version and licence, then exit.
 
@@ -38,6 +40,7 @@ internal static class Program
         if (paths.Isolated) Log.Info($"Isolated profile under {QontrolPaths.HomeVariable}");
         App.Paths = paths;
         App.Settings = AppSettings.Load(paths);
+        App.OpenOnStart = args.FirstOrDefault(a => !a.StartsWith('-'));
         App.WatchUiThread = true;
 
         try

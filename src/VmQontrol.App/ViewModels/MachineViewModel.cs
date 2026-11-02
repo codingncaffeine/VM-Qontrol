@@ -113,6 +113,28 @@ public sealed partial class MachineViewModel : ObservableObject
     [ObservableProperty]
     private bool _isSelected;
 
+    /// <summary>The sidebar folder the machine is filed under; empty = not filed.</summary>
+    [ObservableProperty]
+    private string _folderName = "";
+
+    /// <summary>This machine opens its folder's group in the sidebar, so it shows the folder's heading above itself.</summary>
+    [ObservableProperty]
+    private bool _showFolderHeader;
+
+    public string FolderHeader => FolderName.ToUpperInvariant();
+
+    public bool HasFolder => FolderName.Length > 0;
+
+    partial void OnFolderNameChanged(string value)
+    {
+        OnPropertyChanged(nameof(FolderHeader));
+        OnPropertyChanged(nameof(HasFolder));
+    }
+
+    public bool HasNotes => !string.IsNullOrWhiteSpace(Machine.Notes);
+
+    public string Notes => Machine.Notes;
+
     public bool HasScreen => Screen is not null;
 
     public bool IsRunning => State is PowerState.Running or PowerState.ShuttingDown;
@@ -388,6 +410,12 @@ public sealed partial class MachineViewModel : ObservableObject
 
     [RelayCommand]
     private void ToggleFavourite() => _shell.SetFavourite(this, !IsFavourite);
+
+    [RelayCommand]
+    private void MoveToFolder() => _shell.AskFolder(this);
+
+    [RelayCommand]
+    private void RemoveFromFolder() => _shell.SetFolder(this, "");
 
     private async Task ControlAsync(string done, Func<RunningMachine, CancellationToken, Task> action)
     {

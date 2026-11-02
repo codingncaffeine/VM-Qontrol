@@ -12,6 +12,9 @@ public class App : Application
     /// <summary>The profile's folders, set by <see cref="Program"/> (or a test) before the app starts.</summary>
     public static QontrolPaths? Paths { get; set; }
 
+    /// <summary>A machine to open when the library has loaded (the command line's MACHINE).</summary>
+    public static string? OpenOnStart { get; set; }
+
     /// <summary>The settings, read by <see cref="Program"/> before the UI thread starts.</summary>
     public static AppSettings? Settings { get; set; }
 
@@ -37,7 +40,7 @@ public class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var paths = Paths ?? QontrolPaths.ForCurrentUser();
-            var shell = new ViewModels.ShellViewModel(paths, Settings ?? AppSettings.Load(paths));
+            var shell = new ViewModels.ShellViewModel(paths, Settings ?? AppSettings.Load(paths)) { OpenOnStart = OpenOnStart };
             desktop.MainWindow = new MainWindow { DataContext = shell };
             _ = shell.StartAsync();
         }
