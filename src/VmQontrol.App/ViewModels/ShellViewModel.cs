@@ -61,6 +61,27 @@ public sealed partial class ShellViewModel : ObservableObject
 
     public bool ShowWizard => Wizard is not null;
 
+    /// <summary>A machine's settings while they are open.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowWelcome), nameof(ShowMachine), nameof(ShowSettings))]
+    private SettingsViewModel? _settingsPage;
+
+    public bool ShowSettings => SettingsPage is not null && Wizard is null;
+
+    public void OpenSettings(MachineViewModel machine) => _ = Task.Run(async () =>
+    {
+        var host = await HostAsync().ConfigureAwait(false);
+        Ui.Post(() =>
+        {
+            var page = new SettingsViewModel(machine, host);
+            page.Closed += () => Ui.Post(() =>
+            {
+                if (SettingsPage == page) SettingsPage = null;
+            });
+            SettingsPage = page;
+        });
+    });
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowWelcome), nameof(ShowMachine))]
     private MachineViewModel? _selected;
@@ -82,9 +103,9 @@ public sealed partial class ShellViewModel : ObservableObject
     [ObservableProperty]
     private bool _scanning;
 
-    public bool ShowWelcome => Selected is null && Wizard is null;
+    public bool ShowWelcome => Selected is null && Wizard is null && SettingsPage is null;
 
-    public bool ShowMachine => Selected is not null && Wizard is null;
+    public bool ShowMachine => Selected is not null && Wizard is null && SettingsPage is null;
 
     public bool LibraryEmpty => MachineCount == 0 && !Scanning;
 
@@ -111,7 +132,7 @@ public sealed partial class ShellViewModel : ObservableObject
     public async Task RefreshAsync()
     {
         Ui.Post(() => Scanning = true);
-        var entries = await Task.Run(() => Settings.LibraryRoots.SelectMany(LibraryScanner.Scan).Where(e => e.Machine is not null).ToList()).ConfigureAwait(false);
+        var entries = await Task.Run(() => Settings.LibraryRoots.SelectMany(r => LibraryScanner.Scan(r, Paths.State)).Where(e => e.Machine is not null).ToList()).ConfigureAwait(false);
         var host = await HostAsync().ConfigureAwait(false);
         var models = new List<MachineViewModel>();
         Ui.Post(() =>
@@ -148,6 +169,7 @@ public sealed partial class ShellViewModel : ObservableObject
 
     partial void OnSelectedChanged(MachineViewModel? oldValue, MachineViewModel? newValue)
     {
+        SettingsPage = null;
         OnPropertyChanged(nameof(SidebarSelection));
         if (oldValue is not null) oldValue.IsSelected = false;
         if (newValue is not null) newValue.IsSelected = true;

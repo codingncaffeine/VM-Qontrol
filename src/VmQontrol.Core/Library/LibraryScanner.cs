@@ -17,7 +17,10 @@ public sealed record LibraryEntry(MachineKind Kind, string Path, string Director
 /// <summary>Finds the machines in a library folder: VM Qontrol machines (NAME/vm.json) and quickemu machines (NAME.conf). Reads only.</summary>
 public static class LibraryScanner
 {
-    public static IReadOnlyList<LibraryEntry> Scan(string root)
+    /// <param name="root">The library folder.</param>
+    /// <param name="stateDirectory">VM Qontrol's state folder: a quickemu machine's settings changed in VM Qontrol are kept
+    /// there (machines/ID/vm.json), so its .conf is never written, and they replace what the .conf says.</param>
+    public static IReadOnlyList<LibraryEntry> Scan(string root, string? stateDirectory = null)
     {
         var entries = new List<LibraryEntry>();
         if (!System.IO.Directory.Exists(root)) return entries;
@@ -40,9 +43,12 @@ public static class LibraryScanner
             try
             {
                 var import = QuickemuImporter.Import(conf);
-                entries.Add(new LibraryEntry(MachineKind.Quickemu, conf, import.MachineDirectory, import.Machine, import.Notes, null));
+                var machine = import.Machine;
+                if (stateDirectory is not null && System.IO.Path.Combine(stateDirectory, "machines", machine.Id, MachineStore.FileName) is var saved && File.Exists(saved))
+                    machine = MachineStore.Load(saved) with { Id = machine.Id, ImportedFrom = machine.ImportedFrom };
+                entries.Add(new LibraryEntry(MachineKind.Quickemu, conf, import.MachineDirectory, machine, import.Notes, null));
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or System.Text.Json.JsonException)
             {
                 entries.Add(new LibraryEntry(MachineKind.Quickemu, conf, root, null, [], ex.Message));
             }

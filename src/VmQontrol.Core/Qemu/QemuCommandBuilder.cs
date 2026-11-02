@@ -387,6 +387,13 @@ public static class QemuCommandBuilder
             args.AddRange(["-chardev", $"socket,id=chrtpm,path={ctx.Runtime.Tpm}", "-tpmdev", "emulator,id=tpm0,chardev=chrtpm", "-device", "tpm-tis,tpmdev=tpm0"]);
         }
 
+        if (m.KernelBoot is { } kb && kb.Connect switch { Connect.Never => false, Connect.UntilInstalled => !ctx.SystemDiskUsed, _ => true })
+        {
+            args.AddRange(["-kernel", File(kb.Kernel)]);
+            if (kb.Initrd is { } initrd) args.AddRange(["-initrd", File(initrd)]);
+            if (kb.Append.Length > 0) args.AddRange(["-append", kb.Append]);
+        }
+
         // VM Qontrol talks to the machine over QMP only; the human monitor is off.
         args.AddRange(["-monitor", "none", "-qmp", $"unix:{ctx.Runtime.Qmp},server=on,wait=off", "-qmp", $"unix:{ctx.Runtime.Control},server=on,wait=off"]);
         var serial = m.Serial ?? os is not ("macos" or "windows" or "windows-server");

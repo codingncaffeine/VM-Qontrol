@@ -36,6 +36,9 @@ public sealed record NewMachineRequest
     /// <summary>Install Windows with no questions; <c>null</c> = the person installs it themselves.</summary>
     public WindowsInstallChoices? WindowsEasyInstall { get; init; }
 
+    /// <summary>Install Linux with no questions (Ubuntu, Fedora/RHEL family, Debian discs).</summary>
+    public LinuxInstallChoices? LinuxEasyInstall { get; init; }
+
     public string Notes { get; init; } = "";
 }
 
@@ -70,8 +73,19 @@ public static class MachineFactory
             media.Add(new MediaConfig { Role = MediaRole.Unattended, File = "unattended.iso", Connect = Connect.UntilInstalled });
         }
 
+        KernelBootConfig? kernelBoot = null;
+        if (r.LinuxEasyInstall is { } linux && r.InstallerIso is { } linuxIso && !windows)
+        {
+            var installer = LinuxEasyInstall.Detect(linuxIso);
+            if (installer == LinuxInstaller.None) throw new InvalidOperationException("Easy Install does not know this disc's installer.");
+            var (extra, boot) = LinuxEasyInstall.Prepare(installer, linuxIso, dir, linux);
+            media.AddRange(extra);
+            kernelBoot = boot;
+        }
+
         var machine = new MachineConfig
         {
+            KernelBoot = kernelBoot,
             Name = r.Name,
             Notes = r.Notes,
             Guest = r.Guest,

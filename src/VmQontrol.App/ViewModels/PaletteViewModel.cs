@@ -95,6 +95,7 @@ public sealed partial class PaletteViewModel(ShellViewModel shell) : ObservableO
             Add("Resume", s.ResumeCommand, s.IsPaused);
             Add("Reset", s.ResetCommand, s.IsActive);
             Add("Power off", s.PowerOffCommand, s.IsActive);
+            Add("Open settings", s.OpenSettingsCommand);
             Add("Open folder", s.OpenFolderCommand);
             Add("Copy command line", s.CopyCommandLineCommand);
             Add(s.IsFavourite ? "Remove from favourites" : "Add to favourites", s.ToggleFavouriteCommand);

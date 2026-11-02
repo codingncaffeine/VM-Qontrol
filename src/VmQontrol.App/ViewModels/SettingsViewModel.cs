@@ -1,0 +1,539 @@
+using System.Collections.ObjectModel;
+using System.Globalization;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using VmQontrol.Core.Hosts;
+using VmQontrol.Core.Machines;
+using VmQontrol.Core.Qemu;
+using VmQontrol.Core.Runtime;
+
+namespace VmQontrol.App.ViewModels;
+
+/// <summary>A choice in a settings list: the stored value (null = automatic) and the words for it.</summary>
+public sealed record Option(string? Value, string Label)
+{
+    public override string ToString() => Label;
+}
+
+/// <summary>A disc or floppy slot in the settings, editable.</summary>
+public sealed partial class MediaRow(MediaConfig media) : ObservableObject
+{
+    public MediaRole Role { get; } = media.Role;
+
+    [ObservableProperty] private string _file = media.File;
+    [ObservableProperty] private Option _connect = SettingsViewModel.ConnectOptions.First(o => o.Value == media.Connect.ToString());
+
+    public string Title => Role switch
+    {
+        MediaRole.Installer => "Installer disc",
+        MediaRole.Drivers => "Second disc (drivers, tools)",
+        MediaRole.Unattended => "Answer-file disc (Easy Install)",
+        MediaRole.Recovery => "macOS recovery image",
+        MediaRole.Bootloader => "macOS boot loader",
+        _ => "Floppy disk",
+    };
+
+    public string FileName => Path.GetFileName(File);
+
+    partial void OnFileChanged(string value) => OnPropertyChanged(nameof(FileName));
+
+    public MediaConfig ToConfig() => new() { Role = Role, File = File, Connect = Enum.Parse<Connect>(Connect.Value!) };
+}
+
+/// <summary>A disk in the settings: its file, size and bus; the size only grows, and only while the machine is off.</summary>
+public sealed partial class DiskRow(DiskConfig disk, string machineDirectory) : ObservableObject
+{
+    public DiskConfig Original { get; } = disk;
+
+    public string File => Original.File;
+
+    public string FileName => Path.GetFileName(Original.File);
+
+    public string FullPath => Path.IsPathRooted(Original.File) ? Original.File : Path.Combine(machineDirectory, Original.File);
+
+    [ObservableProperty] private decimal _sizeGb = disk.SizeGiB;
+    [ObservableProperty] private Option _bus = SettingsViewModel.BusOptions.First(o => o.Value == disk.Bus.ToString());
+
+    /// <summary>The smallest size allowed: a disk can grow, never shrink.</summary>
+    public decimal MinimumGb => Original.SizeGiB;
+
+    public string Used => System.IO.File.Exists(FullPath) ? $"{Formats.Bytes(new FileInfo(FullPath).Length)} used on this computer" : "Made at the next power on";
+
+    public DiskConfig ToConfig() => Original with { SizeGiB = (long)SizeGb, Bus = Enum.Parse<DiskBus>(Bus.Value!) };
+}
+
+/// <summary>A forwarded port: a port on this computer that reaches a port in the machine.</summary>
+public sealed partial class ForwardRow(PortForward forward) : ObservableObject
+{
+    [ObservableProperty] private string _protocol = forward.Protocol;
+    [ObservableProperty] private decimal _hostPort = forward.HostPort;
+    [ObservableProperty] private decimal _guestPort = forward.GuestPort;
+
+    public PortForward ToConfig() => new(Protocol, (int)HostPort, (int)GuestPort);
+}
+
+public sealed record SettingsSection(string Key, string Title, string Group);
+
+/// <summary>
+/// A machine's settings, every one of them, in words. Each field says what it does and what is recommended; each
+/// section says whether a change applies now or at the next power on. Saving records the change in the machine's
+/// settings history, so any change can be undone.
+/// </summary>
+public sealed partial class SettingsViewModel : ObservableObject
+{
+    public static readonly IReadOnlyList<Option> ConnectOptions =
+    [
+        new(nameof(Connect.Always), "Always connected"),
+        new(nameof(Connect.UntilInstalled), "Connected until the system is installed"),
+        new(nameof(Connect.Never), "Disconnected"),
+    ];
+
+    public static readonly IReadOnlyList<Option> BusOptions =
+    [
+        new(nameof(DiskBus.Auto), "Automatic (fastest the system supports)"),
+        new(nameof(DiskBus.Virtio), "VirtIO (fastest; needs drivers on Windows)"),
+        new(nameof(DiskBus.Sata), "SATA (works everywhere)"),
+        new(nameof(DiskBus.Ide), "IDE (very old systems)"),
+    ];
+
+    public IReadOnlyList<SettingsSection> Sections { get; } =
+    [
+        new("general", "General", "Options"),
+        new("memory", "Memory", "Hardware"),
+        new("processors", "Processors", "Hardware"),
+        new("disks", "Hard disks", "Hardware"),
+        new("media", "CD/DVD and floppy", "Hardware"),
+        new("network", "Network", "Hardware"),
+        new("usb", "USB", "Hardware"),
+        new("sound", "Sound", "Hardware"),
+        new("display", "Display", "Hardware"),
+        new("input", "Keyboard and mouse", "Hardware"),
+        new("firmware", "Firmware and TPM", "Hardware"),
+        new("serial", "Serial port", "Hardware"),
+        new("advanced", "Advanced", "Options"),
+        new("history", "Change history", "Options"),
+    ];
+
+    public IReadOnlyList<GuestChoice> GuestChoices { get; } = new NewMachineViewModel.GuestChoiceList();
+
+    public IReadOnlyList<Option> NetModes { get; } =
+    [
+        new("User", "NAT: share this computer's connection (recommended)"),
+        new("Restricted", "NAT without internet: this computer only"),
+        new("Bridge", "Bridged: a device on your own network"),
+        new("None", "No network"),
+    ];
+
+    public IReadOnlyList<Option> NicModels { get; } =
+    [
+        new(null, "Automatic"),
+        new("virtio-net-pci", "VirtIO (fastest; Linux, BSD, Windows with drivers)"),
+        new("e1000", "Intel E1000 (works everywhere)"),
+        new("rtl8139", "Realtek 8139 (very old systems)"),
+        new("vmxnet3", "VMware VMXNET3"),
+    ];
+
+    public IReadOnlyList<Option> UsbControllers { get; } = [new(null, "Automatic"), new("xhci", "USB 3 (recommended)"), new("ehci", "USB 2"), new("none", "None")];
+
+    public IReadOnlyList<Option> SoundCards { get; } =
+    [
+        new(null, "Automatic"), new("intel-hda", "Intel HD Audio"), new("ich9-intel-hda", "Intel HD Audio (ICH9)"),
+        new("virtio-sound-pci", "VirtIO sound"), new("ac97", "AC'97 (older systems)"), new("sb16", "Sound Blaster 16 (DOS)"), new("none", "No sound card"),
+    ];
+
+    public IReadOnlyList<Option> DisplayBackends { get; } =
+    [
+        new("Spice", "In a viewer window (recommended)"),
+        new("SpiceApp", "In QEMU's own SPICE window"),
+        new("Gtk", "In a QEMU GTK window"),
+        new("Sdl", "In a QEMU SDL window"),
+        new("None", "No screen (a server)"),
+    ];
+
+    public IReadOnlyList<Option> DisplayDevices { get; } =
+    [
+        new(null, "Automatic"), new("virtio-vga", "VirtIO GPU"), new("qxl-vga", "QXL (Windows guest tools)"),
+        new("vmware-svga", "VMware SVGA"), new("VGA", "Standard VGA"), new("bochs-display", "Bochs display"),
+    ];
+
+    public IReadOnlyList<Option> GlOptions { get; } = [new(null, "Automatic (on with a GPU)"), new("on", "On"), new("off", "Off")];
+
+    public IReadOnlyList<Option> Keyboards { get; } = [new(null, "Automatic"), new("usb", "USB"), new("ps2", "PS/2"), new("virtio", "VirtIO")];
+
+    public IReadOnlyList<Option> Pointers { get; } = [new(null, "Automatic"), new("tablet", "Tablet (pointer follows your mouse exactly)"), new("usb", "USB mouse"), new("ps2", "PS/2 mouse"), new("virtio", "VirtIO")];
+
+    public IReadOnlyList<Option> SerialOptions { get; } = [new(null, "Automatic (off for Windows and macOS)"), new("on", "On: shown in the Console tab"), new("off", "Off")];
+
+    public IReadOnlyList<Option> ViewerOptions { get; } = [new("auto", "Automatic"), new("remote-viewer", "remote-viewer"), new("spicy", "spicy")];
+
+    private readonly MachineViewModel _machine;
+    private readonly HostCapabilities? _host;
+
+    public SettingsViewModel(MachineViewModel machine, HostCapabilities? host)
+    {
+        _machine = machine;
+        _host = host;
+        var m = machine.Machine;
+        Original = m;
+        Name = m.Name;
+        Notes = m.Notes;
+        Guest = GuestChoices.FirstOrDefault(g => g.Os == m.Guest.Os && g.Release == m.Guest.Release) ?? GuestChoices.FirstOrDefault(g => g.Os == m.Guest.Os);
+        MemoryAuto = m.MemoryMiB is null;
+        MemoryGb = m.MemoryMiB is { } mib ? mib / 1024m : RecommendedMemoryGb();
+        CoresAuto = m.Cpu.Cores is null;
+        Cores = m.Cpu.Cores ?? RecommendedCores();
+        CpuModel = m.Cpu.Model ?? "";
+        Uefi = m.Firmware.Kind == FirmwareKind.Uefi;
+        SecureBoot = m.Firmware.SecureBoot;
+        Tpm = m.Tpm;
+        foreach (var d in m.Disks) Disks.Add(new DiskRow(d, machine.Folder));
+        foreach (var x in m.Media) Media.Add(new MediaRow(x));
+        var nic = m.Nics.FirstOrDefault() ?? new NicConfig { Mode = VmQontrol.Core.Machines.NetMode.None };
+        NetMode = NetModes.First(o => o.Value == nic.Mode.ToString());
+        NicModel = NicModels.FirstOrDefault(o => o.Value == nic.Model) ?? new Option(nic.Model, nic.Model ?? "Automatic");
+        Mac = nic.Mac ?? "";
+        Bridge = nic.Bridge ?? "br0";
+        SshForward = nic.SshForward;
+        SshPort = nic.SshHostPort ?? 0;
+        foreach (var f in nic.Forwards) Forwards.Add(new ForwardRow(f));
+        UsbController = UsbControllers.FirstOrDefault(o => o.Value == m.Usb.Controller) ?? UsbControllers[0];
+        UsbDevices = string.Join('\n', m.Usb.Passthrough.Select(u => $"{u.VendorId}:{u.ProductId}"));
+        SoundCard = SoundCards.FirstOrDefault(o => o.Value == m.Audio.Device) ?? SoundCards[0];
+        DisplayBackend = DisplayBackends.First(o => o.Value == m.Display.Backend.ToString());
+        DisplayDevice = DisplayDevices.FirstOrDefault(o => o.Value == m.Display.Device) ?? DisplayDevices[0];
+        Gl = GlOptions.First(o => o.Value == m.Display.Gl switch { true => "on", false => "off", _ => null });
+        Width = m.Display.Width ?? 0;
+        Height = m.Display.Height ?? 0;
+        Viewer = ViewerOptions.FirstOrDefault(o => o.Value == m.Display.Viewer) ?? ViewerOptions[0];
+        Keyboard = Keyboards.FirstOrDefault(o => o.Value == m.Input.Keyboard) ?? Keyboards[0];
+        Pointer = Pointers.FirstOrDefault(o => o.Value == m.Input.Mouse) ?? Pointers[0];
+        Layout = m.Input.Layout;
+        Serial = SerialOptions.First(o => o.Value == m.Serial switch { true => "on", false => "off", _ => null });
+        ExtraArgs = string.Join('\n', m.ExtraArgs);
+        Section = Sections[0];
+        LoadHistory();
+    }
+
+    public MachineConfig Original { get; private set; }
+
+    public string Title => $"{_machine.Name} settings";
+
+    public bool Running => _machine.IsActive;
+
+    public string TimingNote => Running
+        ? "The machine is running: changes marked \"next power on\" take effect when it is powered off and on again. Discs can be changed now."
+        : "The machine is off: every change takes effect at the next power on.";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SectionKey))]
+    private SettingsSection _section;
+
+    public string SectionKey => Section.Key;
+
+    // General
+    [ObservableProperty] private string _name;
+    [ObservableProperty] private string _notes;
+    [ObservableProperty] private GuestChoice? _guest;
+
+    // Memory and processors
+    [ObservableProperty] private bool _memoryAuto;
+    [ObservableProperty] private decimal _memoryGb;
+    [ObservableProperty] private bool _coresAuto;
+    [ObservableProperty] private decimal _cores;
+    [ObservableProperty] private string _cpuModel;
+
+    public decimal HostMemoryGb => _host?.MemoryGB ?? 0;
+
+    public decimal HostCores => _host?.LogicalCpus ?? 1;
+
+    public string MemoryNote => $"Recommended: {RecommendedMemoryGb()} GB for this system on this computer ({HostMemoryGb} GB). Giving more than half of the computer's memory slows the computer itself.";
+
+    public string CoresNote => $"Recommended: {RecommendedCores()} of this computer's {HostCores} processors.";
+
+    // Firmware
+    [ObservableProperty] private bool _uefi;
+    [ObservableProperty] private bool _secureBoot;
+    [ObservableProperty] private bool _tpm;
+
+    // Disks and media
+    public ObservableCollection<DiskRow> Disks { get; } = [];
+
+    public ObservableCollection<MediaRow> Media { get; } = [];
+
+    [ObservableProperty] private decimal _newDiskGb = 32;
+
+    // Network
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(IsBridged), nameof(IsNat))] private Option _netMode;
+    [ObservableProperty] private Option _nicModel;
+    [ObservableProperty] private string _mac;
+    [ObservableProperty] private string _bridge;
+    [ObservableProperty] private bool _sshForward;
+    [ObservableProperty] private decimal _sshPort;
+
+    public ObservableCollection<ForwardRow> Forwards { get; } = [];
+
+    public bool IsBridged => NetMode.Value == "Bridge";
+
+    public bool IsNat => NetMode.Value is "User" or "Restricted";
+
+    // USB, sound, display, input, serial
+    [ObservableProperty] private Option _usbController;
+    [ObservableProperty] private string _usbDevices;
+    [ObservableProperty] private Option _soundCard;
+    [ObservableProperty] private Option _displayBackend;
+    [ObservableProperty] private Option _displayDevice;
+    [ObservableProperty] private Option _gl;
+    [ObservableProperty] private decimal _width;
+    [ObservableProperty] private decimal _height;
+    [ObservableProperty] private Option _viewer;
+    [ObservableProperty] private Option _keyboard;
+    [ObservableProperty] private Option _pointer;
+    [ObservableProperty] private string _layout;
+    [ObservableProperty] private Option _serial;
+
+    // Advanced
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(CommandPreview))] private string _extraArgs;
+
+    public string CommandPreview => BuildPreview();
+
+    // History
+    public ObservableCollection<SettingsChange> History { get; } = [];
+
+    [ObservableProperty] private string _saveNote = "";
+
+    public event Action? Closed;
+
+    private decimal RecommendedMemoryGb() => _host is null ? 4 : Recommendations.For(_machine.Machine.Guest, null, _host).MemoryMiB.Value / 1024m;
+
+    private decimal RecommendedCores() => _host is null ? 2 : Recommendations.For(_machine.Machine.Guest, null, _host).Cores.Value;
+
+    /// <summary>The settings as they stand in the dialog now.</summary>
+    public MachineConfig Build()
+    {
+        var o = Original;
+        var nic = (o.Nics.FirstOrDefault() ?? new NicConfig()) with
+        {
+            Mode = Enum.Parse<NetMode>(NetMode.Value!),
+            Model = NicModel.Value,
+            Mac = Mac.Trim().Length > 0 ? Mac.Trim() : null,
+            Bridge = IsBridged ? Bridge.Trim() : null,
+            SshForward = SshForward,
+            SshHostPort = SshPort > 0 ? (int)SshPort : null,
+            Forwards = Forwards.Select(f => f.ToConfig()).ToList(),
+        };
+        return o with
+        {
+            Name = Name.Trim().Length > 0 ? Name.Trim() : o.Name,
+            Notes = Notes,
+            Guest = Guest is { } g ? o.Guest with { Os = g.Os, Release = g.Release } : o.Guest,
+            MemoryMiB = MemoryAuto ? null : (long)(MemoryGb * 1024),
+            Cpu = new CpuConfig { Cores = CoresAuto ? null : (int)Cores, Model = CpuModel.Trim().Length > 0 ? CpuModel.Trim() : null },
+            Firmware = o.Firmware with { Kind = Uefi ? FirmwareKind.Uefi : FirmwareKind.Bios, SecureBoot = Uefi && SecureBoot },
+            Tpm = Tpm,
+            Disks = Disks.Select(d => d.ToConfig()).ToList(),
+            Media = Media.Select(m => m.ToConfig()).ToList(),
+            Nics = [nic, .. o.Nics.Skip(1)],
+            Usb = new UsbConfig
+            {
+                Controller = UsbController.Value,
+                Passthrough = UsbDevices.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Select(l => l.Split(':')).Where(p => p.Length == 2).Select(p => new UsbDevice(p[0].ToLowerInvariant(), p[1].ToLowerInvariant(),
+                        o.Usb.Passthrough.FirstOrDefault(u => u.VendorId == p[0].ToLowerInvariant() && u.ProductId == p[1].ToLowerInvariant())?.Name)).ToList(),
+            },
+            Audio = new AudioConfig { Device = SoundCard.Value },
+            Display = new DisplayConfig
+            {
+                Backend = Enum.Parse<DisplayBackend>(DisplayBackend.Value!),
+                Device = DisplayDevice.Value,
+                Gl = Gl.Value switch { "on" => true, "off" => false, _ => null },
+                Width = Width > 0 && Height > 0 ? (int)Width : null,
+                Height = Width > 0 && Height > 0 ? (int)Height : null,
+                Viewer = Viewer.Value ?? "auto",
+            },
+            Input = new InputConfig { Keyboard = Keyboard.Value, Mouse = Pointer.Value, Layout = Layout.Trim().Length > 0 ? Layout.Trim() : "en-us" },
+            Serial = Serial.Value switch { "on" => true, "off" => false, _ => null },
+            ExtraArgs = ExtraArgs.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList(),
+        };
+    }
+
+    private string BuildPreview()
+    {
+        if (_host is null) return "";
+        try
+        {
+            var launch = QemuCommandBuilder.Build(Build(), new LaunchContext { Host = _host, MachineDirectory = _machine.Folder, Runtime = new RuntimePaths("/run/user/…/vmqontrol/" + _machine.Id[..12]), FileExists = File.Exists });
+            return "qemu-system-x86_64 \\\n  " + string.Join(" \\\n  ", Pairs(launch.Args)) + (launch.Errors.Count > 0 ? "\n\n" + string.Join("\n", launch.Errors.Select(e => "Cannot start: " + e)) : "");
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or FormatException)
+        {
+            return ex.Message;
+        }
+    }
+
+    private static IEnumerable<string> Pairs(IReadOnlyList<string> args)
+    {
+        for (var i = 0; i < args.Count; i++)
+            yield return i + 1 < args.Count && !args[i + 1].StartsWith('-') ? $"{args[i]} {args[++i]}" : args[i];
+    }
+
+    partial void OnSectionChanged(SettingsSection value)
+    {
+        if (value.Key == "advanced") OnPropertyChanged(nameof(CommandPreview));
+    }
+
+    // ── Commands
+
+    [RelayCommand]
+    private async Task SaveAsync()
+    {
+        var after = Build();
+        var before = Original;
+        var vmJson = Path.Combine(_machine.Folder, MachineStore.FileName);
+        var historyDir = _machine.HistoryDirectory;
+        try
+        {
+            var changes = await Task.Run(() =>
+            {
+                // An imported quickemu machine keeps its .conf untouched: VM Qontrol's settings for it live in its own state.
+                var target = _machine.IsQuickemu ? Path.Combine(historyDir, MachineStore.FileName) : vmJson;
+                var c = SettingsHistory.Save(before, after, target, historyDir);
+                foreach (var d in after.Disks.Zip(before.Disks).Where(p => p.First.SizeGiB > p.Second.SizeGiB))
+                    GrowDisk(d.First);
+                return c;
+            }).ConfigureAwait(false);
+            Ui.Post(() =>
+            {
+                Original = after;
+                SaveNote = changes.Count == 0 ? "Nothing changed." : $"Saved: {string.Join("; ", changes)}.";
+                LoadHistory();
+                _machine.Reload(after);
+            });
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Ui.Post(() => SaveNote = $"Not saved: {ex.Message}");
+        }
+    }
+
+    private void GrowDisk(DiskConfig disk)
+    {
+        var path = Path.IsPathRooted(disk.File) ? disk.File : Path.Combine(_machine.Folder, disk.File);
+        if (!File.Exists(path) || _machine.IsActive) return;
+        QemuImg.RunAsync(CancellationToken.None, "resize", "-f", disk.Format, path, disk.SizeGiB.ToString(CultureInfo.InvariantCulture) + "G").GetAwaiter().GetResult();
+    }
+
+    [RelayCommand]
+    private void Close() => Closed?.Invoke();
+
+    [RelayCommand]
+    private void AddDisk()
+    {
+        var index = Disks.Count;
+        string Name(int i) => $"disk{i}.qcow2";
+        while (Disks.Any(d => d.File == Name(index))) index++;
+        Disks.Add(new DiskRow(new DiskConfig { File = Name(index), SizeGiB = (long)NewDiskGb }, _machine.Folder));
+    }
+
+    [RelayCommand]
+    private void RemoveDisk(DiskRow row)
+    {
+        if (Disks.IndexOf(row) == 0) return; // The system disk stays; it holds the operating system.
+        Disks.Remove(row);
+    }
+
+    [RelayCommand]
+    private void AddDrive() => Media.Add(new MediaRow(new MediaConfig { Role = MediaRole.Drivers, File = "", Connect = Connect.Always }));
+
+    [RelayCommand]
+    private void RemoveMedia(MediaRow row) => Media.Remove(row);
+
+    /// <summary>Puts a disc in a drive; in a running machine the drive changes at once.</summary>
+    public async Task ChangeDiscAsync(MediaRow row, string file)
+    {
+        var old = row.File;
+        row.File = file;
+        if (_machine.Watcher is { } watcher)
+        {
+            try
+            {
+                var full = Path.IsPathRooted(old) ? old : Path.Combine(_machine.Folder, old);
+                await LiveMedia.ChangeAsync(watcher, old.Length > 0 ? full : null, file).ConfigureAwait(false);
+                Ui.Post(() => SaveNote = $"{Path.GetFileName(file)} is in the drive now. Save to keep it for the next power on.");
+            }
+            catch (Exception ex) when (ex is QmpException or IOException)
+            {
+                Ui.Post(() => SaveNote = $"The disc could not be changed now ({ex.Message}); it will be at the next power on once saved.");
+            }
+        }
+    }
+
+    [RelayCommand]
+    private async Task EjectAsync(MediaRow row)
+    {
+        if (_machine.Watcher is not { } watcher || row.File.Length == 0) return;
+        try
+        {
+            await LiveMedia.EjectAsync(watcher, Path.IsPathRooted(row.File) ? row.File : Path.Combine(_machine.Folder, row.File)).ConfigureAwait(false);
+            Ui.Post(() => SaveNote = "Ejected. Set the drive to Disconnected and save to keep it empty at the next power on.");
+        }
+        catch (Exception ex) when (ex is QmpException or IOException)
+        {
+            Ui.Post(() => SaveNote = $"The disc could not be ejected ({ex.Message}).");
+        }
+    }
+
+    [RelayCommand]
+    private void AddForward() => Forwards.Add(new ForwardRow(new PortForward("tcp", 8080, 80)));
+
+    [RelayCommand]
+    private void RemoveForward(ForwardRow row) => Forwards.Remove(row);
+
+    [RelayCommand]
+    private void NewMac()
+    {
+        // A locally administered address in QEMU's 52:54:00 block.
+        var bytes = new byte[3];
+        Random.Shared.NextBytes(bytes);
+        Mac = $"52:54:00:{bytes[0]:x2}:{bytes[1]:x2}:{bytes[2]:x2}";
+    }
+
+    [RelayCommand]
+    private void UseRecommendedMemory()
+    {
+        MemoryAuto = true;
+        MemoryGb = RecommendedMemoryGb();
+    }
+
+    [RelayCommand]
+    private void UseRecommendedCores()
+    {
+        CoresAuto = true;
+        Cores = RecommendedCores();
+    }
+
+    [RelayCommand]
+    private async Task RestoreAsync(SettingsChange change)
+    {
+        var before = SettingsHistory.Before(change);
+        var current = Original;
+        var historyDir = _machine.HistoryDirectory;
+        var target = _machine.IsQuickemu ? Path.Combine(historyDir, MachineStore.FileName) : Path.Combine(_machine.Folder, MachineStore.FileName);
+        await Task.Run(() => SettingsHistory.Save(current, before, target, historyDir)).ConfigureAwait(false);
+        Ui.Post(() =>
+        {
+            SaveNote = $"Restored the settings from before {change.At.LocalDateTime:g}.";
+            _machine.Reload(before);
+            Closed?.Invoke();
+        });
+    }
+
+    private void LoadHistory()
+    {
+        var dir = _machine.HistoryDirectory;
+        _ = Task.Run(() => SettingsHistory.Read(dir)).ContinueWith(t => Ui.Post(() =>
+        {
+            History.Clear();
+            foreach (var c in t.Result) History.Add(c);
+        }), TaskScheduler.Default);
+    }
+}

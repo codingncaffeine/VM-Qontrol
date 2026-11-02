@@ -82,6 +82,12 @@
             <TextBlock Text="Power off" />
           </StackPanel>
         </Button>
+        <Button x:Name="OpenSettings" Classes="tool" Command="{Binding OpenSettingsCommand}" ToolTip.Tip="Memory, processors, disks, discs, network, display and everything else">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Path Classes="icon" Data="{StaticResource IconSettings}" />
+            <TextBlock Text="Settings" />
+          </StackPanel>
+        </Button>
         <Button Classes="tool" Command="{Binding OpenFolderCommand}" ToolTip.Tip="Open the folder that holds this machine's files">
           <StackPanel Orientation="Horizontal" Spacing="8">
             <Path Classes="icon" Data="{StaticResource IconFolder}" />

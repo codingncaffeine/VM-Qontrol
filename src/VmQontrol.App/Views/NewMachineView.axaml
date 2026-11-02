@@ -136,9 +136,9 @@
 
         <!-- 2 Easy Install -->
         <StackPanel Spacing="14" IsVisible="{Binding Step, Converter={x:Static vm:Text.Is}, ConverterParameter=2}">
-          <TextBlock Text="Install Windows for you?" Classes="h1" />
-          <ToggleSwitch x:Name="EasyInstall" IsChecked="{Binding EasyInstall}" OnContent="Yes: install it with no questions" OffContent="No: I will answer Windows Setup myself" />
-          <TextBlock Text="Windows Setup normally asks a dozen questions. VM Qontrol answers them from what you enter here, then you come back to a desktop." Classes="muted" TextWrapping="Wrap" />
+          <TextBlock Text="{Binding EasyInstallTitle}" Classes="h1" />
+          <ToggleSwitch x:Name="EasyInstall" IsChecked="{Binding EasyInstall}" OnContent="Yes: install it with no questions" OffContent="No: I will answer the installer myself" />
+          <TextBlock Text="{Binding EasyInstallExplain}" Classes="muted" TextWrapping="Wrap" />
           <Border Classes="card" IsVisible="{Binding EasyInstallShown}">
             <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="12">
               <TextBlock Text="User name" VerticalAlignment="Center" />
@@ -147,19 +147,20 @@
               <StackPanel Grid.Row="1" Grid.Column="1" Spacing="4">
                 <TextBox Text="{Binding Password}" PasswordChar="●" RevealPassword="{Binding #ShowPassword.IsChecked}" />
                 <CheckBox x:Name="ShowPassword" Content="Show password" />
-                <TextBlock Text="May be left empty. It is stored in the machine's answer file; use one you do not use elsewhere." Classes="muted" TextWrapping="Wrap" FontSize="{DynamicResource QFontSmall}" />
+                <TextBlock Text="{Binding PasswordNote}" Classes="muted" Classes.warn="{Binding PasswordRequired}" TextWrapping="Wrap" FontSize="{DynamicResource QFontSmall}" />
               </StackPanel>
-              <TextBlock Grid.Row="2" Text="Product key" VerticalAlignment="Center" />
-              <StackPanel Grid.Row="2" Grid.Column="1" Spacing="4">
+              <TextBlock Grid.Row="2" Text="Product key" VerticalAlignment="Center" IsVisible="{Binding IsWindowsEasy}" />
+              <StackPanel Grid.Row="2" Grid.Column="1" Spacing="4" IsVisible="{Binding IsWindowsEasy}">
                 <TextBox Text="{Binding ProductKey}" PlaceholderText="Optional: XXXXX-XXXXX-XXXXX-XXXXX-XXXXX" />
                 <TextBlock Text="{Binding KeyNote}" Classes="muted" Classes.warn="{Binding NeedsOwnKey}" TextWrapping="Wrap" FontSize="{DynamicResource QFontSmall}" />
               </StackPanel>
               <TextBlock Grid.Row="3" Text="Language and region" VerticalAlignment="Center" />
               <ComboBox Grid.Row="3" Grid.Column="1" ItemsSource="{Binding Locales}" SelectedItem="{Binding LocaleChoice}" HorizontalAlignment="Stretch" MaxDropDownHeight="360" />
               <TextBlock Grid.Row="4" Text="Time zone" VerticalAlignment="Center" />
-              <ComboBox Grid.Row="4" Grid.Column="1" ItemsSource="{Binding TimeZones}" SelectedItem="{Binding TimeZoneChoice}" HorizontalAlignment="Stretch" MaxDropDownHeight="360" />
-              <TextBlock Grid.Row="5" Text="Driver disc" VerticalAlignment="Top" Margin="0,6,0,0" />
-              <StackPanel Grid.Row="5" Grid.Column="1" Spacing="4">
+              <ComboBox Grid.Row="4" Grid.Column="1" ItemsSource="{Binding TimeZones}" SelectedItem="{Binding TimeZoneChoice}" HorizontalAlignment="Stretch" MaxDropDownHeight="360" IsVisible="{Binding IsWindowsEasy}" />
+              <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding IanaTimeZone}" VerticalAlignment="Center" IsVisible="{Binding IsLinuxEasy}" />
+              <TextBlock Grid.Row="5" Text="Driver disc" VerticalAlignment="Top" Margin="0,6,0,0" IsVisible="{Binding IsWindowsEasy}" />
+              <StackPanel Grid.Row="5" Grid.Column="1" Spacing="4" IsVisible="{Binding IsWindowsEasy}">
                 <StackPanel Orientation="Horizontal" Spacing="8">
                   <Button x:Name="ChooseDrivers" Classes="tool" Content="Choose virtio-win.iso…" />
                   <TextBlock Text="{Binding DriversIso, TargetNullValue='Optional'}" Classes="muted" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="320" />

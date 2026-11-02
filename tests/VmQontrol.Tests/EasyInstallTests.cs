@@ -136,12 +136,12 @@ public sealed class EasyInstallTests
     [InlineData("Windows 11 Education", "NW6C2-QMPVW-D7KKK-3GKT6-VCFB2")]
     [InlineData("Windows 10 Home", null)]
     [InlineData("Windows 11 Home Single Language", null)]
-    public void Each_edition_gets_its_published_setup_key(string edition, string? key) => Assert.Equal(key, WindowsSetupKeys.For(edition));
+    public void Each_edition_gets_its_published_setup_key(string edition, string? key) => Assert.Equal(key, WindowsSetupKeys.For(edition, consumerDisc: false));
 
     [Fact]
     public void The_answer_file_uses_the_setup_key_unless_the_person_gave_their_own()
     {
-        var pro = new WindowsInstallChoices { UserName = "a", ComputerName = "b", EditionName = "Windows 10 Pro" };
+        var pro = new WindowsInstallChoices { UserName = "a", ComputerName = "b", EditionName = "Windows 10 Pro", ConsumerDisc = false };
         Assert.Contains("W269N-WFGWX-YVC9B-37TCY-YTCJR", WindowsAnswerFile.Build(pro, "10"), StringComparison.Ordinal);
         Assert.Contains("AAAAA-BBBBB-CCCCC-DDDDD-EEEEE", WindowsAnswerFile.Build(pro with { ProductKey = "AAAAA-BBBBB-CCCCC-DDDDD-EEEEE" }, "10"), StringComparison.Ordinal);
         Assert.False(WindowsAnswerFile.HasKey(pro with { EditionName = "Windows 10 Home" }));

@@ -58,21 +58,30 @@ public sealed partial class NewMachineViewModel : ObservableObject
         });
     }
 
-    public IReadOnlyList<GuestChoice> GuestChoices { get; } =
-    [
-        new("Windows 11", "windows", "11"),
-        new("Windows 10", "windows", "10"),
-        new("Windows Server", "windows-server", ""),
-        new("Linux (modern)", "linux", ""),
-        new("Linux (older than 2010)", "linux_old", ""),
-        new("FreeBSD", "freebsd", ""),
-        new("Other BSD", "netbsd", ""),
-        new("Haiku", "haiku", ""),
-        new("Solaris / illumos", "solaris", ""),
-        new("ReactOS", "reactos", ""),
-        new("FreeDOS", "freedos", ""),
-        new("Something else", "linux", ""),
-    ];
+    public IReadOnlyList<GuestChoice> GuestChoices { get; } = new GuestChoiceList();
+
+    /// <summary>The systems a person can pick by hand (the wizard and Settings share it).</summary>
+    public sealed class GuestChoiceList : List<GuestChoice>
+    {
+        public GuestChoiceList()
+            : base(
+            [
+                new("Windows 11", "windows", "11"),
+                new("Windows 10", "windows", "10"),
+                new("Windows Server", "windows-server", ""),
+                new("Linux (modern)", "linux", ""),
+                new("Linux (older than 2010)", "linux_old", ""),
+                new("macOS", "macos", ""),
+                new("FreeBSD", "freebsd", ""),
+                new("Other BSD", "netbsd", ""),
+                new("Haiku", "haiku", ""),
+                new("Solaris / illumos", "solaris", ""),
+                new("ReactOS", "reactos", ""),
+                new("FreeDOS", "freedos", ""),
+            ])
+        {
+        }
+    }
 
     // ── Steps
     [ObservableProperty]
@@ -175,16 +184,48 @@ public sealed partial class NewMachineViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(EasyInstallShown))]
     private bool _easyInstall = true;
 
-    public bool EasyInstallShown => IsWindows && Source == SourceKind.Disc && EasyInstall;
+    public bool EasyInstallShown => EasyInstallPossible && EasyInstall;
 
-    public bool EasyInstallPossible => IsWindows && Source == SourceKind.Disc && IsoPath is not null;
+    public bool EasyInstallPossible => Source == SourceKind.Disc && IsoPath is not null && (IsWindows || LinuxInstallerFound != LinuxInstaller.None);
+
+    /// <summary>The Linux installer on the disc, when Easy Install knows it.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EasyInstallPossible), nameof(EasyInstallShown), nameof(IsLinuxEasy), nameof(EasyInstallTitle), nameof(EasyInstallExplain))]
+    private LinuxInstaller _linuxInstallerFound;
+
+    public bool IsLinuxEasy => !IsWindows && LinuxInstallerFound != LinuxInstaller.None;
+
+    public bool IsWindowsEasy => IsWindows;
+
+    public string EasyInstallTitle => IsWindows ? "Install Windows for you?" : "Install it for you?";
+
+    public string EasyInstallExplain => IsWindows
+        ? "Windows Setup normally asks a dozen questions. VM Qontrol answers them from what you enter here, then you come back to a desktop."
+        : LinuxInstallerFound switch
+        {
+            LinuxInstaller.Ubuntu => "Ubuntu's installer is answered from what you enter here (its autoinstall), with the disk used whole, SSH, the guest agent and the clipboard agent installed.",
+            LinuxInstaller.Anaconda => "The installer (Anaconda) is answered with a kickstart made from what you enter here: the disk used whole, your account, the guest agent and the clipboard agent.",
+            LinuxInstaller.Debian => "Debian's installer is answered with a preseed made from what you enter here: the disk used whole, your account, SSH, the guest agent and the clipboard agent.",
+            _ => "",
+        };
+
+    /// <summary>Linux needs a password: its installers make no account without one.</summary>
+    public bool PasswordRequired => IsLinuxEasy && EasyInstall;
+
+    public string PasswordNote => PasswordRequired
+        ? "Required: Linux installers make no account without a password. It is stored hashed in the machine's answer file."
+        : "May be left empty. It is stored in the machine's answer file; use one you do not use elsewhere.";
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(NextCommand))]
     private string _userName = "User";
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(NextCommand))]
     private string _password = "";
+
+    /// <summary>The IANA time zone for Linux answer files (this computer's).</summary>
+    public string IanaTimeZone { get; } = TimeZoneInfo.Local.Id.Contains('/') ? TimeZoneInfo.Local.Id : "UTC";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(NeedsOwnKey), nameof(KeyNote))]
@@ -192,7 +233,10 @@ public sealed partial class NewMachineViewModel : ObservableObject
     private string _productKey = "";
 
     /// <summary>Home editions have no published setup key: Easy Install needs the person's own.</summary>
-    public bool NeedsOwnKey => EasyInstallShown && ProductKey.Trim().Length == 0 && WindowsSetupKeys.For(Edition?.Name ?? "") is null;
+    public bool NeedsOwnKey => EasyInstallShown && IsWindows && ProductKey.Trim().Length == 0 && WindowsSetupKeys.For(Edition?.Name ?? "", ConsumerDisc) is null;
+
+    /// <summary>A consumer disc (Home, Pro…) takes retail setup keys; a volume-licence disc takes KMS client setup keys.</summary>
+    public bool ConsumerDisc => !Editions.Any(e => e.Name.Contains("Enterprise", StringComparison.OrdinalIgnoreCase)) || Editions.Any(e => e.Name.Contains("Home", StringComparison.OrdinalIgnoreCase));
 
     public string KeyNote => NeedsOwnKey
         ? $"{Edition?.DisplayName ?? "This edition"} needs your product key to install without questions. Enter it here, or choose a Pro edition on the first page."
@@ -282,7 +326,7 @@ public sealed partial class NewMachineViewModel : ObservableObject
     private bool CanNext() => !Busy && Step switch
     {
         0 => Source switch { SourceKind.Disc => IsoPath is not null && !IsoProblem, SourceKind.Download => Entry is not null, _ => true },
-        2 => !EasyInstallShown || (UserName.Trim().Length > 0 && !NeedsOwnKey),
+        2 => !EasyInstallShown || (UserName.Trim().Length > 0 && !NeedsOwnKey && (!PasswordRequired || Password.Length > 0)),
         3 => Name.Trim().Length > 0,
         _ => true,
     };
@@ -343,13 +387,14 @@ public sealed partial class NewMachineViewModel : ObservableObject
             }
 
             var db = _osinfo ?? OsInfoDb.LoadInstalled();
+            var linux = LinuxEasyInstall.Detect(path);
             if (db?.Identify(volume) is { } match)
             {
                 var also = match.Ambiguous.Count > 0 ? $" It could also be {string.Join(" or ", match.Ambiguous.Select(a => a.Name))}; change it on the next page if so." : "";
-                return new DiscDetection(false, GuestMapping.ToGuest(match.Os), $"{match.Os.Name}.{also}", [], match.Os.Name);
+                return new DiscDetection(false, GuestMapping.ToGuest(match.Os), $"{match.Os.Name}.{also}", [], match.Os.Name, linux);
             }
 
-            return new DiscDetection(false, new GuestConfig { Os = "linux" }, $"A disc labelled \"{volume.VolumeId}\". Its system is not known; choose it on the next page.", [], volume.VolumeId);
+            return new DiscDetection(false, new GuestConfig { Os = "linux" }, $"A disc labelled \"{volume.VolumeId}\". Its system is not known; choose it on the next page.", [], volume.VolumeId, linux);
         }).ConfigureAwait(false);
         Ui.Post(() =>
         {
@@ -359,11 +404,19 @@ public sealed partial class NewMachineViewModel : ObservableObject
             Editions = result.Editions;
             Edition = result.Editions.FirstOrDefault(e => e.DisplayName.EndsWith(" Pro", StringComparison.Ordinal)) ?? result.Editions.FirstOrDefault();
             if (result.Guest is { } g) Detected(g, result.Text);
+            LinuxInstallerFound = result.Linux;
             if (result.Name.Length > 0 && (Name == "New machine" || Name.Length == 0)) Name = Edition?.DisplayName ?? result.Name;
             OnPropertyChanged(nameof(EasyInstallPossible));
             OnPropertyChanged(nameof(EasyInstallShown));
             NextCommand.NotifyCanExecuteChanged();
         });
+    }
+
+    partial void OnEasyInstallChanged(bool value)
+    {
+        OnPropertyChanged(nameof(PasswordRequired));
+        OnPropertyChanged(nameof(PasswordNote));
+        NextCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnEditionChanged(WindowsEdition? value)
@@ -467,7 +520,17 @@ public sealed partial class NewMachineViewModel : ObservableObject
             Firmware = Uefi ? FirmwareKind.Uefi : FirmwareKind.Bios,
             SecureBoot = SecureBoot,
             Tpm = Tpm,
-            WindowsEasyInstall = EasyInstallShown
+            LinuxEasyInstall = EasyInstallShown && IsLinuxEasy
+                ? new LinuxInstallChoices
+                {
+                    UserName = UserName.Trim(),
+                    Password = Password,
+                    HostName = LinuxEasyInstall.HostName(Name),
+                    TimeZone = IanaTimeZone,
+                    Locale = Locale.Replace('-', '_') + ".UTF-8",
+                }
+                : null,
+            WindowsEasyInstall = EasyInstallShown && IsWindows
                 ? new WindowsInstallChoices
                 {
                     UserName = UserName.Trim(),
@@ -475,6 +538,7 @@ public sealed partial class NewMachineViewModel : ObservableObject
                     ComputerName = WindowsAnswerFile.ComputerName(Name),
                     EditionIndex = Edition?.Index ?? 1,
                     EditionName = Edition?.Name ?? "",
+                    ConsumerDisc = ConsumerDisc,
                     ProductKey = ProductKey.Trim(),
                     Locale = Locale,
                     TimeZone = TimeZone,
@@ -574,7 +638,8 @@ public sealed partial class NewMachineViewModel : ObservableObject
                 _ => "None yet (attach one later in Settings)",
             }),
         };
-        if (EasyInstallShown) rows.Add(new("Easy Install", $"{Edition?.DisplayName ?? "Windows"} for {UserName}{(Password.Length == 0 ? " (no password)" : "")}{(DriversIso is null ? "" : ", with VirtIO drivers")}"));
+        if (EasyInstallShown && IsWindows) rows.Add(new("Easy Install", $"{Edition?.DisplayName ?? "Windows"} for {UserName}{(Password.Length == 0 ? " (no password)" : "")}{(DriversIso is null ? "" : ", with VirtIO drivers")}"));
+        if (EasyInstallShown && IsLinuxEasy) rows.Add(new("Easy Install", $"For {UserName}, host name {LinuxEasyInstall.HostName(Name)}, time zone {IanaTimeZone}"));
         rows.Add(new("Memory", $"{MemoryGb} GB"));
         rows.Add(new("Processors", $"{Cores}"));
         rows.Add(new("Hard disk", $"{DiskGb} GB, grows as it is used"));
@@ -585,7 +650,7 @@ public sealed partial class NewMachineViewModel : ObservableObject
 }
 
 /// <summary>What reading an installer disc found.</summary>
-internal sealed record DiscDetection(bool Problem, GuestConfig? Guest, string Text, IReadOnlyList<WindowsEdition> Editions, string Name);
+internal sealed record DiscDetection(bool Problem, GuestConfig? Guest, string Text, IReadOnlyList<WindowsEdition> Editions, string Name, LinuxInstaller Linux = LinuxInstaller.None);
 
 /// <summary>A step in the wizard's rail.</summary>
 public sealed record StepItem(string Title, bool IsCurrent, bool IsDone);

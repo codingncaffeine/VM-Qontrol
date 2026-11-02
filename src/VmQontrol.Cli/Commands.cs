@@ -57,7 +57,7 @@ internal static class Commands
                     output.WriteLine(Usage);
                     return 0;
                 case "list":
-                    return List(args.Length > 1 ? args[1] : paths.DefaultLibrary, output);
+                    return List(args.Length > 1 ? args[1] : paths.DefaultLibrary, paths, output);
                 case "inspect" when args.Length > 1:
                     return Inspect(args[1], paths, host(), output, error);
                 case "detect" when args.Length > 1:
@@ -122,9 +122,9 @@ internal static class Commands
         }
     }
 
-    private static int List(string root, TextWriter output)
+    private static int List(string root, QontrolPaths paths, TextWriter output)
     {
-        var entries = LibraryScanner.Scan(root);
+        var entries = LibraryScanner.Scan(root, paths.State);
         if (entries.Count == 0)
         {
             output.WriteLine($"No machines in {root}.");
@@ -273,6 +273,7 @@ internal static class Commands
                 ComputerName = WindowsAnswerFile.ComputerName(name),
                 EditionIndex = (int)(Number("--edition") ?? 1),
                 EditionName = iso is not null ? WindowsMedia.Inspect(iso)?.Editions.FirstOrDefault(e => e.Index == (int)(Number("--edition") ?? 1))?.Name ?? "" : "",
+                ConsumerDisc = iso is null || WindowsMedia.Inspect(iso)?.ConsumerDisc != false,
                 ProductKey = Option("--key") ?? "",
                 FirstLogonCommands = Option("--first-logon") is { } cmd ? [cmd] : [],
             };
@@ -357,7 +358,7 @@ internal static class Commands
         var json = Directory.Exists(target) ? System.IO.Path.Combine(target, MachineStore.FileName) : target;
         if (File.Exists(json) && System.IO.Path.GetFileName(json) == MachineStore.FileName)
             return new LibraryEntry(MachineKind.Native, System.IO.Path.GetFullPath(json), System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(json))!, MachineStore.Load(json), [], null);
-        return LibraryScanner.Scan(paths.DefaultLibrary).FirstOrDefault(e => string.Equals(e.Machine?.Name, target, StringComparison.OrdinalIgnoreCase));
+        return LibraryScanner.Scan(paths.DefaultLibrary, paths.State).FirstOrDefault(e => string.Equals(e.Machine?.Name, target, StringComparison.OrdinalIgnoreCase));
     }
 
     private static string Quote(string s) => s.Any(c => c is ' ' or '(' or ')' or '\'' or '"' or '$') ? $"'{s.Replace("'", "'\\''", StringComparison.Ordinal)}'" : s;

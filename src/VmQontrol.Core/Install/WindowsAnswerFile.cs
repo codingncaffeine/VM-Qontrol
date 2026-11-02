@@ -18,6 +18,9 @@ public sealed record WindowsInstallChoices
     /// <summary>The edition's name ("Windows 11 Pro"), which picks Microsoft's setup key when no key is given.</summary>
     public string EditionName { get; init; } = "";
 
+    /// <summary>A consumer disc (Home, Pro… together) rather than a volume-licence disc: they take different setup keys.</summary>
+    public bool ConsumerDisc { get; init; } = true;
+
     /// <summary>A product key, or empty to use the edition's published setup key (Windows asks for activation later).</summary>
     public string ProductKey { get; init; } = "";
 
@@ -160,7 +163,7 @@ public static class WindowsAnswerFile
 
     /// <summary>The person's key, else Microsoft's setup key for the edition; Setup shows its key page only when there is neither.</summary>
     public static string KeyFor(WindowsInstallChoices c) =>
-        c.ProductKey.Trim() is { Length: > 0 } own ? own : WindowsSetupKeys.For(c.EditionName) ?? "";
+        c.ProductKey.Trim() is { Length: > 0 } own ? own : WindowsSetupKeys.For(c.EditionName, c.ConsumerDisc) ?? "";
 
     /// <summary>Whether Easy Install can finish without stopping: a key of the person's own, or a published setup key.</summary>
     public static bool HasKey(WindowsInstallChoices c) => KeyFor(c).Length > 0;

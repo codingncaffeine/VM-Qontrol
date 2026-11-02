@@ -11,6 +11,10 @@ public sealed record WindowsEdition(int Index, string Name, string DisplayName, 
 /// <summary>What a Windows installation disc really holds.</summary>
 public sealed record WindowsMediaInfo(int Build, string Branch, string Architecture, string Release, bool Server, IReadOnlyList<WindowsEdition> Editions)
 {
+    /// <summary>A consumer disc (Home, Pro… together) rather than a volume-licence disc (Enterprise, no Home).</summary>
+    public bool ConsumerDisc => !Editions.Any(e => e.Name.Contains("Enterprise", StringComparison.OrdinalIgnoreCase))
+                                || Editions.Any(e => e.Name.Contains("Home", StringComparison.OrdinalIgnoreCase));
+
     /// <summary>"Windows 11 (build 26100)" — for the wizard.</summary>
     public string Description => $"Windows {(Server ? "Server " : "")}{Release} (build {Build})";
 }

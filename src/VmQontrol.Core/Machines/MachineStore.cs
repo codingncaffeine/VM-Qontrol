@@ -19,6 +19,7 @@ public static class MachineStore
 
     public static void Save(MachineConfig config, string file)
     {
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(file))!);
         var temp = file + ".new";
         using (var stream = File.Create(temp))
         {

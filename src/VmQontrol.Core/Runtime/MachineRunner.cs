@@ -68,6 +68,13 @@ public static class MachineRunner
 
         var nic = m.Nics.FirstOrDefault();
         var ssh = nic is { SshForward: true, Mode: NetMode.User or NetMode.Restricted } ? nic.SshHostPort ?? PortAllocator.FirstFree(22220) : null;
+        if (nic is { SshForward: true, Mode: NetMode.User or NetMode.Restricted } && ssh is null)
+        {
+            // Every port in the SSH range is taken: start without the forward rather than clash on one.
+            Log.Warn($"{m.Name}: no free host port for SSH (22220-22229 are in use); starting without it.");
+            m = m with { Nics = [nic with { SshForward = false }, .. m.Nics.Skip(1)] };
+        }
+
         var launch = QemuCommandBuilder.Build(m, new LaunchContext
         {
             Host = host,

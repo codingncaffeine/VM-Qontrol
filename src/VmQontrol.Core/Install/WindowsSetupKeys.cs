@@ -22,7 +22,39 @@ public static class WindowsSetupKeys
         ("Enterprise", "NPPR9-FWDCX-D2C8J-H872K-2YT43"),
     ];
 
-    /// <summary>The setup key for an edition name such as "Windows 11 Pro", or <c>null</c> when none is published (Home).</summary>
+    /// <summary>
+    /// Keys for consumer discs (Home, Pro… on one disc): Setup on those discs refuses KMS client keys. Each one listed
+    /// here was proven against a real disc by tools/probe-windows-keys.sh; an edition left out falls back to asking for
+    /// the person's key.
+    /// </summary>
+    private static readonly (string Edition, string Key)[] Consumer =
+    [
+        // Proven 2026-11-02 on Windows 10 22H2 (Win10_22H2_English_x64v1.iso): Setup went on to "Installing Windows".
+        // Windows 11 uses the same edition keys. Plain Home is left out: its candidate was refused.
+        ("Pro N for Workstations", "WYPNQ-8C467-V2W6J-TX4WX-WT2RQ"),
+        ("Pro for Workstations N", "WYPNQ-8C467-V2W6J-TX4WX-WT2RQ"),
+        ("Pro for Workstations", "DXG7C-N36C4-C4HTG-X4T3X-2YV77"),
+        ("Pro Education N", "GJTYN-HDMQY-FRR76-HVGC7-QPF8P"),
+        ("Pro Education", "8PTT6-RNW4C-6V7J2-C2D3X-MHBPB"),
+        ("Pro N", "2B87N-8KFHP-DKV6R-Y2C8J-PKCKT"),
+        ("Pro", "VK7JG-NPHTM-C97JM-9MPGT-3V66T"),
+        ("Education N", "84NGF-MHBT6-FXBX8-QWJK7-DRR8H"),
+        ("Education", "YNMGQ-8RYV3-4PGQ3-C8XTP-7CFBY"),
+        ("Home Single Language", "BT79Q-G7N6G-PGBYW-4YWX6-6F4BT"),
+        ("Home N", "4CPRK-NM3K3-X6XXQ-RXX86-WXCHW"),
+    ];
+
+    /// <summary>The setup key for an edition name such as "Windows 11 Pro" on a consumer or a volume-licence disc, or <c>null</c>.</summary>
+    public static string? For(string editionName, bool consumerDisc)
+    {
+        if (!consumerDisc) return For(editionName);
+        var name = editionName.Replace("Pro N for Workstations", "Pro for Workstations N", StringComparison.OrdinalIgnoreCase).Trim();
+        foreach (var (edition, key) in Consumer)
+            if (name.EndsWith(" " + edition, StringComparison.OrdinalIgnoreCase)) return key;
+        return null;
+    }
+
+    /// <summary>The KMS client setup key for an edition name such as "Windows 11 Pro" (volume-licence discs), or <c>null</c>.</summary>
     public static string? For(string editionName)
     {
         // "Windows 10 Pro N for Workstations" names the same edition as "Pro for Workstations N".

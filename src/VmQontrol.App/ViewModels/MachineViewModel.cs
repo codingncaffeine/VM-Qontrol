@@ -160,6 +160,30 @@ public sealed partial class MachineViewModel : ObservableObject
 
     public RunningMachine? Running => _watcher?.Machine;
 
+    /// <summary>The live connection to the running machine, for settings that apply at once (changing a disc).</summary>
+    public MachineWatcher? Watcher => _watcher;
+
+    /// <summary>Where the settings history is kept: beside vm.json, or in VM Qontrol's own state for a quickemu machine.</summary>
+    public string HistoryDirectory => IsQuickemu ? Path.Combine(_shell.Paths.State, "machines", Machine.Id) : Folder;
+
+    /// <summary>Takes new settings (after Save in Settings) and refreshes everything shown from them.</summary>
+    public void Reload(MachineConfig machine)
+    {
+        Machine = machine;
+        Entry = Entry with { Machine = machine };
+        Problems = LibraryScanner.MissingFiles(Entry);
+        OnPropertyChanged(string.Empty);
+        _ = Task.Run(async () =>
+        {
+            var host = await _shell.HostAsync().ConfigureAwait(false);
+            var details = BuildDetails(host);
+            Ui.Post(() => Details = details);
+        });
+    }
+
+    [RelayCommand]
+    private void OpenSettings() => _shell.OpenSettings(this);
+
     /// <summary>Reads the machine's live state and figures (worker thread); posts the results.</summary>
     public async Task LoadAsync(HostCapabilities? host)
     {

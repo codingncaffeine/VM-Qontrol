@@ -85,6 +85,13 @@
         <!-- The page: welcome, or the selected machine. -->
         <Panel Grid.Column="1">
           <views:WelcomeView x:Name="Welcome" IsVisible="{Binding ShowWelcome}" />
+          <ContentControl x:Name="SettingsPage" Content="{Binding SettingsPage}" IsVisible="{Binding ShowSettings}">
+            <ContentControl.ContentTemplate>
+              <DataTemplate x:DataType="vm:SettingsViewModel">
+                <views:SettingsView />
+              </DataTemplate>
+            </ContentControl.ContentTemplate>
+          </ContentControl>
           <ContentControl x:Name="WizardPage" Content="{Binding Wizard}" IsVisible="{Binding ShowWizard}">
             <ContentControl.ContentTemplate>
               <DataTemplate x:DataType="vm:NewMachineViewModel">

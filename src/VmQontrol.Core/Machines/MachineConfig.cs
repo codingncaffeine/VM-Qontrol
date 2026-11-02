@@ -49,6 +49,9 @@ public sealed record MachineConfig
     /// <summary>Serial port as a socket for the console tab; <c>null</c> = the profile's choice (off for Windows and macOS).</summary>
     public bool? Serial { get; set; }
 
+    /// <summary>Boot a kernel directly (an installer's kernel with its answer-file options); <c>null</c> = boot normally.</summary>
+    public KernelBootConfig? KernelBoot { get; set; }
+
     /// <summary>Extra QEMU arguments, appended last, one argument per entry.</summary>
     public List<string> ExtraArgs { get; set; } = [];
 
@@ -94,6 +97,19 @@ public sealed record CpuConfig
 
     /// <summary>A QEMU CPU model; <c>null</c> = the profile's choice (host passthrough for most guests).</summary>
     public string? Model { get; set; }
+}
+
+/// <summary>A kernel, initrd and kernel command line to boot instead of the firmware's boot order.</summary>
+public sealed record KernelBootConfig
+{
+    public required string Kernel { get; set; }
+
+    public string? Initrd { get; set; }
+
+    public string Append { get; set; } = "";
+
+    /// <summary>An installer's kernel is used only while the system disk is unused, like the installer disc.</summary>
+    public Connect Connect { get; set; } = Connect.UntilInstalled;
 }
 
 public enum DiskBus
