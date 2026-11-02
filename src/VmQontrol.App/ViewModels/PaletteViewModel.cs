@@ -76,6 +76,7 @@ public sealed partial class PaletteViewModel(ShellViewModel shell) : ObservableO
     {
         var items = new List<PaletteItem>
         {
+            new("New machine", "Create", shell.NewMachine),
             new("Refresh the library", "Library", () => _ = shell.RefreshAsync()),
             new("Show the host check", "Welcome", () => shell.Selected = null),
         };

@@ -11,6 +11,10 @@
                    Text="Create, run and fine-tune virtual machines on this computer. Every setting is explained where you change it, with the recommended value beside it." />
       </StackPanel>
 
+      <Button Classes="primary" HorizontalAlignment="Left" Command="{Binding NewMachineCommand}" Padding="22,12">
+        <TextBlock Text="Create a virtual machine" FontSize="15" />
+      </Button>
+
       <!-- Where machines live, and what is in the library. -->
       <Border Classes="card">
         <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">

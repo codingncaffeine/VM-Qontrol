@@ -10,6 +10,9 @@ namespace VmQontrol.Core.Runtime;
 /// <summary>A machine that is running: QEMU's process, its runtime folder and its forwarded SSH port.</summary>
 public sealed record RunningMachine(string Id, string Name, int Pid, string RuntimeDirectory, string MachineDirectory, DateTimeOffset Started, int? SshPort)
 {
+    /// <summary>Work that helps the machine through its first seconds (pressing a key for a Windows disc); a short-lived caller waits for it.</summary>
+    public Task BootAssist { get; init; } = Task.CompletedTask;
+
     public RuntimePaths Paths => new(RuntimeDirectory);
 }
 
@@ -112,7 +115,12 @@ public static class MachineRunner
         }
 
         var pid = ReadPid(runtime.Pid) ?? throw new StartRefusedException(["QEMU started but wrote no process id."]);
-        var running = new RunningMachine(m.Id, m.Name, pid, runtime.Directory, machineDirectory, DateTimeOffset.Now, ssh);
+        var installing = !(m.Disks.Count > 0 && DiskState.IsUsed(Full(m.Disks[0].File)))
+                         && m.Media.Any(x => x.Role == MediaRole.Installer && x.Connect != Connect.Never);
+        var assist = installing && m.Guest.Os is "windows" or "windows-server" && m.Firmware.Kind == FirmwareKind.Uefi && !options.Paused
+            ? PressKeyToBootTheDiscAsync(runtime, m.Name)
+            : Task.CompletedTask;
+        var running = new RunningMachine(m.Id, m.Name, pid, runtime.Directory, machineDirectory, DateTimeOffset.Now, ssh) { BootAssist = assist };
         await File.WriteAllTextAsync(runtime.Lock, JsonSerializer.Serialize(new JsonObject
         {
             ["id"] = m.Id,
@@ -124,6 +132,29 @@ public static class MachineRunner
         }, LockJson), ct).ConfigureAwait(false);
         Log.Info($"{m.Name}: started (process {pid}){(ssh is { } port ? $", SSH on host port {port}" : "")}");
         return running;
+    }
+
+    /// <summary>
+    /// Microsoft's installation discs wait a few seconds for "Press any key to boot from CD or DVD" when they start on UEFI
+    /// firmware; with nobody there the machine falls through to network boot. While a Windows machine installs, Enter is
+    /// pressed every half second for the first twenty seconds: only the firmware and the boot manager see it.
+    /// </summary>
+    private static async Task PressKeyToBootTheDiscAsync(RuntimePaths runtime, string name)
+    {
+        try
+        {
+            await using var qmp = await QmpClient.ConnectAsync(runtime.Control, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            var key = new JsonObject { ["keys"] = new JsonArray(new JsonObject { ["type"] = "qcode", ["data"] = "ret" }) };
+            for (var i = 0; i < 40; i++)
+            {
+                await qmp.ExecuteAsync("send-key", (JsonObject)key.DeepClone()).ConfigureAwait(false);
+                await Task.Delay(500).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or QmpException or System.Net.Sockets.SocketException)
+        {
+            Log.Warn($"{name}: could not press a key to start the installer ({ex.Message}); press any key in the viewer if it waits.");
+        }
     }
 
     /// <summary>The machine if it is running now; a runtime folder left by a machine that has stopped is cleared.</summary>

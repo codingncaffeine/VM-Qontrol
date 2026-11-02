@@ -11,13 +11,16 @@ public static class IsoWriter
 {
     private const int Sector = 2048;
 
-    public static void Write(string isoFile, string volumeId, IReadOnlyDictionary<string, byte[]> files)
+    /// <summary>Writes the disc to a file. <paramref name="keepLabelCase"/> keeps the label's letter case in the primary
+    /// descriptor (as genisoimage -V does, and many real discs do, e.g. "Ubuntu 24.04.1 LTS amd64"); strict ISO 9660
+    /// upper-cases it.</summary>
+    public static void Write(string isoFile, string volumeId, IReadOnlyDictionary<string, byte[]> files, bool keepLabelCase = false)
     {
         using var stream = File.Create(isoFile);
-        Write(stream, volumeId, files);
+        Write(stream, volumeId, files, keepLabelCase);
     }
 
-    public static void Write(Stream output, string volumeId, IReadOnlyDictionary<string, byte[]> files)
+    public static void Write(Stream output, string volumeId, IReadOnlyDictionary<string, byte[]> files, bool keepLabelCase = false)
     {
         var names = files.Keys.Order(StringComparer.Ordinal).ToList();
         var shortNames = ShortNames(names);
@@ -47,7 +50,7 @@ public static class IsoWriter
         PathTable(image.AsSpan(21 * Sector), jolietRoot, littleEndian: true);
         PathTable(image.AsSpan(22 * Sector), jolietRoot, littleEndian: false);
 
-        Descriptor(image.AsSpan(16 * Sector, Sector), 1, volumeId.ToUpperInvariant(), primaryRoot, 19, 20, total, now, joliet: false);
+        Descriptor(image.AsSpan(16 * Sector, Sector), 1, keepLabelCase ? volumeId : volumeId.ToUpperInvariant(), primaryRoot, 19, 20, total, now, joliet: false);
         Descriptor(image.AsSpan(17 * Sector, Sector), 2, volumeId, jolietRoot, 21, 22, total, now, joliet: true);
         var end = image.AsSpan(18 * Sector, Sector);
         end[0] = 255;

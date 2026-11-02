@@ -1,6 +1,7 @@
 using System.Globalization;
 using VmQontrol.Core;
 using VmQontrol.Core.Hosts;
+using VmQontrol.Core.Install;
 using VmQontrol.Core.Import;
 using VmQontrol.Core.Library;
 using VmQontrol.Core.Machines;
@@ -22,7 +23,9 @@ internal static class Commands
                               MACHINE is a quickemu .conf, a vm.json, a machine folder, or a name in the library.
           detect FILE.iso     Name the operating system on an installer disc.
           create NAME [--iso FILE] [--os OS] [--disk-gib N] [--memory-mib N] [--cores N] [--bios] [--tpm]
+                 [--easy-install --user NAME [--password P] [--edition N] [--key KEY] [--drivers virtio-win.iso] [--first-logon CMD]]
                               Make a new machine in the library (the system is detected from --iso when --os is left out).
+                              --easy-install installs Windows with no questions.
           start MACHINE [--headless] [--paused]
                               Power the machine on. With a screen, the viewer opens.
           status MACHINE      Whether the machine is running, its process and its SSH port.
@@ -202,6 +205,15 @@ internal static class Commands
             return 0;
         }
 
+        // Windows discs say exactly which release and editions they hold, beyond what their label can.
+        if (WindowsMedia.Inspect(file) is { } windows)
+        {
+            output.WriteLine($"System:    {windows.Description}, {windows.Architecture}");
+            foreach (var e in windows.Editions) output.WriteLine($"  Edition {e.Index}: {e.DisplayName}");
+            output.WriteLine($"Profile:   {(windows.Server ? "windows-server" : "windows")} {windows.Release}");
+            return 0;
+        }
+
         output.WriteLine(match.Ambiguous.Count == 0
             ? $"System:    {match.Os.Name}"
             : $"System:    {match.Os.Name} or {string.Join(" or ", match.Ambiguous.Select(a => a.Name))} (the disc label fits each)");
@@ -215,10 +227,9 @@ internal static class Commands
         var name = args[0];
         string? Option(string flag) => Array.IndexOf(args, flag) is var i and >= 0 && i + 1 < args.Length ? args[i + 1] : null;
         long? Number(string flag) => long.TryParse(Option(flag), NumberStyles.None, CultureInfo.InvariantCulture, out var v) ? v : null;
-        var dir = System.IO.Path.Combine(paths.DefaultLibrary, name);
-        if (Directory.Exists(dir))
+        if (Directory.Exists(System.IO.Path.Combine(paths.DefaultLibrary, name)))
         {
-            error.WriteLine($"vmq create: {dir} already exists.");
+            error.WriteLine($"vmq create: {System.IO.Path.Combine(paths.DefaultLibrary, name)} already exists.");
             return 1;
         }
 
@@ -239,20 +250,54 @@ internal static class Commands
             }
         }
 
+        if (iso is not null && Option("--os") is null && WindowsMedia.Inspect(iso) is { } windows)
+        {
+            guest = new GuestConfig { Os = windows.Server ? "windows-server" : "windows", Release = windows.Release, OsInfoId = guest.OsInfoId };
+            output.WriteLine($"The disc holds {windows.Description}.");
+        }
+
         var isWindows = guest.Os is "windows" or "windows-server";
-        var machine = new MachineConfig
+        WindowsInstallChoices? easy = null;
+        if (args.Contains("--easy-install"))
+        {
+            if (!isWindows || Option("--user") is not { } user)
+            {
+                error.WriteLine("vmq create: --easy-install needs a Windows disc and --user NAME.");
+                return 2;
+            }
+
+            easy = new WindowsInstallChoices
+            {
+                UserName = user,
+                Password = Option("--password") ?? "",
+                ComputerName = WindowsAnswerFile.ComputerName(name),
+                EditionIndex = (int)(Number("--edition") ?? 1),
+                EditionName = iso is not null ? WindowsMedia.Inspect(iso)?.Editions.FirstOrDefault(e => e.Index == (int)(Number("--edition") ?? 1))?.Name ?? "" : "",
+                ProductKey = Option("--key") ?? "",
+                FirstLogonCommands = Option("--first-logon") is { } cmd ? [cmd] : [],
+            };
+        }
+
+        if (easy is not null && !WindowsAnswerFile.HasKey(easy))
+        {
+            error.WriteLine($"vmq create: {(easy.EditionName.Length > 0 ? easy.EditionName : "This edition")} has no published setup key; pass --key YOUR-KEY or choose a Pro edition with --edition.");
+            return 2;
+        }
+
+        var (_, dir) = MachineFactory.Create(new NewMachineRequest
         {
             Name = name,
+            LibraryRoot = paths.DefaultLibrary,
             Guest = guest,
+            InstallerIso = iso,
+            DriversIso = Option("--drivers") is { } drv ? System.IO.Path.GetFullPath(drv) : null,
             MemoryMiB = Number("--memory-mib"),
-            Cpu = new CpuConfig { Cores = (int?)Number("--cores") },
-            Firmware = new FirmwareConfig { Kind = args.Contains("--bios") ? FirmwareKind.Bios : FirmwareKind.Uefi },
+            Cores = (int?)Number("--cores"),
+            Firmware = args.Contains("--bios") ? FirmwareKind.Bios : FirmwareKind.Uefi,
             Tpm = args.Contains("--tpm") || (isWindows && guest.Release == "11"),
-            Disks = [new DiskConfig { File = "disk0.qcow2", SizeGiB = Number("--disk-gib") ?? (isWindows ? 64 : guest.Os == "macos" ? 128 : 32) }],
-            Media = iso is null ? [] : [new MediaConfig { Role = MediaRole.Installer, File = iso, Connect = Connect.UntilInstalled }],
-        };
-        Directory.CreateDirectory(dir);
-        MachineStore.Save(machine, System.IO.Path.Combine(dir, MachineStore.FileName));
+            DiskGiB = Number("--disk-gib") ?? (isWindows ? 64 : guest.Os == "macos" ? 128 : 32),
+            WindowsEasyInstall = easy,
+        });
         output.WriteLine($"Created {name} in {dir}.");
         return 0;
     }
@@ -268,6 +313,11 @@ internal static class Commands
 
         var running = MachineRunner.StartAsync(m, entry.Directory, paths, host(), new StartOptions { Headless = headless, Paused = paused }).GetAwaiter().GetResult();
         output.WriteLine($"{m.Name} is running (process {running.Pid}){(running.SshPort is { } p ? $"; SSH: ssh -p {p} user@localhost" : "")}.");
+        if (!running.BootAssist.IsCompleted)
+        {
+            output.WriteLine("Starting the installer (pressing a key for the disc's boot prompt)…");
+            running.BootAssist.GetAwaiter().GetResult();
+        }
         if (!headless && m.Display.Backend == DisplayBackend.Spice)
         {
             var viewer = ViewerLauncher.Open(m, running);

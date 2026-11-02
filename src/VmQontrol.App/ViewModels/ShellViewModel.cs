@@ -54,6 +54,13 @@ public sealed partial class ShellViewModel : ObservableObject
     [ObservableProperty]
     private FolderPromptViewModel? _folderPrompt;
 
+    /// <summary>The New Machine wizard while it is open.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowWelcome), nameof(ShowMachine), nameof(ShowWizard))]
+    private NewMachineViewModel? _wizard;
+
+    public bool ShowWizard => Wizard is not null;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowWelcome), nameof(ShowMachine))]
     private MachineViewModel? _selected;
@@ -75,9 +82,9 @@ public sealed partial class ShellViewModel : ObservableObject
     [ObservableProperty]
     private bool _scanning;
 
-    public bool ShowWelcome => Selected is null;
+    public bool ShowWelcome => Selected is null && Wizard is null;
 
-    public bool ShowMachine => Selected is not null;
+    public bool ShowMachine => Selected is not null && Wizard is null;
 
     public bool LibraryEmpty => MachineCount == 0 && !Scanning;
 
@@ -183,7 +190,37 @@ public sealed partial class ShellViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void ShowHome() => Selected = null;
+    private void ShowHome()
+    {
+        Wizard = null;
+        Selected = null;
+    }
+
+    [RelayCommand]
+    public void NewMachine()
+    {
+        if (Wizard is not null) return;
+        var wizard = new NewMachineViewModel(this);
+        wizard.Closed += () => Ui.Post(() =>
+        {
+            if (Wizard == wizard) Wizard = null;
+        });
+        Wizard = wizard;
+    }
+
+    /// <summary>After the wizard: the new machine appears selected in the library and, if asked, powers on.</summary>
+    public async Task FinishNewMachineAsync(string directory, bool powerOn)
+    {
+        await RefreshAsync().ConfigureAwait(false);
+        Ui.Post(() =>
+        {
+            var created = _all.FirstOrDefault(m => m.Folder == directory);
+            if (created is null) return;
+            Selected = created;
+            Note($"{created.Name} is ready.");
+            if (powerOn) created.PowerOnCommand.Execute(null);
+        });
+    }
 
     public IReadOnlyList<string> FolderNames => _all.Select(m => m.FolderName).Where(f => f.Length > 0).Distinct().Order(StringComparer.CurrentCultureIgnoreCase).ToList();
 

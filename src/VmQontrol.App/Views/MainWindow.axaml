@@ -32,6 +32,10 @@
                 <TextBlock Text="VM Qontrol" Classes="h1" VerticalAlignment="Center" />
               </StackPanel>
             </Button>
+            <Button x:Name="NewMachine" DockPanel.Dock="Top" Classes="primary" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                    Command="{Binding NewMachineCommand}" Margin="0,0,0,12" ToolTip.Tip="Create a virtual machine, step by step">
+              <TextBlock Text="+  New machine" />
+            </Button>
             <TextBox x:Name="Search" DockPanel.Dock="Top" Classes="search" PlaceholderText="Search machines   (Ctrl+F)"
                      Text="{Binding Search}" Margin="0,0,0,16" />
             <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="4,0,0,6">
@@ -81,6 +85,13 @@
         <!-- The page: welcome, or the selected machine. -->
         <Panel Grid.Column="1">
           <views:WelcomeView x:Name="Welcome" IsVisible="{Binding ShowWelcome}" />
+          <ContentControl x:Name="WizardPage" Content="{Binding Wizard}" IsVisible="{Binding ShowWizard}">
+            <ContentControl.ContentTemplate>
+              <DataTemplate x:DataType="vm:NewMachineViewModel">
+                <views:NewMachineView />
+              </DataTemplate>
+            </ContentControl.ContentTemplate>
+          </ContentControl>
           <ContentControl x:Name="MachinePage" Content="{Binding Selected}" IsVisible="{Binding ShowMachine}">
             <ContentControl.ContentTemplate>
               <DataTemplate x:DataType="vm:MachineViewModel">

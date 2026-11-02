@@ -1,0 +1,238 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:VmQontrol.App.ViewModels"
+             xmlns:dl="using:VmQontrol.Core.Downloads"
+             xmlns:media="using:VmQontrol.Core.Media"
+             x:Class="VmQontrol.App.Views.NewMachineView"
+             x:DataType="vm:NewMachineViewModel">
+  <DockPanel Margin="{DynamicResource QPagePadding}">
+    <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,20">
+      <TextBlock Text="New virtual machine" Classes="hero" />
+      <TextBlock Text="Each step starts on the recommended answer. Change only what you want to." Classes="muted" />
+    </StackPanel>
+
+    <!-- Back / Continue -->
+    <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource QBorder}" BorderThickness="0,1,0,0" Padding="0,14,0,0" Margin="0,16,0,0">
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10">
+        <Button Classes="secondary" Content="Cancel" Command="{Binding CancelCommand}" />
+        <StackPanel Grid.Column="1" Margin="16,0" VerticalAlignment="Center" IsVisible="{Binding Busy}" Spacing="4">
+          <TextBlock Text="{Binding ProgressText}" Classes="muted" />
+          <ProgressBar Value="{Binding ProgressValue}" IsIndeterminate="{Binding !ProgressKnown}" Maximum="100" Height="4" />
+        </StackPanel>
+        <Button Grid.Column="2" Classes="secondary" Content="Back" Command="{Binding BackCommand}" IsVisible="{Binding !IsFirst}" />
+        <Button x:Name="Next" Grid.Column="3" Classes="primary" Content="{Binding NextText}" Command="{Binding NextCommand}" />
+      </Grid>
+    </Border>
+
+    <!-- Step rail -->
+    <ItemsControl DockPanel.Dock="Left" Width="170" ItemsSource="{Binding Steps}" Margin="0,4,24,0">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="vm:StepItem">
+          <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,6">
+            <Border Width="3" Height="18" CornerRadius="2" Background="{DynamicResource QAccent}" IsVisible="{Binding IsCurrent}" />
+            <TextBlock Text="{Binding Title}" Classes="muted" Classes.current="{Binding IsCurrent}" Classes.done="{Binding IsDone}" Margin="{Binding IsCurrent, Converter={x:Static vm:Text.RailIndent}}" />
+          </StackPanel>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+
+    <ScrollViewer>
+      <Panel MaxWidth="760" HorizontalAlignment="Left">
+
+        <!-- 0 Installer -->
+        <StackPanel Spacing="14" IsVisible="{Binding Step, Converter={x:Static vm:Text.Is}, ConverterParameter=0}">
+          <TextBlock Text="How will you install the operating system?" Classes="h1" />
+          <UniformGrid Columns="3" ColumnSpacing="12">
+            <RadioButton x:Name="SourceDisc" Classes="choice" IsChecked="{Binding IsDisc, Mode=OneWay}" Command="{Binding ChooseSourceCommand}" CommandParameter="{x:Static vm:SourceKind.Disc}" GroupName="source">
+              <StackPanel Spacing="4">
+                <TextBlock Text="Installer disc image" FontWeight="SemiBold" />
+                <TextBlock Text="An .iso file you have downloaded." Classes="muted" TextWrapping="Wrap" />
+              </StackPanel>
+            </RadioButton>
+            <RadioButton x:Name="SourceDownload" Classes="choice" IsChecked="{Binding IsDownload, Mode=OneWay}" Command="{Binding ChooseSourceCommand}" CommandParameter="{x:Static vm:SourceKind.Download}" GroupName="source">
+              <StackPanel Spacing="4">
+                <TextBlock Text="Download a system" FontWeight="SemiBold" />
+                <TextBlock Text="Pick from 90+ systems; VM Qontrol downloads and checks it." Classes="muted" TextWrapping="Wrap" />
+              </StackPanel>
+            </RadioButton>
+            <RadioButton x:Name="SourceLater" Classes="choice" IsChecked="{Binding IsLater, Mode=OneWay}" Command="{Binding ChooseSourceCommand}" CommandParameter="{x:Static vm:SourceKind.Later}" GroupName="source">
+              <StackPanel Spacing="4">
+                <TextBlock Text="Install later" FontWeight="SemiBold" />
+                <TextBlock Text="Make the machine now with an empty disk." Classes="muted" TextWrapping="Wrap" />
+              </StackPanel>
+            </RadioButton>
+          </UniformGrid>
+
+          <Border Classes="card" IsVisible="{Binding IsDisc}" DragDrop.AllowDrop="True" x:Name="DropZone">
+            <StackPanel Spacing="10">
+              <StackPanel Orientation="Horizontal" Spacing="10">
+                <Button x:Name="ChooseIso" Classes="tool" Content="Choose disc image…" />
+                <TextBlock Text="or drop an .iso file here" Classes="muted" VerticalAlignment="Center" />
+              </StackPanel>
+              <TextBlock Text="{Binding IsoPath}" TextWrapping="Wrap" FontFamily="monospace" FontSize="12" IsVisible="{Binding IsoPath, Converter={x:Static ObjectConverters.IsNotNull}}" />
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Path Classes="icon" Data="{StaticResource IconWarning}" Stroke="{DynamicResource QWarning}" IsVisible="{Binding IsoProblem}" />
+                <Path Classes="icon" Data="{StaticResource IconCheck}" Stroke="{DynamicResource QSuccess}" IsVisible="{Binding !IsoProblem}" />
+                <TextBlock x:Name="IsoSummary" Text="{Binding IsoSummary}" TextWrapping="Wrap" FontWeight="SemiBold" />
+              </StackPanel>
+              <StackPanel Spacing="6" IsVisible="{Binding HasEditions}">
+                <TextBlock Text="Edition to install" FontWeight="SemiBold" />
+                <ComboBox ItemsSource="{Binding Editions}" SelectedItem="{Binding Edition}" MinWidth="320">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="media:WindowsEdition">
+                      <TextBlock Text="{Binding DisplayName}" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+                <TextBlock Text="The disc holds several editions; Pro is chosen because it suits most people. Your licence key decides which one you may activate." Classes="muted" TextWrapping="Wrap" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+          <Border Classes="card" IsVisible="{Binding IsDownload}">
+            <StackPanel Spacing="10">
+              <TextBlock Text="{Binding CatalogueNote}" Classes="muted" TextWrapping="Wrap" />
+              <TextBox Classes="search" Text="{Binding CatalogueSearch}" PlaceholderText="Search: Ubuntu, Fedora, Debian…" IsVisible="{Binding CatalogueAvailable}" />
+              <Grid ColumnDefinitions="*,*" ColumnSpacing="12" Height="320" IsVisible="{Binding CatalogueAvailable}">
+                <ListBox x:Name="CatalogueSystems" Classes="library" ItemsSource="{Binding Systems}" SelectedItem="{Binding System}">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="dl:CatalogueSystem">
+                      <TextBlock Text="{Binding DisplayName}" />
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+                <ListBox x:Name="CatalogueEntries" Grid.Column="1" Classes="library" ItemsSource="{Binding System.Entries}" SelectedItem="{Binding Entry}">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="dl:CatalogueEntry">
+                      <TextBlock Text="{Binding Label}" />
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+              </Grid>
+            </StackPanel>
+          </Border>
+
+          <Border Classes="card" IsVisible="{Binding IsLater}">
+            <TextBlock TextWrapping="Wrap" Classes="muted"
+                       Text="The machine is made with an empty disk. Attach an installer disc when you are ready, from the machine's Settings." />
+          </Border>
+        </StackPanel>
+
+        <!-- 1 System -->
+        <StackPanel Spacing="14" IsVisible="{Binding Step, Converter={x:Static vm:Text.Is}, ConverterParameter=1}">
+          <TextBlock Text="Which system is this?" Classes="h1" />
+          <Border Classes="card">
+            <StackPanel Spacing="8">
+              <TextBlock x:Name="GuestLabel" Text="{Binding GuestLabel}" Classes="h1" />
+              <TextBlock Text="{Binding DetectedText}" Classes="muted" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+          <StackPanel Spacing="6">
+            <TextBlock Text="If this is wrong, choose the system here" FontWeight="SemiBold" />
+            <ComboBox ItemsSource="{Binding GuestChoices}" SelectedItem="{Binding GuestOverride}" PlaceholderText="Keep the detected system" MinWidth="320" />
+            <TextBlock Text="The system decides the virtual hardware: the processor features, the disk and network adapters, and the firmware. The detected choice is right for almost every disc." Classes="muted" TextWrapping="Wrap" />
+          </StackPanel>
+        </StackPanel>
+
+        <!-- 2 Easy Install -->
+        <StackPanel Spacing="14" IsVisible="{Binding Step, Converter={x:Static vm:Text.Is}, ConverterParameter=2}">
+          <TextBlock Text="Install Windows for you?" Classes="h1" />
+          <ToggleSwitch x:Name="EasyInstall" IsChecked="{Binding EasyInstall}" OnContent="Yes: install it with no questions" OffContent="No: I will answer Windows Setup myself" />
+          <TextBlock Text="Windows Setup normally asks a dozen questions. VM Qontrol answers them from what you enter here, then you come back to a desktop." Classes="muted" TextWrapping="Wrap" />
+          <Border Classes="card" IsVisible="{Binding EasyInstallShown}">
+            <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="12">
+              <TextBlock Text="User name" VerticalAlignment="Center" />
+              <TextBox x:Name="UserName" Grid.Column="1" Text="{Binding UserName}" />
+              <TextBlock Grid.Row="1" Text="Password" VerticalAlignment="Center" />
+              <StackPanel Grid.Row="1" Grid.Column="1" Spacing="4">
+                <TextBox Text="{Binding Password}" PasswordChar="●" RevealPassword="{Binding #ShowPassword.IsChecked}" />
+                <CheckBox x:Name="ShowPassword" Content="Show password" />
+                <TextBlock Text="May be left empty. It is stored in the machine's answer file; use one you do not use elsewhere." Classes="muted" TextWrapping="Wrap" FontSize="{DynamicResource QFontSmall}" />
+              </StackPanel>
+              <TextBlock Grid.Row="2" Text="Product key" VerticalAlignment="Center" />
+              <StackPanel Grid.Row="2" Grid.Column="1" Spacing="4">
+                <TextBox Text="{Binding ProductKey}" PlaceholderText="Optional: XXXXX-XXXXX-XXXXX-XXXXX-XXXXX" />
+                <TextBlock Text="{Binding KeyNote}" Classes="muted" Classes.warn="{Binding NeedsOwnKey}" TextWrapping="Wrap" FontSize="{DynamicResource QFontSmall}" />
+              </StackPanel>
+              <TextBlock Grid.Row="3" Text="Language and region" VerticalAlignment="Center" />
+              <ComboBox Grid.Row="3" Grid.Column="1" ItemsSource="{Binding Locales}" SelectedItem="{Binding LocaleChoice}" HorizontalAlignment="Stretch" MaxDropDownHeight="360" />
+              <TextBlock Grid.Row="4" Text="Time zone" VerticalAlignment="Center" />
+              <ComboBox Grid.Row="4" Grid.Column="1" ItemsSource="{Binding TimeZones}" SelectedItem="{Binding TimeZoneChoice}" HorizontalAlignment="Stretch" MaxDropDownHeight="360" />
+              <TextBlock Grid.Row="5" Text="Driver disc" VerticalAlignment="Top" Margin="0,6,0,0" />
+              <StackPanel Grid.Row="5" Grid.Column="1" Spacing="4">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Button x:Name="ChooseDrivers" Classes="tool" Content="Choose virtio-win.iso…" />
+                  <TextBlock Text="{Binding DriversIso, TargetNullValue='Optional'}" Classes="muted" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="320" />
+                </StackPanel>
+                <TextBlock Classes="muted" TextWrapping="Wrap" FontSize="{DynamicResource QFontSmall}"
+                           Text="With the VirtIO driver disc, Windows gets the fast disk and network and the guest tools (shared clipboard, the machine's address). Without it, Windows installs on standard hardware it already knows, and works the same, a little slower." />
+              </StackPanel>
+            </Grid>
+          </Border>
+        </StackPanel>
+
+        <!-- 3 Name -->
+        <StackPanel Spacing="14" IsVisible="{Binding Step, Converter={x:Static vm:Text.Is}, ConverterParameter=3}">
+          <TextBlock Text="Name the machine" Classes="h1" />
+          <TextBox x:Name="MachineName" Text="{Binding Name}" FontSize="18" />
+          <TextBlock Text="The name shows in the library and in the window title. It can be changed later." Classes="muted" TextWrapping="Wrap" />
+          <Border Classes="card">
+            <StackPanel Spacing="6">
+              <TextBlock Text="Its files will be kept in" FontWeight="SemiBold" />
+              <Border Classes="code"><TextBlock Text="{Binding FolderPreview}" TextWrapping="Wrap" /></Border>
+              <Button x:Name="ChooseLibrary" Classes="tool" Content="Keep it somewhere else…" HorizontalAlignment="Left" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <!-- 4 Hardware -->
+        <StackPanel Spacing="14" IsVisible="{Binding Step, Converter={x:Static vm:Text.Is}, ConverterParameter=4}">
+          <TextBlock Text="Hardware" Classes="h1" />
+          <TextBlock Text="Recommended for this system on this computer. Everything here can be changed later in Settings." Classes="muted" TextWrapping="Wrap" />
+          <Border Classes="card">
+            <Grid ColumnDefinitions="160,160,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="16" ColumnSpacing="12">
+              <TextBlock Text="Memory (GB)" VerticalAlignment="Center" FontWeight="SemiBold" />
+              <NumericUpDown x:Name="MemoryGb" Grid.Column="1" VerticalContentAlignment="Center" Value="{Binding MemoryGb}" Minimum="{Binding MemoryMinimumGb}" Maximum="{Binding MemoryMaximumGb}" Increment="1" FormatString="0" />
+              <TextBlock Grid.Column="2" Text="{Binding MemoryReason}" Classes="muted" TextWrapping="Wrap" VerticalAlignment="Center" />
+              <TextBlock Grid.Row="1" Text="Processors" VerticalAlignment="Center" FontWeight="SemiBold" />
+              <NumericUpDown Grid.Row="1" Grid.Column="1" VerticalContentAlignment="Center" Value="{Binding Cores}" Minimum="1" Maximum="{Binding CoresMaximum}" Increment="1" FormatString="0" />
+              <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding CoresReason}" Classes="muted" TextWrapping="Wrap" VerticalAlignment="Center" />
+              <TextBlock Grid.Row="2" Text="Disk (GB)" VerticalAlignment="Center" FontWeight="SemiBold" />
+              <NumericUpDown Grid.Row="2" Grid.Column="1" VerticalContentAlignment="Center" Value="{Binding DiskGb}" Minimum="{Binding DiskMinimumGb}" Maximum="8192" Increment="8" FormatString="0" />
+              <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding DiskReason}" Classes="muted" TextWrapping="Wrap" VerticalAlignment="Center" />
+            </Grid>
+          </Border>
+          <Border Classes="card">
+            <StackPanel Spacing="8">
+              <TextBlock Text="Firmware" FontWeight="SemiBold" />
+              <WrapPanel ItemSpacing="18">
+                <CheckBox Content="UEFI firmware" IsChecked="{Binding Uefi}" />
+                <CheckBox Content="Secure Boot" IsChecked="{Binding SecureBoot}" IsEnabled="{Binding Uefi}" />
+                <CheckBox Content="TPM 2.0" IsChecked="{Binding Tpm}" />
+              </WrapPanel>
+              <TextBlock Text="{Binding FirmwareReason}" Classes="muted" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <!-- 5 Summary -->
+        <StackPanel Spacing="14" IsVisible="{Binding Step, Converter={x:Static vm:Text.Is}, ConverterParameter=5}">
+          <TextBlock Text="Ready to create" Classes="h1" />
+          <Border Classes="card">
+            <ItemsControl x:Name="Summary" ItemsSource="{Binding Summary}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:DetailRow">
+                  <Grid ColumnDefinitions="140,*" Margin="0,5">
+                    <TextBlock Text="{Binding Label}" Classes="muted" />
+                    <TextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </Border>
+          <CheckBox Content="Power on the machine when it is created" IsChecked="{Binding PowerOnAfter}" />
+        </StackPanel>
+      </Panel>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>
