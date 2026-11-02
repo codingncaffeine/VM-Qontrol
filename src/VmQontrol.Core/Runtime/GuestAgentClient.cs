@@ -58,6 +58,27 @@ public sealed class GuestAgentClient(string socketPath)
     public async Task<JsonObject?> OsInfoAsync(TimeSpan timeout, CancellationToken ct = default) =>
         await CallAsync("guest-get-osinfo", null, timeout, ct).ConfigureAwait(false) as JsonObject;
 
+    /// <summary>Reads a small file in the guest through the agent (at most 64 KiB); <c>null</c> when the agent did not answer or refused.</summary>
+    public async Task<byte[]?> ReadFileAsync(string path, TimeSpan timeout, CancellationToken ct = default)
+    {
+        if (await CallAsync("guest-file-open", new JsonObject { ["path"] = path, ["mode"] = "r" }, timeout, ct).ConfigureAwait(false) is not JsonValue handleValue
+            || !handleValue.TryGetValue<long>(out var handle))
+            return null;
+        try
+        {
+            var read = await CallAsync("guest-file-read", new JsonObject { ["handle"] = handle, ["count"] = 65536 }, timeout, ct).ConfigureAwait(false);
+            return read?["buf-b64"]?.GetValue<string>() is { } b64 ? Convert.FromBase64String(b64) : null;
+        }
+        finally
+        {
+            await CallAsync("guest-file-close", new JsonObject { ["handle"] = handle }, timeout, CancellationToken.None).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Sets the guest's clock to this computer's (after a resume, when the guest's clock stood still); <c>false</c> when the agent did not answer.</summary>
+    public async Task<bool> SetTimeAsync(DateTimeOffset now, TimeSpan timeout, CancellationToken ct = default) =>
+        await CallAsync("guest-set-time", new JsonObject { ["time"] = (now - DateTimeOffset.UnixEpoch).Ticks * 100 }, timeout, ct).ConfigureAwait(false) is not null;
+
     /// <summary>Asks the guest to shut down cleanly. The agent does not answer this one; no exception means it was sent.</summary>
     public async Task<bool> ShutdownAsync(TimeSpan timeout, CancellationToken ct = default)
     {

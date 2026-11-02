@@ -44,7 +44,7 @@ public sealed partial class SnapshotsViewModel(MachineViewModel machine, ShellVi
 
     public bool IsEmpty => Rows.Count == 0;
 
-    private SnapshotStore Store => new(machine.Machine, machine.Folder, machine.HistoryDirectory);
+    internal SnapshotStore Store => new(machine.Machine, machine.Folder, machine.HistoryDirectory);
 
     public async Task LoadAsync()
     {

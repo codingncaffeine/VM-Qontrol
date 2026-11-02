@@ -333,6 +333,20 @@
           </Border>
         </StackPanel>
 
+        <StackPanel IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=autoprotect}" Spacing="2">
+          <TextBlock Text="AutoProtect" Classes="h1" />
+          <Border Classes="badge-now"><TextBlock Text="Applies at once" /></Border>
+          <CheckBox x:Name="AutoProtectOn" Content="Take snapshots automatically while the machine runs" IsChecked="{Binding AutoProtectOn}" Margin="0,6,0,0" />
+          <TextBlock Text="A safety net: if something goes wrong inside the machine, go back to one of these from the Snapshots tab. Each one holds the running state, programs and all. Off is recommended unless you want that net; the snapshots you take yourself work either way." Classes="help" />
+          <TextBlock Text="How often" Classes="field" />
+          <ComboBox ItemsSource="{Binding AutoProtectIntervals}" SelectedItem="{Binding AutoProtectInterval}" IsEnabled="{Binding AutoProtectOn}" />
+          <TextBlock Text="Counted from when the machine started. Every hour is recommended; the machine pauses for a moment while each is taken." Classes="help" />
+          <TextBlock Text="How many to keep" Classes="field" />
+          <NumericUpDown Value="{Binding AutoProtectKeep}" Minimum="1" Maximum="50" Increment="1" FormatString="0" Width="160" HorizontalAlignment="Left" VerticalContentAlignment="Center" IsEnabled="{Binding AutoProtectOn}" />
+          <TextBlock Text="When there are more, the oldest automatic one is deleted. 3 is recommended: each keeps the disk changes since the one before plus a copy of the memory, so they use space. Snapshots you take yourself are never deleted." Classes="help" />
+          <TextBlock Text="Snapshots are taken while VM Qontrol is open." Classes="help" />
+        </StackPanel>
+
         <StackPanel IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=advanced}" Spacing="2">
           <TextBlock Text="Advanced" Classes="h1" />
           <Border Classes="badge-next"><TextBlock Text="Applies at next power on" /></Border>

@@ -23,6 +23,18 @@ public sealed class SettingsTests
     }
 
     [Fact]
+    public void An_AutoProtect_change_alone_is_saved()
+    {
+        using var profile = new TestProfile("history-autoprotect");
+        var file = Path.Combine(profile.Root, "vm.json");
+        var before = new MachineConfig { Name = "a" };
+        MachineStore.Save(before, file);
+        var changes = SettingsHistory.Save(before, before with { AutoProtect = new AutoProtectConfig { Enabled = true, IntervalMinutes = 30, Keep = 5 } }, file, profile.Root);
+        Assert.Equal(["AutoProtect: off → every 30 min, keep 5"], changes);
+        Assert.True(MachineStore.Load(file).AutoProtect.Enabled);
+    }
+
+    [Fact]
     public void Saving_records_the_change_and_the_settings_before_it()
     {
         using var profile = new TestProfile("history");
@@ -37,6 +49,48 @@ public sealed class SettingsTests
 
     private static T Named<T>(Control root, string name) where T : Control =>
         root.GetLogicalDescendants().OfType<T>().FirstOrDefault(c => c.Name == name) ?? throw new InvalidOperationException($"no {typeof(T).Name} named {name}");
+
+    [Trait("Tier", "Window")]
+    [Fact]
+    public async Task AutoProtect_turned_on_in_settings_is_saved()
+    {
+        using var profile = new TestProfile("settings-autoprotect");
+        var dir = Path.Combine(profile.Paths.DefaultLibrary, "Box");
+        Directory.CreateDirectory(dir);
+        MachineStore.Save(new MachineConfig { Name = "Box", Disks = [new DiskConfig { File = "disk0.qcow2", SizeGiB = 20 }] }, Path.Combine(dir, "vm.json"));
+
+        var described = await Ui.Run(() =>
+        {
+            var shell = new ShellViewModel(profile.Paths, AppSettings.Load(profile.Paths));
+            var window = new MainWindow { DataContext = shell, Width = 1320, Height = 900 };
+            Avalonia.Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
+            window.Show();
+            _ = shell.StartAsync();
+            Ui.PumpUntil(() => shell.Machines.Count == 1, "the library");
+            Ui.Click(window, Named<ListBox>(window, "Library").GetVisualDescendants().OfType<ListBoxItem>().First());
+            Ui.PumpUntil(() => shell.Selected is not null, "the machine page");
+            Ui.Pump(0.3);
+            Ui.Click(window, Named<Button>(window.GetVisualDescendants().OfType<MachineView>().Single(), "OpenSettings"));
+            Ui.PumpUntil(() => shell.SettingsPage is not null, "the settings", 15);
+            Ui.Pump(0.3);
+            var settings = shell.SettingsPage!;
+            var view = window.GetVisualDescendants().OfType<SettingsView>().Single();
+            Ui.Click(window, Named<ListBox>(view, "Sections").GetVisualDescendants().OfType<ListBoxItem>().First(i => (i.DataContext as SettingsSection)?.Key == "autoprotect"));
+            Ui.Pump(0.2);
+            Ui.Click(window, Named<CheckBox>(view, "AutoProtectOn"));
+            Ui.Pump(0.2);
+            Ui.Capture(window, "phase6", "settings-autoprotect");
+            Ui.Click(window, Named<Button>(view, "Save"));
+            Ui.PumpUntil(() => settings.SaveNote.StartsWith("Saved", StringComparison.Ordinal), "the save");
+            window.Close();
+            return settings.SaveNote;
+        });
+
+        var saved = MachineStore.Load(Path.Combine(dir, "vm.json")).AutoProtect;
+        Assert.True(saved.Enabled, described);
+        Assert.Equal(60, saved.IntervalMinutes);
+        Assert.Equal(3, saved.Keep);
+    }
 
     [Trait("Tier", "Window")]
     [Fact]

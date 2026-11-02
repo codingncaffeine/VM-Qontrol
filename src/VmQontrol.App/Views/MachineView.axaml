@@ -35,10 +35,10 @@
       <!-- Power and actions: only what makes sense in the current state is shown. -->
       <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
         <Button x:Name="PowerOn" Classes="primary" Command="{Binding PowerOnCommand}" IsVisible="{Binding IsOff}" IsEnabled="{Binding !Busy}"
-                ToolTip.Tip="Start the machine and open its screen">
+                ToolTip.Tip="{Binding PowerOnTip}">
           <StackPanel Orientation="Horizontal" Spacing="8">
             <Path Classes="iconfill" Data="{StaticResource IconPlay}" Fill="{DynamicResource QOnAccent}" />
-            <TextBlock Text="Power on" />
+            <TextBlock Text="{Binding PowerOnText}" />
           </StackPanel>
         </Button>
         <Button x:Name="OpenScreen" Classes="primary" Command="{Binding OpenScreenCommand}" IsVisible="{Binding IsActive}"
@@ -66,6 +66,13 @@
           <StackPanel Orientation="Horizontal" Spacing="8">
             <Path Classes="iconfill" Data="{StaticResource IconPlay}" />
             <TextBlock Text="Resume" />
+          </StackPanel>
+        </Button>
+        <Button x:Name="Suspend" Classes="tool" Command="{Binding SuspendCommand}" IsVisible="{Binding IsActive}"
+                ToolTip.Tip="Save everything the machine is doing and turn it off; Resume carries on from there, programs and all">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Path Classes="icon" Data="{StaticResource IconSuspend}" />
+            <TextBlock Text="Suspend" />
           </StackPanel>
         </Button>
         <Button Classes="tool" Command="{Binding ResetCommand}" IsVisible="{Binding IsActive}"
@@ -98,7 +105,8 @@
           <TextBlock Text="⋯  More" />
           <Button.Flyout>
             <MenuFlyout Placement="BottomEdgeAlignedLeft">
-              <MenuItem Header="Power on to firmware setup" Command="{Binding PowerOnToFirmwareCommand}" IsVisible="{Binding IsOff}" />
+              <MenuItem Header="Power on to firmware setup" Command="{Binding PowerOnToFirmwareCommand}" IsVisible="{Binding CanOpenFirmware}" />
+              <MenuItem Header="Discard suspended state…" Command="{Binding DiscardSuspendedCommand}" IsVisible="{Binding CanDiscardSuspended}" />
               <MenuItem Header="Send Ctrl+Alt+Del" Command="{Binding SendCtrlAltDelCommand}" IsVisible="{Binding IsActive}" />
               <MenuItem Header="Save a screenshot" Command="{Binding SaveScreenshotCommand}" IsVisible="{Binding IsActive}" />
               <MenuItem Header="Clone…" Command="{Binding CloneCommand}" />

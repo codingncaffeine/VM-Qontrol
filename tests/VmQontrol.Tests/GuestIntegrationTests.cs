@@ -73,6 +73,81 @@ public sealed class GuestIntegrationTests
         }
     }
 
+    /// <summary>
+    /// Suspend writes the state and turns the machine off; power on carries on in the same boot (the kernel's boot id is
+    /// unchanged) and uses the state up. The control: a discarded state means a fresh boot, with a new boot id.
+    /// </summary>
+    [Fact]
+    public async Task A_suspended_machine_carries_on_in_the_same_boot_and_a_discarded_one_starts_afresh()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var image = Path.Combine(TestProfile.ScratchRoot, "images", Image);
+        Assert.SkipWhen(!File.Exists(image), "Run tools/fetch-test-image.sh first.");
+        using var profile = new TestProfile("suspend");
+        var dir = Path.Combine(profile.Paths.DefaultLibrary, "alpine");
+        Directory.CreateDirectory(dir);
+        await QemuImg.RunAsync(ct, "create", "-q", "-f", "qcow2", "-b", image, "-F", "qcow2", Path.Combine(dir, "disk0.qcow2"));
+        IsoWriter.Write(Path.Combine(dir, "seed.iso"), "cidata", new Dictionary<string, byte[]>
+        {
+            ["meta-data"] = "instance-id: vmq-suspend-test\n"u8.ToArray(),
+            ["user-data"] = Encoding.UTF8.GetBytes("""
+                #cloud-config
+                packages: [qemu-guest-agent]
+                runcmd:
+                  - rc-update add qemu-guest-agent default
+                  - rc-service qemu-guest-agent start
+                """),
+        });
+        var m = new MachineConfig
+        {
+            Name = "alpine",
+            MemoryMiB = 512,
+            Cpu = new CpuConfig { Cores = 1 },
+            Firmware = new FirmwareConfig { Kind = FirmwareKind.Bios },
+            Disks = [new DiskConfig { File = "disk0.qcow2" }],
+            Media = [new MediaConfig { Role = MediaRole.Drivers, File = "seed.iso" }],
+        };
+        MachineStore.Save(m, Path.Combine(dir, MachineStore.FileName));
+
+        async Task<string> BootId(RunningMachine r)
+        {
+            var agent = new GuestAgentClient(r.Paths.Agent);
+            var deadline = DateTime.UtcNow.AddMinutes(4);
+            while (true)
+            {
+                if (await agent.ReadFileAsync("/proc/sys/kernel/random/boot_id", TimeSpan.FromSeconds(2), ct) is { Length: > 0 } id) return Encoding.ASCII.GetString(id).Trim();
+                Assert.True(DateTime.UtcNow < deadline, "the guest agent never answered");
+                await Task.Delay(2000, ct);
+            }
+        }
+
+        string Status() { var o = new StringWriter(); Commands.Run(["status", "alpine"], o, new StringWriter(), profile.Paths, () => HostProbe.Probe()); return o.ToString().Trim(); }
+
+        try
+        {
+            var first = await BootId(await MachineRunner.StartAsync(m, dir, profile.Paths, HostProbe.Probe(), new StartOptions { Headless = true }, ct));
+
+            await MachineSuspend.SuspendAsync(MachineRunner.Find(m, profile.Paths)!, ct: ct);
+            Assert.Null(MachineRunner.Find(m, profile.Paths));
+            Assert.True(MachineSuspend.IsSuspended(dir));
+            Assert.Equal("alpine: suspended", Status());
+
+            var resumed = await MachineRunner.StartAsync(m, dir, profile.Paths, HostProbe.Probe(), new StartOptions { Headless = true }, ct);
+            Assert.False(MachineSuspend.IsSuspended(dir));
+            Assert.Equal(first, await BootId(resumed));
+
+            await MachineSuspend.SuspendAsync(resumed, ct: ct);
+            MachineSuspend.Discard(dir);
+            Assert.Equal("alpine: off", Status());
+            var fresh = await BootId(await MachineRunner.StartAsync(m, dir, profile.Paths, HostProbe.Probe(), new StartOptions { Headless = true }, ct));
+            Assert.NotEqual(first, fresh);
+        }
+        finally
+        {
+            if (MachineRunner.Find(m, profile.Paths) is { } still) await MachineRunner.PowerOffAsync(still, CancellationToken.None);
+        }
+    }
+
     /// <summary>A shared folder, both ways: the guest reads a file the host put there and writes one back, then powers off.</summary>
     [Fact]
     public async Task A_shared_folder_carries_files_both_ways()

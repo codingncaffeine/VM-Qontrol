@@ -55,6 +55,8 @@ public sealed record MachineConfig
     /// <summary>Boot order, boot menu and extra devices; every default is quickemu's.</summary>
     public DevicesConfig Devices { get; set; } = new();
 
+    public AutoProtectConfig AutoProtect { get; set; } = new();
+
     /// <summary>Boot a kernel directly (an installer's kernel with its answer-file options); <c>null</c> = boot normally.</summary>
     public KernelBootConfig? KernelBoot { get; set; }
 
@@ -75,6 +77,12 @@ public sealed record GuestConfig
 
     /// <summary>The osinfo-db identifier when known (e.g. "http://microsoft.com/win/11"), for recommendations.</summary>
     public string? OsInfoId { get; set; }
+
+    /// <summary>The account Easy Install made in the guest, as the guest spells it; <c>null</c> when unknown. The SSH hint uses it.</summary>
+    public string? Account { get; set; }
+
+    /// <summary>The command that opens a shell in the guest through the forwarded SSH port.</summary>
+    public string SshCommand(int port) => $"ssh -p {port} {Account ?? "user"}@localhost";
 }
 
 public enum FirmwareKind
@@ -311,6 +319,18 @@ public sealed record UsbConfig
 }
 
 public sealed record ImportSource(string Kind, string Path);
+
+/// <summary>Workstation's AutoProtect: a snapshot every so often while the machine runs, keeping the newest few.</summary>
+public sealed record AutoProtectConfig
+{
+    public bool Enabled { get; set; }
+
+    /// <summary>Minutes of running between automatic snapshots.</summary>
+    public int IntervalMinutes { get; set; } = 60;
+
+    /// <summary>How many automatic snapshots to keep; older ones are deleted. Snapshots the person took are never touched.</summary>
+    public int Keep { get; set; } = 3;
+}
 
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull, UseStringEnumConverter = true)]

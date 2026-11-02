@@ -6,6 +6,7 @@ using Avalonia.VisualTree;
 using VmQontrol.App.ViewModels;
 using VmQontrol.App.Views;
 using VmQontrol.Core;
+using VmQontrol.Core.Machines;
 
 namespace VmQontrol.Tests;
 
@@ -125,6 +126,98 @@ public sealed class MainWindowTests
         Assert.Equal("Retro", VmQontrol.Core.AppSettings.Load(profile.Paths).Folders.Single().Value);
     }
 
+    /// <summary>
+    /// More → Clone…, choose Linked clone: the new machine is in the library at once, layered on a shared base. Deleting it
+    /// keeps the base (the original still uses it); deleting the original then names the base and removes it too.
+    /// </summary>
+    [Trait("Tier", "Window")]
+    [Fact]
+    public async Task A_linked_clone_made_from_the_menu_shares_a_base_that_goes_with_the_last_machine()
+    {
+        Assert.SkipWhen(!File.Exists("/usr/bin/qemu-io"), "qemu-io is not installed");
+        using var profile = new TestProfile("linked-window");
+        var lib = profile.Paths.DefaultLibrary;
+        var dir = Path.Combine(lib, "Lab");
+        Directory.CreateDirectory(dir);
+        await VmQontrol.Core.Runtime.QemuImg.CreateAsync(Path.Combine(dir, "disk0.qcow2"), "qcow2", 1, ct: TestContext.Current.CancellationToken);
+        MachineStore.Save(new MachineConfig { Name = "Lab", Disks = [new DiskConfig { File = "disk0.qcow2", SizeGiB = 1 }] }, Path.Combine(dir, "vm.json"));
+        var bases = Path.Combine(lib, MachineLifecycle.BasesFolder);
+
+        var seen = await Ui.Run(() =>
+        {
+            var (window, shell) = Open(profile);
+            Ui.PumpUntil(() => shell.Machines.Count == 1, "the library");
+            void Pick(string name)
+            {
+                var item = Named<ListBox>(window, "Library").GetVisualDescendants().OfType<ListBoxItem>().First(i => (i.DataContext as MachineViewModel)?.Name == name);
+                Ui.Click(window, item);
+                Ui.PumpUntil(() => shell.Selected?.Name == name, $"{name}'s page");
+                Ui.Pump(0.3);
+            }
+
+            void Menu(string header)
+            {
+                var page = window.GetVisualDescendants().OfType<MachineView>().Single();
+                var more = Named<Button>(page, "More");
+                Ui.Click(window, more);
+                Ui.Pump(0.3);
+                var entry = ((MenuFlyout)more.Flyout!).Items.OfType<MenuItem>().First(m => (m.Header as string) == header);
+                Assert.True(entry.IsEffectivelyVisible, $"{header} is not in the open menu");
+                Ui.Click(window, entry);
+                Ui.PumpUntil(() => shell.Prompt is not null, $"the {header} prompt");
+                Ui.Pump(0.3);
+            }
+
+            void Confirm(string? typed)
+            {
+                if (typed is not null)
+                {
+                    Named<TextBox>(window, "PromptText").Focus();
+                    window.KeyTextInput(typed);
+                }
+
+                Ui.Click(window, Named<Button>(window, "PromptConfirm"));
+                Ui.PumpUntil(() => shell.Prompt is null, "the prompt to close", 30);
+                Ui.Pump(0.5);
+            }
+
+            Pick("Lab");
+            Menu("Clone…");
+            var choices = Named<ItemsControl>(window, "PromptOptions").GetVisualDescendants().OfType<RadioButton>().ToList();
+            Ui.Click(window, choices[1]);
+            Ui.Pump(0.2);
+            Ui.Capture(window, "phase6", "linked-clone-prompt");
+            Confirm(null);
+            Ui.PumpUntil(() => shell.Machines.Count == 2, "the clone in the library");
+            Ui.Capture(window, "phase6", "linked-clone-made");
+            var afterClone = (shell.Machines.Select(m => m.Name).Order().ToList(), Directory.GetFiles(bases).Length);
+
+            Pick("Lab (clone)");
+            Menu("Delete…");
+            var cloneDeleteLines = string.Join("\n", shell.Prompt!.Lines);
+            Confirm("Lab (clone)");
+            Ui.PumpUntil(() => shell.Machines.Count == 1, "the clone gone");
+            var basesAfterCloneDeleted = Directory.GetFiles(bases).Length;
+
+            Pick("Lab");
+            Menu("Delete…");
+            var originalDeleteLines = string.Join("\n", shell.Prompt!.Lines);
+            Ui.Capture(window, "phase6", "delete-names-shared-disk");
+            Confirm("Lab");
+            Ui.PumpUntil(() => shell.Machines.Count == 0, "the original gone");
+            window.Close();
+            return (afterClone, cloneDeleteLines, basesAfterCloneDeleted, originalDeleteLines, Directory.GetFiles(bases).Length);
+        });
+
+        Assert.Equal(["Lab", "Lab (clone)"], seen.afterClone.Item1);
+        Assert.Equal(1, seen.afterClone.Item2);
+        Assert.DoesNotContain(".bases", seen.cloneDeleteLines, StringComparison.Ordinal);
+        Assert.Equal(1, seen.basesAfterCloneDeleted);
+        Assert.Contains("shared disks no other machine uses", seen.originalDeleteLines, StringComparison.Ordinal);
+        Assert.Contains(".bases", seen.originalDeleteLines, StringComparison.Ordinal);
+        Assert.Equal(0, seen.Item5);
+    }
+
     /// <summary>A real machine, started headless and silent before the window opens: its page finds it running and shows its screen.</summary>
     [Trait("Tier", "Integration")]
     [Fact]
@@ -178,6 +271,72 @@ public sealed class MainWindowTests
         {
             await VmQontrol.Core.Runtime.MachineRunner.PowerOffAsync(running, CancellationToken.None);
             await VmQontrol.Core.Runtime.MachineRunner.WaitForExitAsync(running, TimeSpan.FromSeconds(10), CancellationToken.None);
+        }
+    }
+
+    /// <summary>
+    /// Suspend on a running machine's page: it turns off as "Suspended", Power on reads "Resume", and Resume brings it back
+    /// running with the saved state used up.
+    /// </summary>
+    [Trait("Tier", "Integration")]
+    [Fact]
+    public async Task Suspend_turns_the_machine_off_as_suspended_and_Resume_brings_it_back()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var profile = new TestProfile("suspend-window");
+        var dir = Path.Combine(profile.Paths.DefaultLibrary, "Nap");
+        Directory.CreateDirectory(dir);
+        var machine = new MachineConfig
+        {
+            Name = "Nap",
+            MemoryMiB = 256,
+            Cpu = new CpuConfig { Cores = 1 },
+            Firmware = new FirmwareConfig { Kind = FirmwareKind.Bios },
+            Disks = [new DiskConfig { File = "disk0.qcow2", SizeGiB = 1 }],
+            Display = new DisplayConfig { Backend = DisplayBackend.None },
+        };
+        await VmQontrol.Core.Runtime.QemuImg.CreateAsync(Path.Combine(dir, "disk0.qcow2"), "qcow2", 1, ct: ct);
+        MachineStore.Save(machine, Path.Combine(dir, "vm.json"));
+        var running = await VmQontrol.Core.Runtime.MachineRunner.StartAsync(machine, dir, profile.Paths, VmQontrol.Core.Hosts.HostProbe.Probe(), new VmQontrol.Core.Runtime.StartOptions { Headless = true }, ct);
+        try
+        {
+            var seen = await Ui.Run(() =>
+            {
+                var (window, shell) = Open(profile);
+                Ui.PumpUntil(() => shell.Machines.Count == 1, "the library");
+                Ui.Click(window, Named<ListBox>(window, "Library").GetVisualDescendants().OfType<ListBoxItem>().First());
+                Ui.PumpUntil(() => shell.Selected is { IsRunning: true }, "the running state", 20);
+                Ui.Pump(0.3);
+                var page = window.GetVisualDescendants().OfType<MachineView>().Single();
+                Ui.Click(window, Named<Button>(page, "Suspend"));
+                Ui.PumpUntil(() => shell.Selected is { IsOff: true, IsSuspended: true }, "the machine suspended", 30);
+                Ui.Pump(0.3);
+                var suspendedState = Named<TextBlock>(page, "StateText").Text;
+                var powerOnText = string.Join("", Named<Button>(page, "PowerOn").GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
+                var file = File.Exists(VmQontrol.Core.Runtime.MachineSuspend.StatePath(dir));
+                Ui.Capture(window, "phase6", "suspended");
+
+                Ui.Click(window, Named<Button>(page, "PowerOn"));
+                Ui.PumpUntil(() => shell.Selected is { IsRunning: true, IsSuspended: false } || shell.Notice is not null, "the machine resumed", 30);
+                Assert.True(shell.Notice is null, shell.Notice is { } n ? n.Title + ": " + string.Join(" ", n.Lines) : "");
+                Ui.Pump(0.3);
+                var resumedState = Named<TextBlock>(page, "StateText").Text;
+                window.Close();
+                return (suspendedState, powerOnText, file, resumedState);
+            });
+            Assert.Equal("Suspended", seen.suspendedState);
+            Assert.Equal("Resume", seen.powerOnText);
+            Assert.True(seen.file);
+            Assert.Equal("Running", seen.resumedState);
+            Assert.False(File.Exists(VmQontrol.Core.Runtime.MachineSuspend.StatePath(dir)));
+        }
+        finally
+        {
+            if (VmQontrol.Core.Runtime.MachineRunner.Find(machine, profile.Paths) is { } still)
+            {
+                await VmQontrol.Core.Runtime.MachineRunner.PowerOffAsync(still, CancellationToken.None);
+                await VmQontrol.Core.Runtime.MachineRunner.WaitForExitAsync(still, TimeSpan.FromSeconds(10), CancellationToken.None);
+            }
         }
     }
 

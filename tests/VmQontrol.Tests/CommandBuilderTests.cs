@@ -130,4 +130,18 @@ public sealed class CommandBuilderTests
         var args = Build(Linux with { Devices = new DevicesConfig { BootOrder = "dc" } }).Args;
         Assert.DoesNotContain("-boot", args);
     }
+
+    [Fact]
+    public void Two_machines_on_the_real_network_never_share_a_MAC()
+    {
+        MachineConfig Bridged(string id) => Linux with { Id = id, Nics = [new NicConfig { Mode = NetMode.Bridge, Bridge = "br0" }] };
+        string Nic(MachineConfig m) { var a = Build(m).Args.ToList(); return a[a.IndexOf("-nic") + 1]; }
+        var original = Nic(Bridged("aaaa"));
+        var clone = Nic(Bridged("bbbb"));
+        Assert.Contains(",mac=52:54:00:", original, StringComparison.Ordinal);
+        Assert.NotEqual(original, clone);
+        Assert.Equal(original, Nic(Bridged("aaaa")));
+        // A quickemu machine keeps quickemu's command line.
+        Assert.DoesNotContain("mac=", Nic(Bridged("cccc") with { ImportedFrom = new ImportSource("quickemu", "/x.conf") }), StringComparison.Ordinal);
+    }
 }

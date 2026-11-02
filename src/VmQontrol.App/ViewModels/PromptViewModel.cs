@@ -3,9 +3,29 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace VmQontrol.App.ViewModels;
 
-/// <summary>A question that needs a typed answer: a new name, or the machine's name to confirm a deletion.</summary>
-public sealed partial class PromptViewModel(string title, IReadOnlyList<string> lines, string field, string text, string confirm, Func<string, bool> valid, bool isDanger = false) : ObservableObject
+/// <summary>One of the ways a prompt can be answered (a full or a linked clone), with what choosing it means.</summary>
+public sealed partial class PromptOption(string title, string detail, bool chosen = false) : ObservableObject
 {
+    public string Title { get; } = title;
+
+    public string Detail { get; } = detail;
+
+    [ObservableProperty]
+    private bool _chosen = chosen;
+}
+
+/// <summary>A question that needs a typed answer: a new name, or the machine's name to confirm a deletion; optionally a choice too.</summary>
+public sealed partial class PromptViewModel(string title, IReadOnlyList<string> lines, string field, string text, string confirm, Func<string, bool> valid, bool isDanger = false,
+    IReadOnlyList<PromptOption>? options = null) : ObservableObject
+{
+    /// <summary>The choices shown above the text field; empty for a plain question.</summary>
+    public IReadOnlyList<PromptOption> Options { get; } = options ?? [];
+
+    public bool HasOptions => Options.Count > 0;
+
+    /// <summary>The position of the chosen option (0 when there are none).</summary>
+    public int Choice => Math.Max(0, Options.ToList().FindIndex(o => o.Chosen));
+
     private readonly TaskCompletionSource<string?> _answer = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public string Title { get; } = title;

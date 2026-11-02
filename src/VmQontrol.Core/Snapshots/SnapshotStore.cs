@@ -24,6 +24,9 @@ public sealed record Snapshot
 
     /// <summary>A screenshot of the moment, beside the list (file name).</summary>
     public string? Screenshot { get; init; }
+
+    /// <summary>Taken by AutoProtect, which deletes its own oldest ones; the person's own snapshots are never deleted for them.</summary>
+    public bool Auto { get; init; }
 }
 
 /// <summary>The snapshot list and which one the machine stands on now ("You are here").</summary>
@@ -71,7 +74,7 @@ public sealed class SnapshotStore(MachineConfig machine, string machineDirectory
     }
 
     /// <summary>Takes a snapshot; <paramref name="watcher"/> is the running machine's connection, or <c>null</c> when it is off.</summary>
-    public async Task<Snapshot> TakeAsync(string name, string description, MachineWatcher? watcher, CancellationToken ct = default)
+    public async Task<Snapshot> TakeAsync(string name, string description, MachineWatcher? watcher, CancellationToken ct = default, bool auto = false)
     {
         if (machine.Disks.Any(d => d.Format != "qcow2"))
             throw new InvalidOperationException("Snapshots need every disk in qcow2 format; this machine has a raw disk.");
@@ -104,7 +107,7 @@ public sealed class SnapshotStore(MachineConfig machine, string machineDirectory
             foreach (var disk in Disks) await QemuImg.RunAsync(ct, "snapshot", "-c", tag, disk).ConfigureAwait(false);
         }
 
-        var snapshot = new Snapshot { Tag = tag, Name = name, Description = description, Taken = DateTimeOffset.Now, WithMemory = watcher is not null, Parent = list.Current, Screenshot = screenshot };
+        var snapshot = new Snapshot { Tag = tag, Name = name, Description = description, Taken = DateTimeOffset.Now, WithMemory = watcher is not null, Parent = list.Current, Screenshot = screenshot, Auto = auto };
         Save(list with { Snapshots = [.. list.Snapshots, snapshot], Current = tag });
         return snapshot;
     }
@@ -126,6 +129,9 @@ public sealed class SnapshotStore(MachineConfig machine, string machineDirectory
         }
         else
         {
+            // The saved memory belongs to the disks as they are; under another state it would wreck the guest's files.
+            if (MachineSuspend.IsSuspended(machineDirectory))
+                throw new InvalidOperationException("The machine is suspended. Power it on and shut it down, or discard its suspended state, before going back to a snapshot.");
             foreach (var disk in Disks) await QemuImg.RunAsync(ct, "snapshot", "-a", snapshot.Tag, disk).ConfigureAwait(false);
         }
 

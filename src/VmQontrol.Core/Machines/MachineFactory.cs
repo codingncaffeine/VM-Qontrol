@@ -74,6 +74,7 @@ public static class MachineFactory
         }
 
         KernelBootConfig? kernelBoot = null;
+        string? account = null;
         if (r.LinuxEasyInstall is { } linux && r.InstallerIso is { } linuxIso && !windows)
         {
             var installer = LinuxEasyInstall.Detect(linuxIso);
@@ -81,6 +82,7 @@ public static class MachineFactory
             var (extra, boot) = LinuxEasyInstall.Prepare(installer, linuxIso, dir, linux);
             media.AddRange(extra);
             kernelBoot = boot;
+            account = LinuxEasyInstall.AccountName(linux.UserName);
         }
 
         var machine = new MachineConfig
@@ -88,7 +90,7 @@ public static class MachineFactory
             KernelBoot = kernelBoot,
             Name = r.Name,
             Notes = r.Notes,
-            Guest = r.Guest,
+            Guest = account is null ? r.Guest : r.Guest with { Account = account },
             MemoryMiB = r.MemoryMiB,
             Cpu = new CpuConfig { Cores = r.Cores },
             Firmware = new FirmwareConfig { Kind = r.Firmware, SecureBoot = r.SecureBoot },

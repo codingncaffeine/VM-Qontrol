@@ -27,11 +27,17 @@ internal static class Commands
                               Make a new machine in the library (the system is detected from --iso when --os is left out).
                               --easy-install installs Windows, Ubuntu, Fedora/RHEL or Debian with no questions
                               (Linux needs --password; --power-off-when-done stops the machine after installing).
+          clone MACHINE NEW [--linked]
+                              Copy a machine that is off. --linked shares its disks as they are now instead of copying
+                              them (seconds, almost no space); both machines keep their own changes from then on.
           start MACHINE [--headless] [--paused]
                               Power the machine on. With a screen, the viewer opens.
           status MACHINE      Whether the machine is running, its process and its SSH port.
           shutdown MACHINE    Ask the guest to shut down (the power button).
           poweroff MACHINE    Turn the machine off at once (unsaved work in the guest is lost).
+          suspend MACHINE     Save the running machine's state to its folder and turn it off; start carries on from it.
+          discard-suspended MACHINE
+                              Throw the saved state away: the next start begins afresh, as after a power cut.
           pause / resume / reset MACHINE
           screenshot MACHINE FILE.png
           version             Print the version and licence.
@@ -65,12 +71,14 @@ internal static class Commands
                     return Detect(args[1], output, error);
                 case "create" when args.Length > 1:
                     return Create(args[1..], paths, output, error);
+                case "clone" when args.Length > 2:
+                    return Clone(args[1], args[2], args.Contains("--linked"), paths, output, error);
                 case "start" when args.Length > 1:
                     return Start(args[1], args.Contains("--headless"), args.Contains("--paused"), paths, host, output, error);
                 case "status" when args.Length > 1:
                     return Control(args[1], paths, output, error, async r =>
                     {
-                        output.WriteLine($"{r.Name}: {await MachineRunner.StatusAsync(r).ConfigureAwait(false)} (process {r.Pid}){(r.SshPort is { } p ? $", SSH: ssh -p {p} user@localhost" : "")}");
+                        output.WriteLine($"{r.Name}: {await MachineRunner.StatusAsync(r).ConfigureAwait(false)} (process {r.Pid}){(r.SshPort is { } p && Resolve(args[1], paths)?.Machine is { } sm ? $", SSH: {sm.Guest.SshCommand(p)}" : "")}");
                         // The guest's own addresses, when its agent answers (it is absent until guest tools are installed).
                         var addresses = await new GuestAgentClient(r.Paths.Agent).AddressesAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
                         if (addresses is { Count: > 0 }) output.WriteLine($"  Guest addresses: {string.Join(", ", addresses.Select(a => $"{a.Address} ({a.Interface})"))}");
@@ -86,6 +94,14 @@ internal static class Commands
                         // Clears the runtime folder the machine left.
                         if (Resolve(args[1], paths)?.Machine is { } stopped) MachineRunner.Find(stopped, paths);
                     });
+                case "suspend" when args.Length > 1:
+                    return Control(args[1], paths, output, error, async r =>
+                    {
+                        await MachineSuspend.SuspendAsync(r, new Progress<string>(output.WriteLine)).ConfigureAwait(false);
+                        output.WriteLine($"{r.Name} is suspended; 'vmq start {args[1]}' carries on from here.");
+                    });
+                case "discard-suspended" when args.Length > 1:
+                    return DiscardSuspended(args[1], paths, output, error);
                 case "pause" when args.Length > 1:
                     return Control(args[1], paths, output, error, r => MachineRunner.PauseAsync(r));
                 case "resume" when args.Length > 1:
@@ -98,8 +114,8 @@ internal static class Commands
                         await MachineRunner.ScreenshotAsync(r, args[2]).ConfigureAwait(false);
                         output.WriteLine($"Saved {Path.GetFullPath(args[2])}");
                     });
-                case "inspect" or "detect" or "create" or "start" or "status" or "shutdown" or "poweroff" or "pause" or "resume" or "reset" or "screenshot":
-                    error.WriteLine($"vmq {command}: something is missing ({(command == "detect" ? "the disc image" : command == "screenshot" ? "the machine and the file" : command == "create" ? "the name" : "the machine")}). Run 'vmq help' for the list.");
+                case "inspect" or "detect" or "create" or "clone" or "start" or "status" or "shutdown" or "poweroff" or "suspend" or "discard-suspended" or "pause" or "resume" or "reset" or "screenshot":
+                    error.WriteLine($"vmq {command}: something is missing ({(command == "detect" ? "the disc image" : command == "screenshot" ? "the machine and the file" : command == "clone" ? "the machine and the new name" : command == "create" ? "the name" : "the machine")}). Run 'vmq help' for the list.");
                     return 2;
                 default:
                     error.WriteLine($"vmq: unknown command '{command}'. Run 'vmq help' for the list.");
@@ -329,6 +345,49 @@ internal static class Commands
         return 0;
     }
 
+    private static int DiscardSuspended(string target, QontrolPaths paths, TextWriter output, TextWriter error)
+    {
+        var entry = Resolve(target, paths);
+        if (entry?.Machine is not { } m)
+        {
+            error.WriteLine($"vmq discard-suspended: no machine called '{target}'.");
+            return 1;
+        }
+
+        if (!MachineSuspend.IsSuspended(entry.Directory))
+        {
+            output.WriteLine($"{m.Name} is not suspended.");
+            return 0;
+        }
+
+        MachineSuspend.Discard(entry.Directory);
+        output.WriteLine($"{m.Name}'s saved state is gone; it will start afresh.");
+        return 0;
+    }
+
+    private static int Clone(string target, string name, bool linked, QontrolPaths paths, TextWriter output, TextWriter error)
+    {
+        var entry = Resolve(target, paths);
+        if (entry?.Machine is not { } m)
+        {
+            error.WriteLine($"vmq clone: no machine called '{target}'.");
+            return 1;
+        }
+
+        if (MachineRunner.Find(m, paths) is not null)
+        {
+            error.WriteLine($"vmq clone: power {m.Name} off first; its disks must not change while they are cloned.");
+            return 1;
+        }
+
+        var progress = new Progress<string>(output.WriteLine);
+        var dir = linked
+            ? MachineLifecycle.LinkedCloneAsync(m, entry.Directory, paths.DefaultLibrary, name, progress).GetAwaiter().GetResult().Directory
+            : MachineLifecycle.CloneAsync(m, entry.Directory, paths.DefaultLibrary, name, progress).GetAwaiter().GetResult().Directory;
+        output.WriteLine($"Created {name} in {dir}{(linked ? $", sharing {m.Name}'s disks as they were" : "")}.");
+        return 0;
+    }
+
     private static int Start(string target, bool headless, bool paused, QontrolPaths paths, Func<HostCapabilities> host, TextWriter output, TextWriter error)
     {
         var entry = Resolve(target, paths);
@@ -339,7 +398,7 @@ internal static class Commands
         }
 
         var running = MachineRunner.StartAsync(m, entry.Directory, paths, host(), new StartOptions { Headless = headless, Paused = paused }).GetAwaiter().GetResult();
-        output.WriteLine($"{m.Name} is running (process {running.Pid}){(running.SshPort is { } p ? $"; SSH: ssh -p {p} user@localhost" : "")}.");
+        output.WriteLine($"{m.Name} is running (process {running.Pid}){(running.SshPort is { } p ? $"; SSH: {m.Guest.SshCommand(p)}" : "")}.");
         if (!running.BootAssist.IsCompleted)
         {
             output.WriteLine("Starting the installer (pressing a key for the disc's boot prompt)…");
@@ -365,7 +424,7 @@ internal static class Commands
 
         if (MachineRunner.Find(m, paths) is not { } running)
         {
-            (notRunning == 0 ? output : error).WriteLine($"{m.Name}: off");
+            (notRunning == 0 ? output : error).WriteLine($"{m.Name}: {(MachineSuspend.IsSuspended(entry.Directory) ? "suspended" : "off")}");
             return notRunning;
         }
 

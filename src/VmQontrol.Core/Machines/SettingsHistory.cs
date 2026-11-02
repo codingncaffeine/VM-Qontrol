@@ -52,9 +52,12 @@ public static class SettingsHistory
         Diff("Boot order", before.Devices.BootOrder, after.Devices.BootOrder, v => v?.ToString() ?? "automatic");
         Diff("Boot menu", before.Devices.BootMenu, after.Devices.BootMenu, v => (bool?)v == true ? "on" : "off");
         Diff("Shared folders", string.Join(", ", before.Shares.Select(x => $"{x.Tag}={x.Path}{(x.ReadOnly ? " (read only)" : "")}")), string.Join(", ", after.Shares.Select(x => $"{x.Tag}={x.Path}{(x.ReadOnly ? " (read only)" : "")}")), v => (v as string) is { Length: > 0 } t ? t : "none");
+        Diff("AutoProtect", AutoProtectText(before.AutoProtect), AutoProtectText(after.AutoProtect));
         Diff("Extra QEMU arguments", string.Join(' ', before.ExtraArgs), string.Join(' ', after.ExtraArgs), v => (v as string) is { Length: > 0 } s ? s : "none");
         return changes;
     }
+
+    private static string AutoProtectText(AutoProtectConfig a) => a.Enabled ? $"every {a.IntervalMinutes} min, keep {a.Keep}" : "off";
 
     private static string Nic(NicConfig n) => $"{n.Mode}{(n.Bridge is { } b ? " " + b : "")}{(n.Model is { } m ? " " + m : "")}{(n.Mac is { } mac ? " " + mac : "")}" +
                                               (n.Forwards.Count > 0 ? $" forwards {string.Join(' ', n.Forwards.Select(f => $"{f.Protocol}:{f.HostPort}->{f.GuestPort}"))}" : "");

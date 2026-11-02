@@ -78,7 +78,7 @@ public static class MachineRunner
             m = m with { Nics = [nic with { SshForward = false }, .. m.Nics.Skip(1)] };
         }
 
-        var launch = QemuCommandBuilder.Build(m, new LaunchContext
+        var context = new LaunchContext
         {
             Host = host,
             MachineDirectory = machineDirectory,
@@ -87,7 +87,8 @@ public static class MachineRunner
             SystemDiskUsed = m.Disks.Count > 0 && DiskState.IsUsed(Full(m.Disks[0].File)),
             Headless = options.Headless,
             FirmwareMenu = options.FirmwareSetup && m.Firmware.Kind == FirmwareKind.Bios && m.Guest.Os != "macos",
-        });
+        };
+        var launch = QemuCommandBuilder.Build(m, context);
         if (launch.Errors.Count > 0) throw new StartRefusedException(launch.Errors);
         foreach (var w in launch.Warnings) Log.Warn($"{m.Name}: {w}");
         if (launch.VarsToCreate is { } vars)
@@ -121,17 +122,50 @@ public static class MachineRunner
                 throw new StartRefusedException([$"A shared folder could not be shared: {(await process.StandardError.ReadToEndAsync(ct).ConfigureAwait(false)).Trim()}"]);
         }
 
-        var args = new List<string>(launch.Args);
-        if (options.Paused) args.Add("-S");
-        // QEMU detaches once it is ready; until then its errors come back on stderr and the exit code says whether it started.
-        args.Add("-daemonize");
+        // A suspended machine carries on from its saved state (the firmware screen means starting afresh instead).
+        var resuming = MachineSuspend.IsSuspended(machineDirectory) && !options.FirmwareSetup;
+        if (options.FirmwareSetup) MachineSuspend.Discard(machineDirectory);
+        List<string> Args(IReadOnlyList<string> built)
+        {
+            var list = new List<string>(built);
+            if (options.Paused) list.Add("-S");
+            if (resuming) list.AddRange(["-incoming", "defer"]);
+            // QEMU detaches once it is ready; until then its errors come back on stderr and the exit code says whether it started.
+            list.Add("-daemonize");
+            return list;
+        }
+
+        // A resumed machine runs the command line it was suspended with (its state fits only that hardware); only the
+        // SSH port, which belongs to this computer and not the machine, is chosen again.
+        var saved = resuming ? MachineSuspend.SavedCommand(machineDirectory) : null;
+        IReadOnlyList<string> Built(int? port) => saved is null ? QemuCommandBuilder.Build(m, context with { SshHostPort = port ?? 22220 }).Args : WithSshPort(saved, port);
+        var args = Args(saved is null ? launch.Args : Built(ssh));
         try
         {
-            var stderr = await RunDaemonAsync(QemuProgram, args, "QEMU", ct).ConfigureAwait(false);
+            string stderr;
+            while (true)
+            {
+                try
+                {
+                    stderr = await RunDaemonAsync(QemuProgram, args, "QEMU", ct).ConfigureAwait(false);
+                    break;
+                }
+                catch (StartRefusedException ex) when (ssh is { } taken && nic?.SshHostPort is null
+                    && ex.Message.Contains("Could not set up host forwarding rule", StringComparison.Ordinal)
+                    && PortAllocator.FirstFree(22220, after: taken) is { } next)
+                {
+                    // Another program took the SSH port between choosing it and QEMU binding it: take the next one.
+                    Log.Warn($"{m.Name}: host port {taken} was taken as the machine started; using {next} for SSH.");
+                    ssh = next;
+                    args = Args(Built(next));
+                }
+            }
+
             if (stderr.Length > 0) await File.WriteAllTextAsync(Path.Combine(logs, "qemu.log"), stderr, ct).ConfigureAwait(false);
         }
         catch
         {
+            if (ssh is { } unused) PortAllocator.Release(unused);
             if (swtpmPid is { } p) TryKill(p);
             foreach (var sharePid in shareProcesses) TryKill(sharePid);
             // QEMU opens its sockets before it can fail on a device; a refused start leaves nothing behind.
@@ -139,8 +173,9 @@ public static class MachineRunner
             throw;
         }
 
+        if (ssh is { } bound) PortAllocator.Release(bound);
         var pid = ReadPid(runtime.Pid) ?? throw new StartRefusedException(["QEMU started but wrote no process id."]);
-        var installing = !(m.Disks.Count > 0 && DiskState.IsUsed(Full(m.Disks[0].File)))
+        var installing = !resuming && !(m.Disks.Count > 0 && DiskState.IsUsed(Full(m.Disks[0].File)))
                          && m.Media.Any(x => x.Role == MediaRole.Installer && x.Connect != Connect.Never);
         var assist = options.FirmwareSetup && !options.Paused
             ? PressKeysAsync(runtime, m.Name, "esc", 24, "open the firmware screen")
@@ -157,7 +192,32 @@ public static class MachineRunner
             ["started"] = running.Started.ToString("O"),
             ["sshPort"] = ssh,
         }, LockJson), ct).ConfigureAwait(false);
-        Log.Info($"{m.Name}: started (process {pid}){(ssh is { } port ? $", SSH on host port {port}" : "")}");
+        Log.Info($"{m.Name}: started (process {pid}){(ssh is { } port ? $", SSH on host port {port}" : "")}{(resuming ? ", resuming" : "")}");
+        if (resuming)
+        {
+            try
+            {
+                await MachineSuspend.FinishResumeAsync(running, run: !options.Paused, ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is StartRefusedException or QmpException or IOException or OperationCanceledException)
+            {
+                // The saved state stays for the person to discard; nothing of this attempt does.
+                try
+                {
+                    await PowerOffAsync(running, CancellationToken.None).ConfigureAwait(false);
+                    await WaitForExitAsync(running, TimeSpan.FromSeconds(10), CancellationToken.None).ConfigureAwait(false);
+                }
+                catch (Exception stop) when (stop is IOException or QmpException or System.Net.Sockets.SocketException)
+                {
+                }
+
+                if (swtpmPid is { } p) TryKill(p);
+                foreach (var sharePid in shareProcesses) TryKill(sharePid);
+                TryDelete(runtime.Directory);
+                throw ex as StartRefusedException ?? new StartRefusedException([$"The suspended state could not be loaded ({ex.Message}). Discard it to start the machine afresh."]);
+            }
+        }
+
         return running;
     }
 
@@ -184,6 +244,15 @@ public static class MachineRunner
             Log.Warn($"{name}: could not press a key to {purpose} ({ex.Message}).");
         }
     }
+
+    /// <summary>
+    /// A saved command line with its SSH forward moved to <paramref name="port"/> (or dropped when none is free). The SSH
+    /// forward is the first on the network option (the builder writes it before the person's own), so only that one moves.
+    /// </summary>
+    public static IReadOnlyList<string> WithSshPort(IReadOnlyList<string> args, int? port) =>
+        args.Select(a => SshForward.Replace(a, port is { } p ? $",hostfwd=tcp::{p}-:22" : "", 1)).ToList();
+
+    private static readonly System.Text.RegularExpressions.Regex SshForward = new(@",hostfwd=tcp::\d+-:22(?=,|$)", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     /// <summary>The machine if it is running now; a runtime folder left by a machine that has stopped is cleared.</summary>
     public static RunningMachine? Find(MachineConfig m, QontrolPaths paths)

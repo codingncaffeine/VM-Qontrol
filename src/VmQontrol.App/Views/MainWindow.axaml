@@ -121,6 +121,18 @@
               <DataTemplate x:DataType="x:String"><SelectableTextBlock Text="{Binding}" TextWrapping="Wrap" Margin="0,2" /></DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
+          <ItemsControl x:Name="PromptOptions" ItemsSource="{Binding Options}" IsVisible="{Binding HasOptions}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:PromptOption">
+                <RadioButton GroupName="PromptChoice" IsChecked="{Binding Chosen}" Margin="0,2">
+                  <StackPanel Spacing="2">
+                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding Detail}" Classes="muted" TextWrapping="Wrap" FontSize="{DynamicResource QFontSmall}" />
+                  </StackPanel>
+                </RadioButton>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
           <TextBlock Text="{Binding Field}" FontWeight="SemiBold" />
           <TextBox x:Name="PromptText" Text="{Binding Text}">
             <TextBox.KeyBindings>

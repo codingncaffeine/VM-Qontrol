@@ -84,6 +84,8 @@ public sealed partial class ShellViewModel : ObservableObject
     /// <summary>The library folder machines are made in.</summary>
     public string LibraryRoot => Settings.LibraryRoots[0];
 
+    public IReadOnlyList<string> LibraryRoots => Settings.LibraryRoots;
+
     /// <summary>After a clone or a delete: the library is read again and, for a clone, the new machine selected.</summary>
     public async Task AfterLifecycleAsync(string? selectDirectory)
     {

@@ -114,7 +114,7 @@ public static class LinuxEasyInstall
           timezone: {c.TimeZone}
           identity:
             hostname: {c.HostName}
-            username: {c.UserName.ToLowerInvariant()}
+            username: {AccountName(c.UserName)}
             realname: "{c.UserName.Replace("\"", "", StringComparison.Ordinal)}"
             password: "{hash}"
           ssh:
@@ -138,7 +138,7 @@ public static class LinuxEasyInstall
         timezone {c.TimeZone} --utc
         network --bootproto=dhcp --hostname={c.HostName}
         rootpw --lock
-        user --name={c.UserName.ToLowerInvariant()} --gecos="{c.UserName.Replace("\"", "", StringComparison.Ordinal)}" --groups=wheel --iscrypted --password={hash}
+        user --name={AccountName(c.UserName)} --gecos="{c.UserName.Replace("\"", "", StringComparison.Ordinal)}" --groups=wheel --iscrypted --password={hash}
         zerombr
         clearpart --all --initlabel
         autopart
@@ -164,7 +164,7 @@ public static class LinuxEasyInstall
         d-i mirror/http/proxy string
         d-i passwd/root-login boolean false
         d-i passwd/user-fullname string {c.UserName}
-        d-i passwd/username string {c.UserName.ToLowerInvariant()}
+        d-i passwd/username string {AccountName(c.UserName)}
         d-i passwd/user-password-crypted password {hash}
         d-i clock-setup/utc boolean true
         d-i time/zone string {c.TimeZone}
@@ -186,6 +186,18 @@ public static class LinuxEasyInstall
         d-i debian-installer/exit/poweroff boolean {(c.PowerOffWhenDone ? "true" : "false")}
 
         """;
+
+    /// <summary>
+    /// The account name made from the person's name, in the form every installer accepts: lower-case letters, digits,
+    /// '-' and '_', starting with a letter, at most 32 ("Jane Doe" becomes "janedoe").
+    /// </summary>
+    public static string AccountName(string userName)
+    {
+        var name = new string(userName.ToLowerInvariant().Where(ch => char.IsAsciiLetterOrDigit(ch) || ch is '-' or '_').ToArray()).TrimStart('-', '_');
+        if (name.Length == 0) return "user";
+        if (!char.IsAsciiLetter(name[0])) name = "u" + name;
+        return name[..Math.Min(32, name.Length)];
+    }
 
     /// <summary>A Linux host name from a machine name: lower case letters, digits and hyphens, at most 63.</summary>
     public static string HostName(string machineName)

@@ -318,8 +318,13 @@ public static class QemuCommandBuilder
             }
 
             case NetMode.Bridge:
-                args.AddRange(["-nic", $"bridge,br={nic.Bridge},model={nicModel}{(nic.Mac is { } mac ? ",mac=" + mac : "")}"]);
+            {
+                // On the real network each machine needs its own MAC, or two machines (a clone and its original) clash on
+                // QEMU's one default; a quickemu machine keeps quickemu's own command line.
+                var bridgeMac = nic.Mac ?? (m.ImportedFrom is null ? MacFor(m.Id) : null);
+                args.AddRange(["-nic", $"bridge,br={nic.Bridge},model={nicModel}{(bridgeMac is { } mac ? ",mac=" + mac : "")}"]);
                 break;
+            }
             default:
                 args.AddRange(["-device", $"{nicModel},netdev=nic", "-netdev", $"{net},id=nic"]);
                 break;

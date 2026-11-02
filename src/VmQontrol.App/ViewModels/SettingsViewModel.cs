@@ -124,6 +124,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         new("serial", "Serial port", "Hardware"),
         new("boot", "Boot and devices", "Hardware"),
         new("shares", "Shared folders", "Options"),
+        new("autoprotect", "AutoProtect", "Options"),
         new("advanced", "Advanced", "Options"),
         new("history", "Change history", "Options"),
     ];
@@ -178,6 +179,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     public IReadOnlyList<Option> Pointers { get; } = [new(null, "Automatic"), new("tablet", "Tablet (pointer follows your mouse exactly)"), new("usb", "USB mouse"), new("ps2", "PS/2 mouse"), new("virtio", "VirtIO")];
 
     public IReadOnlyList<Option> SerialOptions { get; } = [new(null, "Automatic (off for Windows and macOS)"), new("on", "On: shown in the Console tab"), new("off", "Off")];
+
+    public IReadOnlyList<Option> AutoProtectIntervals { get; } =
+        [new("15", "Every 15 minutes"), new("30", "Every 30 minutes"), new("60", "Every hour"), new("240", "Every 4 hours"), new("1440", "Every day")];
 
     public IReadOnlyList<Option> WatchdogOptions { get; } = [new(null, "None"), new("reset", "Restart the machine"), new("poweroff", "Power the machine off"), new("pause", "Pause the machine")];
 
@@ -242,6 +246,10 @@ public sealed partial class SettingsViewModel : ObservableObject
         CrashReporting = m.Devices.CrashReporting;
         BootOrder = BootOrders.FirstOrDefault(o => o.Value == m.Devices.BootOrder) ?? BootOrders[0];
         BootMenu = m.Devices.BootMenu;
+        AutoProtectOn = m.AutoProtect.Enabled;
+        AutoProtectInterval = AutoProtectIntervals.FirstOrDefault(o => o.Value == m.AutoProtect.IntervalMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            ?? new Option(m.AutoProtect.IntervalMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture), $"Every {m.AutoProtect.IntervalMinutes} minutes");
+        AutoProtectKeep = m.AutoProtect.Keep;
         Section = Sections[0];
         LoadHistory();
     }
@@ -335,6 +343,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _balloon;
     [ObservableProperty] private bool _balloonAuto;
     [ObservableProperty] private Option _watchdog;
+    [ObservableProperty] private bool _autoProtectOn;
+    [ObservableProperty] private Option _autoProtectInterval;
+    [ObservableProperty] private decimal _autoProtectKeep = 3;
     [ObservableProperty] private bool _crashReporting;
     [ObservableProperty] private Option _bootOrder;
     [ObservableProperty] private bool _bootMenu;
@@ -411,6 +422,12 @@ public sealed partial class SettingsViewModel : ObservableObject
                 CrashReporting = CrashReporting,
                 BootOrder = BootOrder.Value,
                 BootMenu = BootMenu,
+            },
+            AutoProtect = new AutoProtectConfig
+            {
+                Enabled = AutoProtectOn,
+                IntervalMinutes = int.Parse(AutoProtectInterval.Value ?? "60", System.Globalization.CultureInfo.InvariantCulture),
+                Keep = (int)Math.Clamp(AutoProtectKeep, 1, 50),
             },
         };
     }

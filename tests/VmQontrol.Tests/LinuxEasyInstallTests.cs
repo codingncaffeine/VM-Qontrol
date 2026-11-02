@@ -83,4 +83,23 @@ public sealed class LinuxEasyInstallTests
         Assert.Contains("media=cdrom,index=2,file=/vms/u/autoinstall.iso", QemuCommandBuilder.Build(m, Ctx(false)).Args);
         Assert.DoesNotContain(QemuCommandBuilder.Build(m, Ctx(true)).Args, a => a.Contains("autoinstall.iso", StringComparison.Ordinal));
     }
+
+    [Theory]
+    [InlineData("Eldritich", "eldritich")]
+    [InlineData("Jane Doe", "janedoe")]
+    [InlineData("2fast", "u2fast")]
+    [InlineData("  ", "user")]
+    public void Account_names_are_ones_every_installer_accepts(string person, string account) => Assert.Equal(account, LinuxEasyInstall.AccountName(person));
+
+    [Fact]
+    public void The_SSH_hint_names_the_account_Easy_Install_made()
+    {
+        Assert.Equal("ssh -p 22220 jane@localhost", new GuestConfig { Account = "jane" }.SshCommand(22220));
+        Assert.Equal("ssh -p 22220 user@localhost", new GuestConfig().SshCommand(22220));
+        var hash = Sha512Crypt.Hash("x");
+        var choices = new LinuxInstallChoices { UserName = "Jane Doe", Password = "x", HostName = "h" };
+        Assert.Contains("--name=janedoe ", LinuxEasyInstall.Kickstart(choices, hash), StringComparison.Ordinal);
+        Assert.Contains("passwd/username string janedoe", LinuxEasyInstall.Preseed(choices, hash), StringComparison.Ordinal);
+        Assert.Contains("username: janedoe", LinuxEasyInstall.UbuntuAutoinstall(choices, hash), StringComparison.Ordinal);
+    }
 }

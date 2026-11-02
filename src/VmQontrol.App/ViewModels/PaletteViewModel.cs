@@ -88,12 +88,14 @@ public sealed partial class PaletteViewModel(ShellViewModel shell) : ObservableO
                 if (when) items.Add(new(title, s.Name, () => command.Execute(null)));
             }
 
-            Add("Power on", s.PowerOnCommand, s.IsOff);
-            Add("Power on to firmware setup", s.PowerOnToFirmwareCommand, s.IsOff);
+            Add(s.PowerOnText, s.PowerOnCommand, s.IsOff);
+            Add("Power on to firmware setup", s.PowerOnToFirmwareCommand, s.CanOpenFirmware);
+            Add("Discard suspended state", s.DiscardSuspendedCommand, s.CanDiscardSuspended);
             Add("Open screen", s.OpenScreenCommand, s.IsActive);
             Add("Shut down", s.ShutDownCommand, s.IsRunning);
             Add("Pause", s.PauseCommand, s.CanPause);
             Add("Resume", s.ResumeCommand, s.IsPaused);
+            Add("Suspend", s.SuspendCommand, s.IsActive);
             Add("Reset", s.ResetCommand, s.IsActive);
             Add("Power off", s.PowerOffCommand, s.IsActive);
             Add("Open settings", s.OpenSettingsCommand);

@@ -8,6 +8,7 @@ using VmQontrol.Core.Library;
 using VmQontrol.Core.Machines;
 using VmQontrol.Core.Qemu;
 using VmQontrol.Core.Runtime;
+using VmQontrol.Core.Snapshots;
 
 namespace VmQontrol.App.ViewModels;
 
@@ -29,6 +30,7 @@ public sealed partial class MachineViewModel : ObservableObject
         Logs = new LogViewModel(shell.Paths, Machine);
         Console.CopyRequested = text => shell.CopyToClipboard(text, "The console output is on the clipboard.");
         Snapshots = new SnapshotsViewModel(this, shell);
+        _ = RefreshSuspendedAsync();
     }
 
     public PerformanceViewModel Performance { get; } = new();
@@ -94,8 +96,16 @@ public sealed partial class MachineViewModel : ObservableObject
     private IReadOnlyList<DetailRow> _details = [];
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(StateText), nameof(IsRunning), nameof(IsOff), nameof(IsPaused), nameof(CanPause), nameof(IsActive), nameof(ScreenPlaceholder))]
+    [NotifyPropertyChangedFor(nameof(StateText), nameof(IsRunning), nameof(IsOff), nameof(IsPaused), nameof(CanPause), nameof(IsActive), nameof(ScreenPlaceholder),
+        nameof(CanOpenFirmware), nameof(CanDiscardSuspended))]
     private PowerState _state = PowerState.Off;
+
+    /// <summary>Off with its state saved: Power on carries on from where it was.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StateText), nameof(ScreenPlaceholder), nameof(PowerOnText), nameof(PowerOnTip), nameof(CanOpenFirmware), nameof(CanDiscardSuspended))]
+    private bool _isSuspended;
+
+    private bool _suspending;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsActive), nameof(StateText))]
@@ -151,16 +161,25 @@ public sealed partial class MachineViewModel : ObservableObject
 
     public bool CanPause => State == PowerState.Running;
 
+    public string PowerOnText => IsSuspended ? "Resume" : "Power on";
+
+    public string PowerOnTip => IsSuspended ? "Carry on from where the machine was suspended, with every program as it was" : "Start the machine and open its screen";
+
+    /// <summary>The firmware screen means a fresh start, so a suspended machine offers Discard first.</summary>
+    public bool CanOpenFirmware => IsOff && !IsSuspended;
+
+    public bool CanDiscardSuspended => IsOff && IsSuspended;
+
     public string StateText => Busy && State == PowerState.Off ? "Starting…" : State switch
     {
         PowerState.Running => "Running",
         PowerState.Paused => "Paused",
         PowerState.ShuttingDown => "Shutting down…",
         PowerState.Crashed => "Crashed",
-        _ => "Powered off",
+        _ => IsSuspended ? "Suspended" : "Powered off",
     };
 
-    public string ScreenPlaceholder => State == PowerState.Off ? "Powered off" : "Waiting for the screen…";
+    public string ScreenPlaceholder => State == PowerState.Off ? IsSuspended ? "Suspended" : "Powered off" : "Waiting for the screen…";
 
     public RunningMachine? Running => _watcher?.Machine;
 
@@ -223,20 +242,38 @@ public sealed partial class MachineViewModel : ObservableObject
             return;
         }
 
+        var full = new PromptOption("Full clone",
+            "A separate machine with copies of this one's disks, firmware settings and TPM. Recommended when the clone will live long or move to another computer. Needs as much free space as this machine's disks use, and takes minutes for a large disk.",
+            chosen: true);
+        var linked = new PromptOption("Linked clone",
+            $"Ready in seconds and needs almost no space: both machines share {Name}'s disks as they are now, kept read-only, and each keeps its own changes from then on. Best for trying things out. The shared disks stay until neither machine is left.");
         var prompt = new PromptViewModel($"Clone {Name}",
-            ["A clone is a separate machine with copies of this one's disks, firmware settings and TPM; changes to either never touch the other.", "It needs as much free space as this machine's disks use."],
-            "Name of the new machine", $"{Name} (clone)", "Clone", t => t.Trim().Length > 0);
+            ["Changes to either machine never touch the other."],
+            "Name of the new machine", $"{Name} (clone)", "Clone", t => t.Trim().Length > 0, options: [full, linked]);
         _shell.ShowPrompt(prompt);
         if (await prompt.Answer.ConfigureAwait(false) is not { } name) return;
+        var isLinked = prompt.Choice == 1;
         Ui.Post(() => prompt.Busy = true);
         try
         {
             var progress = new Progress<string>(p => Ui.Post(() => prompt.Progress = p));
-            var (_, dir) = await Task.Run(() => MachineLifecycle.CloneAsync(Machine, Entry.Directory, _shell.LibraryRoot, name, progress)).ConfigureAwait(false);
+            string dir;
+            if (isLinked)
+            {
+                var result = await Task.Run(() => MachineLifecycle.LinkedCloneAsync(Machine, Entry.Directory, _shell.LibraryRoot, name, progress)).ConfigureAwait(false);
+                dir = result.Directory;
+                // The original now writes to a layer of its own on the shared base.
+                Ui.Post(() => Machine = result.Original);
+            }
+            else
+            {
+                dir = (await Task.Run(() => MachineLifecycle.CloneAsync(Machine, Entry.Directory, _shell.LibraryRoot, name, progress)).ConfigureAwait(false)).Directory;
+            }
+
             Ui.Post(() =>
             {
                 prompt.Finish();
-                _shell.Note($"{name} is a clone of {Name}.");
+                _shell.Note(isLinked ? $"{name} is a linked clone of {Name}." : $"{name} is a clone of {Name}.");
             });
             await _shell.AfterLifecycleAsync(dir).ConfigureAwait(false);
         }
@@ -260,15 +297,22 @@ public sealed partial class MachineViewModel : ObservableObject
         }
 
         var conf = IsQuickemu ? Entry.Path : null;
-        var files = MachineLifecycle.FilesToDelete(Machine, Entry.Directory, conf);
+        var roots = _shell.LibraryRoots;
+        var (files, freed) = await Task.Run(() => (MachineLifecycle.FilesToDelete(Machine, Entry.Directory, conf), MachineLifecycle.BasesFreedBy(Entry.Directory, roots))).ConfigureAwait(false);
         var prompt = new PromptViewModel($"Delete {Name}?",
-            ["This deletes the machine and everything in it, for good:", .. files.Select(f => "    " + f), "Installer discs kept elsewhere are not touched.", $"Type the machine's name to confirm."],
+            ["This deletes the machine and everything in it, for good:", .. files.Select(f => "    " + f),
+             .. freed.Count > 0 ? ["and the shared disks no other machine uses any more:", .. freed.Select(f => "    " + f)] : Array.Empty<string>(),
+             "Installer discs kept elsewhere, and shared disks other machines still use, are not touched.", $"Type the machine's name to confirm."],
             "Machine name", "", "Delete for good", t => t.Trim() == Name, isDanger: true);
-        _shell.ShowPrompt(prompt);
+        Ui.Post(() => _shell.ShowPrompt(prompt));
         if (await prompt.Answer.ConfigureAwait(false) is null) return;
         try
         {
-            await Task.Run(() => MachineLifecycle.Delete(Entry.Directory, conf)).ConfigureAwait(false);
+            await Task.Run(() =>
+            {
+                MachineLifecycle.Delete(Entry.Directory, conf);
+                MachineLifecycle.PruneBases(roots);
+            }).ConfigureAwait(false);
             Ui.Post(() =>
             {
                 prompt.Finish();
@@ -341,11 +385,12 @@ public sealed partial class MachineViewModel : ObservableObject
             _watcher = watcher;
             Ui.Post(() =>
             {
-                SshCommand = running.SshPort is { } p ? $"ssh -p {p} user@localhost" : null;
+                SshCommand = running.SshPort is { } p ? Machine.Guest.SshCommand(p) : null;
                 OnState(watcher.State);
             });
             _ = watcher.Exited.ContinueWith(_ => Ui.Post(OnExited), TaskScheduler.Default);
             _ = PollGuestAsync(watcher);
+            _ = AutoProtectLoopAsync(watcher);
         }
         catch (Exception ex) when (ex is IOException or System.Net.Sockets.SocketException or QmpException or TimeoutException)
         {
@@ -373,7 +418,9 @@ public sealed partial class MachineViewModel : ObservableObject
         Screen = null;
         GuestAddress = null;
         SshCommand = null;
-        _shell.Note($"{Name} powered off.");
+        _shell.Note(_suspending ? $"{Name} is suspended." : $"{Name} powered off.");
+        _suspending = false;
+        _ = RefreshSuspendedAsync();
         _ = Task.Run(() => MachineRunner.Find(Machine, _shell.Paths));
     }
 
@@ -432,6 +479,30 @@ public sealed partial class MachineViewModel : ObservableObject
         }
     }
 
+    /// <summary>AutoProtect while the machine runs: a look once a minute, a snapshot when one is due.</summary>
+    private async Task AutoProtectLoopAsync(MachineWatcher watcher)
+    {
+        while (!watcher.Exited.IsCompleted)
+        {
+            await Task.WhenAny(watcher.Exited, Task.Delay(TimeSpan.FromMinutes(1))).ConfigureAwait(false);
+            if (watcher.Exited.IsCompleted || _suspending || watcher.Machine is not { } running) return;
+            var config = Machine.AutoProtect;
+            if (!config.Enabled) continue;
+            try
+            {
+                var taken = await Task.Run(() => AutoProtect.RunIfDueAsync(Snapshots.Store, config, watcher, running.Started, DateTimeOffset.Now)).ConfigureAwait(false);
+                if (taken is null) continue;
+                Ui.Post(() => _shell.Note($"AutoProtect took a snapshot of {Name}."));
+                await Snapshots.LoadAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is QmpException or IOException or InvalidOperationException)
+            {
+                // To the log, not a notice: a notice would come back every minute until the cause is fixed.
+                Log.Warn($"{Name}: AutoProtect could not take a snapshot ({ex.Message}).");
+            }
+        }
+    }
+
     [RelayCommand]
     private Task PowerOnAsync() => StartAsync(new StartOptions());
 
@@ -449,7 +520,11 @@ public sealed partial class MachineViewModel : ObservableObject
             var host = await _shell.HostAsync().ConfigureAwait(false);
             var running = await Task.Run(() => MachineRunner.StartAsync(Machine, Entry.Directory, _shell.Paths, host, options)).ConfigureAwait(false);
             await AttachAsync(running).ConfigureAwait(false);
-            Ui.Post(() => _shell.Note($"{Name} is running."));
+            Ui.Post(() =>
+            {
+                _shell.Note(IsSuspended ? $"{Name} carried on where it was." : $"{Name} is running.");
+                IsSuspended = false;
+            });
             if (Machine.Display.Backend == DisplayBackend.Spice) OpenScreen();
         }
         catch (StartRefusedException ex)
@@ -485,6 +560,51 @@ public sealed partial class MachineViewModel : ObservableObject
             confirm: "Power off", isDanger: true);
         _shell.Show(notice);
         if (await notice.Answer.ConfigureAwait(false)) await ControlAsync("powered off", MachineRunner.PowerOffAsync).ConfigureAwait(false);
+    }
+
+    /// <summary>Saves what the machine is doing to its folder and turns it off; Power on carries on from there.</summary>
+    [RelayCommand]
+    private async Task SuspendAsync()
+    {
+        if (_watcher?.Machine is not { } running) return;
+        _suspending = true;
+        _shell.Note($"Suspending {Name}…");
+        try
+        {
+            await Task.Run(() => MachineSuspend.SuspendAsync(running, new Progress<string>(p => Ui.Post(() => _shell.Note(p))))).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is QmpException or IOException or System.Net.Sockets.SocketException)
+        {
+            Ui.Post(() =>
+            {
+                _suspending = false;
+                _shell.Note($"{Name} is still running.");
+                _shell.Show(new NoticeViewModel($"{Name} could not be suspended", [
+                    $"QEMU could not save the machine's state: {(ex is QmpException q ? q.Description : ex.Message)}",
+                    "Shared folders and USB devices handed over from this computer keep a machine from being suspended. The machine is still running; Shut down works instead."], isError: true));
+            });
+        }
+    }
+
+    [RelayCommand]
+    private async Task DiscardSuspendedAsync()
+    {
+        var notice = new NoticeViewModel($"Discard {Name}'s suspended state?",
+            ["The machine will start afresh, as after a power cut: anything open and unsaved inside it is lost.", "Resume carries on from where it was instead."],
+            confirm: "Discard", isDanger: true);
+        _shell.Show(notice);
+        if (!await notice.Answer.ConfigureAwait(false)) return;
+        var dir = Entry.Directory;
+        await Task.Run(() => MachineSuspend.Discard(dir)).ConfigureAwait(false);
+        Ui.Post(() => _shell.Note($"{Name} will start afresh."));
+        await RefreshSuspendedAsync().ConfigureAwait(false);
+    }
+
+    private async Task RefreshSuspendedAsync()
+    {
+        var dir = Entry.Directory;
+        var suspended = await Task.Run(() => MachineSuspend.IsSuspended(dir)).ConfigureAwait(false);
+        Ui.Post(() => IsSuspended = suspended);
     }
 
     [RelayCommand]
