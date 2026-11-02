@@ -24,9 +24,11 @@ public static class ViewerLauncher
     {
         if (Find(m.Display.Viewer) is not { } program) return null;
         var uri = $"spice+unix://{running.Paths.Spice}";
+        // Both viewers take -f/--full-screen (spicy 0.42, remote-viewer 11).
+        List<string> full = m.Display.FullScreen ? ["--full-screen"] : [];
         return Path.GetFileName(program) == "spicy"
-            ? (program, ["--uri=" + uri, "--title", m.Name])
-            : (program, [uri, "--title", m.Name, "--auto-resize=always"]);
+            ? (program, ["--uri=" + uri, "--title", m.Name, .. full])
+            : (program, [uri, "--title", m.Name, "--auto-resize=always", .. full]);
     }
 
     /// <summary>Starts the viewer and returns its program name, or <c>null</c> when none is installed.</summary>

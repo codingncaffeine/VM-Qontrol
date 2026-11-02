@@ -4,17 +4,49 @@
              xmlns:m="using:VmQontrol.Core.Machines"
              x:Class="VmQontrol.App.Views.SettingsView"
              x:DataType="vm:SettingsViewModel">
+  <!--
+    Every section has the same shape: its title with when changes apply, then groups (cards) of rows. A row is the
+    setting's name and one or two lines of what it does on the left, its control on the right, so every control in a
+    section lines up on one edge.
+  -->
   <UserControl.Styles>
-    <!-- A field: its name, then one line of what it does. -->
-    <Style Selector="TextBlock.field">
+    <Style Selector="Border.group">
+      <Setter Property="Background" Value="{DynamicResource QSurface}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource QBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{DynamicResource QRadius}" />
+      <Setter Property="ClipToBounds" Value="True" />
+    </Style>
+    <Style Selector="Border.row">
+      <Setter Property="Padding" Value="18,14" />
+      <Setter Property="BorderBrush" Value="{DynamicResource QBorder}" />
+      <Setter Property="BorderThickness" Value="0,1,0,0" />
+    </Style>
+    <Style Selector="Border.row.first">
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="Border.row > Grid">
+      <Setter Property="ColumnSpacing" Value="28" />
+    </Style>
+    <Style Selector="TextBlock.label">
       <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Margin" Value="0,10,0,4" />
+      <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
     <Style Selector="TextBlock.help">
       <Setter Property="Foreground" Value="{DynamicResource QTextMuted}" />
       <Setter Property="TextWrapping" Value="Wrap" />
       <Setter Property="FontSize" Value="{DynamicResource QFontSmall}" />
-      <Setter Property="Margin" Value="0,4,0,0" />
+      <Setter Property="Margin" Value="0,3,0,0" />
+    </Style>
+    <Style Selector="TextBlock.grouptitle">
+      <Setter Property="FontSize" Value="{DynamicResource QFontSmall}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource QTextMuted}" />
+      <Setter Property="LetterSpacing" Value="0.6" />
+      <Setter Property="Margin" Value="2,6,0,-4" />
+    </Style>
+    <Style Selector="StackPanel.section">
+      <Setter Property="Spacing" Value="14" />
     </Style>
     <Style Selector="Border.badge-next">
       <Setter Property="Background" Value="{DynamicResource QSurfaceRaised}" />
@@ -22,7 +54,7 @@
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="999" />
       <Setter Property="Padding" Value="10,3" />
-      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
     <Style Selector="Border.badge-next TextBlock">
       <Setter Property="FontSize" Value="{DynamicResource QFontSmall}" />
@@ -32,20 +64,49 @@
       <Setter Property="Background" Value="{DynamicResource QAccentSoft}" />
       <Setter Property="CornerRadius" Value="999" />
       <Setter Property="Padding" Value="10,3" />
-      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
     <Style Selector="Border.badge-now TextBlock">
       <Setter Property="FontSize" Value="{DynamicResource QFontSmall}" />
       <Setter Property="Foreground" Value="{DynamicResource QAccent}" />
       <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
-    <Style Selector="ComboBox">
-      <Setter Property="MinWidth" Value="360" />
+    <Style Selector="Border.row ComboBox">
+      <Setter Property="Width" Value="300" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.row NumericUpDown">
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.row ToggleSwitch">
+      <Setter Property="OnContent" Value="" />
+      <Setter Property="OffContent" Value="" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="MinWidth" Value="0" />
+      <!-- The switch keeps room for a label it no longer shows; pull it to the edge the other controls end on. -->
+      <Setter Property="Margin" Value="0,0,-11,0" />
+    </Style>
+    <Style Selector="Border.tile">
+      <Setter Property="Width" Value="36" />
+      <Setter Property="Height" Value="36" />
+      <Setter Property="CornerRadius" Value="9" />
+      <Setter Property="Background" Value="{DynamicResource QAccentSoft}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.tile > Path">
+      <Setter Property="Stroke" Value="{DynamicResource QAccent}" />
+      <Setter Property="Width" Value="18" />
+      <Setter Property="Height" Value="18" />
+      <Setter Property="Stretch" Value="Uniform" />
+    </Style>
+    <Style Selector="ListBox#Sections ListBoxItem">
+      <Setter Property="Padding" Value="10,7" />
     </Style>
   </UserControl.Styles>
 
   <DockPanel Margin="{DynamicResource QPagePadding}">
-    <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,16">
+    <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,18">
       <TextBlock Text="{Binding Title}" Classes="hero" />
       <TextBlock Text="{Binding TimingNote}" Classes="muted" TextWrapping="Wrap" />
     </StackPanel>
@@ -58,332 +119,827 @@
       </Grid>
     </Border>
 
-    <ListBox x:Name="Sections" DockPanel.Dock="Left" Width="200" Classes="library" ItemsSource="{Binding Sections}" SelectedItem="{Binding Section}" Margin="0,0,24,0">
+    <ListBox x:Name="Sections" DockPanel.Dock="Left" Width="220" Classes="library" ItemsSource="{Binding Sections}" SelectedItem="{Binding Section}" Margin="0,0,28,0">
       <ListBox.ItemTemplate>
         <DataTemplate x:DataType="vm:SettingsSection">
-          <TextBlock Text="{Binding Title}" />
+          <StackPanel Orientation="Horizontal" Spacing="12">
+            <Path Classes="icon" Data="{Binding Icon}" Width="17" Height="17" Stretch="Uniform" Opacity="0.85" />
+            <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
+          </StackPanel>
         </DataTemplate>
       </ListBox.ItemTemplate>
     </ListBox>
 
-    <ScrollViewer>
-      <Panel MaxWidth="760" HorizontalAlignment="Left">
+    <ScrollViewer Padding="0,0,14,0">
+      <!-- One width for every page: the column grows with the window up to 820, and stays on the left. -->
+      <Grid>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" MaxWidth="820" />
+        <ColumnDefinition Width="0.01*" />
+      </Grid.ColumnDefinitions>
+      <Panel>
 
-        <StackPanel IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=general}">
+        <!-- General -->
+        <StackPanel Classes="section" IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=general}">
           <TextBlock Text="General" Classes="h1" />
-          <TextBlock Text="Name" Classes="field" />
-          <TextBox x:Name="MachineName" Text="{Binding Name}" />
-          <TextBlock Text="Shown in the library and the viewer window's title." Classes="help" />
-          <TextBlock Text="Operating system" Classes="field" />
-          <ComboBox ItemsSource="{Binding GuestChoices}" SelectedItem="{Binding Guest}" />
-          <TextBlock Text="Decides the virtual hardware the machine gets (processor features, disk and network adapters). Change it only if the machine was made with the wrong one." Classes="help" />
-          <TextBlock Text="Notes" Classes="field" />
-          <TextBox Text="{Binding Notes}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="90" />
-          <TextBlock Text="Anything you want to remember about this machine; shown on its summary." Classes="help" />
+          <Border Classes="group">
+            <StackPanel>
+              <Border Classes="row first">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Name" Classes="label" />
+                    <TextBlock Text="Shown in the library and the viewer window's title." Classes="help" />
+                  </StackPanel>
+                  <TextBox x:Name="MachineName" Grid.Column="1" Text="{Binding Name}" Width="300" VerticalAlignment="Center" />
+                </Grid>
+              </Border>
+              <Border Classes="row">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Operating system" Classes="label" />
+                    <TextBlock Text="Decides the virtual hardware (processor features, disk and network adapters). Change it only if the machine was made with the wrong one." Classes="help" />
+                  </StackPanel>
+                  <ComboBox Grid.Column="1" ItemsSource="{Binding GuestChoices}" SelectedItem="{Binding Guest}" />
+                </Grid>
+              </Border>
+              <Border Classes="row">
+                <StackPanel Spacing="8">
+                  <StackPanel>
+                    <TextBlock Text="Notes" Classes="label" />
+                    <TextBlock Text="Anything you want to remember about this machine; shown on its summary." Classes="help" />
+                  </StackPanel>
+                  <TextBox Text="{Binding Notes}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="90" />
+                </StackPanel>
+              </Border>
+            </StackPanel>
+          </Border>
         </StackPanel>
 
-        <StackPanel IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=memory}" Spacing="2">
-          <TextBlock Text="Memory" Classes="h1" />
-          <Border Classes="badge-next"><TextBlock Text="Applies at next power on" /></Border>
-          <CheckBox Content="Use the recommended amount for this computer" IsChecked="{Binding MemoryAuto}" Margin="0,10,0,0" />
-          <StackPanel Orientation="Horizontal" Spacing="10" IsEnabled="{Binding !MemoryAuto}" Margin="0,8,0,0">
-            <NumericUpDown x:Name="MemoryGb" Value="{Binding MemoryGb}" Minimum="0.25" Maximum="{Binding HostMemoryGb}" Increment="1" FormatString="0.##" Width="160" VerticalContentAlignment="Center" />
-            <TextBlock Text="GB" VerticalAlignment="Center" />
-          </StackPanel>
-          <TextBlock Text="{Binding MemoryNote}" Classes="help" />
+        <!-- Memory -->
+        <StackPanel Classes="section" IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=memory}">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="Memory" Classes="h1" />
+            <Border Grid.Column="1" Classes="badge-next"><TextBlock Text="Applies at next power on" /></Border>
+          </Grid>
+          <Border Classes="group">
+            <StackPanel>
+              <Border Classes="row first">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Use the recommended amount" Classes="label" />
+                    <TextBlock Text="{Binding MemoryNote}" Classes="help" />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="1" IsChecked="{Binding MemoryAuto}" />
+                </Grid>
+              </Border>
+              <Border Classes="row" IsEnabled="{Binding !MemoryAuto}">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Memory" Classes="label" />
+                    <TextBlock Text="Giving more than half of this computer's memory slows the computer itself." Classes="help" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
+                    <NumericUpDown x:Name="MemoryGb" Value="{Binding MemoryGb}" Minimum="0.25" Maximum="{Binding HostMemoryGb}" Increment="1" FormatString="0.##" Width="150" />
+                    <TextBlock Text="GB" VerticalAlignment="Center" Classes="muted" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+            </StackPanel>
+          </Border>
         </StackPanel>
 
-        <StackPanel IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=processors}" Spacing="2">
-          <TextBlock Text="Processors" Classes="h1" />
-          <Border Classes="badge-next"><TextBlock Text="Applies at next power on" /></Border>
-          <CheckBox Content="Use the recommended number for this computer" IsChecked="{Binding CoresAuto}" Margin="0,10,0,0" />
-          <NumericUpDown Value="{Binding Cores}" Minimum="1" Maximum="{Binding HostCores}" Increment="1" FormatString="0" Width="160" IsEnabled="{Binding !CoresAuto}" Margin="0,8,0,0" HorizontalAlignment="Left" VerticalContentAlignment="Center" />
-          <TextBlock Text="{Binding CoresNote}" Classes="help" />
-          <TextBlock Text="Processor model (advanced)" Classes="field" />
-          <TextBox Text="{Binding CpuModel}" PlaceholderText="Automatic: this computer's own processor" Width="360" HorizontalAlignment="Left" />
-          <TextBlock Text="Leave empty: the machine sees this computer's processor, which is fastest. A named model (e.g. Haswell-v2) is only for systems that need one." Classes="help" />
+        <!-- Processors -->
+        <StackPanel Classes="section" IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=processors}">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="Processors" Classes="h1" />
+            <Border Grid.Column="1" Classes="badge-next"><TextBlock Text="Applies at next power on" /></Border>
+          </Grid>
+          <Border Classes="group">
+            <StackPanel>
+              <Border Classes="row first">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Use the recommended number" Classes="label" />
+                    <TextBlock Text="{Binding CoresNote}" Classes="help" />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="1" IsChecked="{Binding CoresAuto}" />
+                </Grid>
+              </Border>
+              <Border Classes="row" IsEnabled="{Binding !CoresAuto}">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Processors" Classes="label" />
+                    <TextBlock Text="Processor cores the machine sees." Classes="help" />
+                  </StackPanel>
+                  <NumericUpDown Grid.Column="1" Value="{Binding Cores}" Minimum="1" Maximum="{Binding HostCores}" Increment="1" FormatString="0" Width="150" />
+                </Grid>
+              </Border>
+            </StackPanel>
+          </Border>
+          <TextBlock Text="ADVANCED" Classes="grouptitle" />
+          <Border Classes="group">
+            <Border Classes="row first">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel>
+                  <TextBlock Text="Processor model" Classes="label" />
+                  <TextBlock Text="Leave empty: the machine sees this computer's own processor, which is fastest. A named model (e.g. Haswell-v2) is only for systems that need one." Classes="help" />
+                </StackPanel>
+                <TextBox Grid.Column="1" Text="{Binding CpuModel}" PlaceholderText="Automatic" Width="300" VerticalAlignment="Center" />
+              </Grid>
+            </Border>
+          </Border>
         </StackPanel>
 
-        <StackPanel IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=disks}" Spacing="8">
-          <TextBlock Text="Hard disks" Classes="h1" />
-          <Border Classes="badge-next"><TextBlock Text="Applies at next power on" /></Border>
+        <!-- Hard disks -->
+        <StackPanel Classes="section" IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=disks}">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="Hard disks" Classes="h1" />
+            <Border Grid.Column="1" Classes="badge-next"><TextBlock Text="Applies at next power on" /></Border>
+          </Grid>
           <ItemsControl ItemsSource="{Binding Disks}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate><StackPanel Spacing="12" /></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:DiskRow">
-                <Border Classes="card" Margin="0,0,0,10">
-                  <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto">
-                    <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" />
-                    <Button Grid.Column="1" Classes="tool danger" Content="Remove" Command="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).RemoveDiskCommand}" CommandParameter="{Binding}"
-                            ToolTip.Tip="Detach the disk from the machine (its file stays on this computer). The first disk holds the system and cannot be removed." />
-                    <TextBlock Grid.Row="1" Text="{Binding Used}" Classes="help" />
-                    <StackPanel Grid.Row="2" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="12" Margin="0,10,0,0">
-                      <NumericUpDown Value="{Binding SizeGb}" Minimum="{Binding MinimumGb}" Maximum="65536" Increment="8" FormatString="0" Width="150" VerticalContentAlignment="Center" />
-                      <TextBlock Text="GB" VerticalAlignment="Center" />
-                      <ComboBox ItemsSource="{x:Static vm:SettingsViewModel.BusOptions}" SelectedItem="{Binding Bus}" MinWidth="300" />
-                    </StackPanel>
-                  </Grid>
+                <Border Classes="group">
+                  <StackPanel>
+                    <Border Classes="row first">
+                      <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+                        <Border Classes="tile"><Path Classes="icon" Data="{StaticResource IconDisk}" /></Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                          <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" />
+                          <TextBlock Text="{Binding Used}" Classes="help" />
+                        </StackPanel>
+                        <Button Grid.Column="2" Classes="tool danger" Content="Remove" VerticalAlignment="Center"
+                                Command="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).RemoveDiskCommand}" CommandParameter="{Binding}"
+                                ToolTip.Tip="Detach the disk from the machine (its file stays on this computer). The first disk holds the system and cannot be removed." />
+                      </Grid>
+                    </Border>
+                    <Border Classes="row">
+                      <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                          <TextBlock Text="Size" Classes="label" />
+                          <TextBlock Text="A disk can grow, never shrink. After growing it, extend the partition inside the system (Disk Management on Windows, GParted on Linux)." Classes="help" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
+                          <NumericUpDown Value="{Binding SizeGb}" Minimum="{Binding MinimumGb}" Maximum="65536" Increment="8" FormatString="0" Width="150" />
+                          <TextBlock Text="GB" VerticalAlignment="Center" Classes="muted" />
+                        </StackPanel>
+                      </Grid>
+                    </Border>
+                    <Border Classes="row">
+                      <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                          <TextBlock Text="Connected as" Classes="label" />
+                          <TextBlock Text="Changing the system disk's bus can stop the system starting until it has the driver." Classes="help" />
+                        </StackPanel>
+                        <ComboBox Grid.Column="1" ItemsSource="{x:Static vm:SettingsViewModel.BusOptions}" SelectedItem="{Binding Bus}" />
+                      </Grid>
+                    </Border>
+                  </StackPanel>
                 </Border>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
-          <TextBlock Text="A disk can grow, never shrink: grow it here, then extend the partition inside the system (Disk Management on Windows, GParted on Linux). Changing the bus of the system disk can stop the system starting until it has the driver." Classes="help" />
-          <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,8,0,0">
-            <NumericUpDown Value="{Binding NewDiskGb}" Minimum="1" Maximum="65536" Increment="8" FormatString="0" Width="150" VerticalContentAlignment="Center" />
-            <TextBlock Text="GB" VerticalAlignment="Center" />
-            <Button Classes="tool" Content="Add a disk" Command="{Binding AddDiskCommand}" />
-          </StackPanel>
+          <Border Classes="group">
+            <Border Classes="row first">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel>
+                  <TextBlock Text="Add a disk" Classes="label" />
+                  <TextBlock Text="A new empty disk; it uses space only as the system fills it." Classes="help" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
+                  <NumericUpDown Value="{Binding NewDiskGb}" Minimum="1" Maximum="65536" Increment="8" FormatString="0" Width="150" />
+                  <TextBlock Text="GB" VerticalAlignment="Center" Classes="muted" />
+                  <Button Classes="tool" Content="Add" Command="{Binding AddDiskCommand}" VerticalAlignment="Center" />
+                </StackPanel>
+              </Grid>
+            </Border>
+          </Border>
         </StackPanel>
 
-        <StackPanel IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=media}" Spacing="8">
-          <TextBlock Text="CD/DVD and floppy" Classes="h1" />
-          <Border Classes="badge-now"><TextBlock Text="Discs can be changed now, while the machine runs" /></Border>
+        <!-- CD/DVD and floppy -->
+        <StackPanel Classes="section" IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=media}">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="CD/DVD and floppy" Classes="h1" />
+            <Border Grid.Column="1" Classes="badge-now"><TextBlock Text="Discs can be changed while it runs" /></Border>
+          </Grid>
           <ItemsControl x:Name="MediaList" ItemsSource="{Binding Media}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate><StackPanel Spacing="12" /></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:MediaRow">
-                <Border Classes="card" Margin="0,0,0,10">
-                  <StackPanel Spacing="8">
-                    <Grid ColumnDefinitions="*,Auto">
-                      <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
-                      <Button Grid.Column="1" Classes="tool danger" Content="Remove" Command="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).RemoveMediaCommand}" CommandParameter="{Binding}" />
-                    </Grid>
-                    <TextBlock Text="{Binding FileName, TargetNullValue='Empty'}" FontFamily="monospace" FontSize="12" />
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                      <Button Classes="tool" Content="Change disc…" Tag="change" />
-                      <Button Classes="tool" Content="Eject" Command="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).EjectCommand}" CommandParameter="{Binding}" />
-                      <ComboBox ItemsSource="{x:Static vm:SettingsViewModel.ConnectOptions}" SelectedItem="{Binding Connect}" MinWidth="300" />
-                    </StackPanel>
+                <Border Classes="group">
+                  <StackPanel>
+                    <Border Classes="row first">
+                      <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+                        <Border Classes="tile"><Path Classes="icon" Data="{StaticResource IconDisc}" /></Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                          <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                          <TextBlock Text="{Binding FileName, TargetNullValue='Empty'}" Classes="help" FontFamily="monospace" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                          <Button Classes="tool" Content="Change disc…" Tag="change" />
+                          <Button Classes="tool" Content="Eject" Command="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).EjectCommand}" CommandParameter="{Binding}" />
+                          <Button Classes="tool danger" Content="Remove" Command="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).RemoveMediaCommand}" CommandParameter="{Binding}" />
+                        </StackPanel>
+                      </Grid>
+                    </Border>
+                    <Border Classes="row">
+                      <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                          <TextBlock Text="Connected" Classes="label" />
+                          <TextBlock Text="&quot;Until the system is installed&quot; keeps an installer in the drive only while the disk is empty, so the machine starts from its disk afterwards." Classes="help" />
+                        </StackPanel>
+                        <ComboBox Grid.Column="1" ItemsSource="{x:Static vm:SettingsViewModel.ConnectOptions}" SelectedItem="{Binding Connect}" />
+                      </Grid>
+                    </Border>
                   </StackPanel>
                 </Border>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
-          <Button Classes="tool" Content="Add a CD/DVD drive" Command="{Binding AddDriveCommand}" />
-          <TextBlock Text="&quot;Connected until the system is installed&quot; keeps an installer in the drive only while the disk is empty, so the machine starts from its disk afterwards." Classes="help" />
+          <Button Classes="tool" Content="Add a CD/DVD drive" Command="{Binding AddDriveCommand}" HorizontalAlignment="Left" />
         </StackPanel>
 
-        <StackPanel IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=network}" Spacing="2">
-          <TextBlock Text="Network" Classes="h1" />
-          <Border Classes="badge-next"><TextBlock Text="Applies at next power on" /></Border>
-          <TextBlock Text="Connection" Classes="field" />
-          <ComboBox ItemsSource="{Binding NetModes}" SelectedItem="{Binding NetMode}" />
-          <TextBlock Text="NAT gives the machine this computer's internet connection, invisible to the rest of your network; this computer reaches the machine through forwarded ports. Bridged puts it on your network like another computer." Classes="help" />
-          <StackPanel IsVisible="{Binding IsBridged}">
-            <TextBlock Text="Bridge" Classes="field" />
-            <TextBox Text="{Binding Bridge}" Width="200" HorizontalAlignment="Left" />
-            <TextBlock Text="The name of a network bridge on this computer (e.g. br0). Bridging needs a one-time setup that the host check explains." Classes="help" />
-          </StackPanel>
-          <StackPanel IsVisible="{Binding IsSegment}">
-            <TextBlock Text="Segment name" Classes="field" />
-            <TextBox Text="{Binding Segment}" Width="200" HorizontalAlignment="Left" />
-            <TextBlock Text="Machines with the same segment name see each other and nothing else, like computers on their own switch. Give each machine a fixed address (e.g. 10.10.0.1, 10.10.0.2…): the segment has no DHCP server yet." Classes="help" />
-          </StackPanel>
-          <TextBlock Text="Adapter" Classes="field" />
-          <ComboBox ItemsSource="{Binding NicModels}" SelectedItem="{Binding NicModel}" />
-          <TextBlock Text="MAC address" Classes="field" />
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <TextBox Text="{Binding Mac}" PlaceholderText="Automatic" Width="200" />
-            <Button Classes="tool" Content="New address" Command="{Binding NewMacCommand}" />
-          </StackPanel>
-          <TextBlock Text="Leave empty unless your network hands out addresses by MAC." Classes="help" />
-          <StackPanel IsVisible="{Binding IsNat}">
-            <CheckBox Content="Forward a port on this computer to the machine's SSH port (22)" IsChecked="{Binding SshForward}" Margin="0,12,0,0" />
-            <StackPanel Orientation="Horizontal" Spacing="8" IsEnabled="{Binding SshForward}" Margin="24,6,0,0">
-              <NumericUpDown Value="{Binding SshPort}" Minimum="0" Maximum="65535" FormatString="0" Width="150" VerticalContentAlignment="Center" />
-              <TextBlock Text="0 = the first free port from 22220" Classes="help" VerticalAlignment="Center" />
-            </StackPanel>
-            <TextBlock Text="Port forwards" Classes="field" />
-            <ItemsControl ItemsSource="{Binding Forwards}">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="vm:ForwardRow">
-                  <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,0,6">
-                    <ComboBox SelectedItem="{Binding Protocol}" ItemsSource="{x:Static vm:Text.Protocols}" MinWidth="90" />
-                    <TextBlock Text="this computer's port" VerticalAlignment="Center" Classes="help" />
-                    <NumericUpDown Value="{Binding HostPort}" Minimum="1" Maximum="65535" FormatString="0" Width="120" VerticalContentAlignment="Center" />
-                    <TextBlock Text="→ machine's port" VerticalAlignment="Center" Classes="help" />
-                    <NumericUpDown Value="{Binding GuestPort}" Minimum="1" Maximum="65535" FormatString="0" Width="120" VerticalContentAlignment="Center" />
-                    <Button Classes="icononly" Content="✕" Command="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).RemoveForwardCommand}" CommandParameter="{Binding}" />
+        <!-- Network -->
+        <StackPanel Classes="section" IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=network}">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="Network" Classes="h1" />
+            <Border Grid.Column="1" Classes="badge-next"><TextBlock Text="Applies at next power on" /></Border>
+          </Grid>
+          <Border Classes="group">
+            <StackPanel>
+              <Border Classes="row first">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Connection" Classes="label" />
+                    <TextBlock Text="NAT shares this computer's internet and keeps the machine invisible to your network; this computer reaches it through forwarded ports. Bridged puts it on your network like another computer." Classes="help" />
                   </StackPanel>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-            <Button Classes="tool" Content="Add a port forward" Command="{Binding AddForwardCommand}" HorizontalAlignment="Left" />
-          </StackPanel>
+                  <ComboBox Grid.Column="1" ItemsSource="{Binding NetModes}" SelectedItem="{Binding NetMode}" />
+                </Grid>
+              </Border>
+              <Border Classes="row" IsVisible="{Binding IsBridged}">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Bridge" Classes="label" />
+                    <TextBlock Text="A network bridge on this computer (e.g. br0). Bridging needs a one-time setup that the host check explains." Classes="help" />
+                  </StackPanel>
+                  <TextBox Grid.Column="1" Text="{Binding Bridge}" Width="300" VerticalAlignment="Center" />
+                </Grid>
+              </Border>
+              <Border Classes="row" IsVisible="{Binding IsSegment}">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Segment name" Classes="label" />
+                    <TextBlock Text="Machines with the same name see each other and nothing else, like computers on their own switch. Give each a fixed address (10.10.0.1, 10.10.0.2…): the segment has no DHCP server yet." Classes="help" />
+                  </StackPanel>
+                  <TextBox Grid.Column="1" Text="{Binding Segment}" Width="300" VerticalAlignment="Center" />
+                </Grid>
+              </Border>
+              <Border Classes="row">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Adapter" Classes="label" />
+                    <TextBlock Text="The network card the system sees." Classes="help" />
+                  </StackPanel>
+                  <ComboBox Grid.Column="1" ItemsSource="{Binding NicModels}" SelectedItem="{Binding NicModel}" />
+                </Grid>
+              </Border>
+              <Border Classes="row">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="MAC address" Classes="label" />
+                    <TextBlock Text="Leave empty unless your network hands out addresses by MAC." Classes="help" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                    <TextBox Text="{Binding Mac}" PlaceholderText="Automatic" Width="230" VerticalAlignment="Center" />
+                    <Button Classes="tool" Content="New" Command="{Binding NewMacCommand}" VerticalAlignment="Center" ToolTip.Tip="Make a new random address" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+            </StackPanel>
+          </Border>
+
+          <TextBlock Text="REACHING THE MACHINE FROM THIS COMPUTER" Classes="grouptitle" IsVisible="{Binding IsNat}" />
+          <Border Classes="group" IsVisible="{Binding IsNat}">
+            <StackPanel>
+              <Border Classes="row first">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="SSH port" Classes="label" />
+                    <TextBlock Text="A port on this computer that reaches the machine's SSH port (22). 0 picks the first free port from 22220." Classes="help" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="14">
+                    <NumericUpDown Value="{Binding SshPort}" Minimum="0" Maximum="65535" FormatString="0" Width="150" IsEnabled="{Binding SshForward}" />
+                    <ToggleSwitch IsChecked="{Binding SshForward}" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+              <Border Classes="row">
+                <StackPanel Spacing="10">
+                  <StackPanel>
+                    <TextBlock Text="Port forwards" Classes="label" />
+                    <TextBlock Text="A port on this computer that reaches a port in the machine, e.g. 8080 here to a web server on 80." Classes="help" />
+                  </StackPanel>
+                  <ItemsControl ItemsSource="{Binding Forwards}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:ForwardRow">
+                        <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,0,0,8">
+                          <ComboBox SelectedItem="{Binding Protocol}" ItemsSource="{x:Static vm:Text.Protocols}" Width="90" />
+                          <TextBlock Text="This computer" VerticalAlignment="Center" Classes="muted" />
+                          <NumericUpDown Value="{Binding HostPort}" Minimum="1" Maximum="65535" FormatString="0" Width="120" VerticalContentAlignment="Center" />
+                          <TextBlock Text="→  machine" VerticalAlignment="Center" Classes="muted" />
+                          <NumericUpDown Value="{Binding GuestPort}" Minimum="1" Maximum="65535" FormatString="0" Width="120" VerticalContentAlignment="Center" />
+                          <Button Classes="icononly" Content="✕" ToolTip.Tip="Remove this forward" Command="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).RemoveForwardCommand}" CommandParameter="{Binding}" />
+                        </StackPanel>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <Button Classes="tool" Content="Add a port forward" Command="{Binding AddForwardCommand}" HorizontalAlignment="Left" />
+                </StackPanel>
+              </Border>
+            </StackPanel>
+          </Border>
         </StackPanel>
 
-        <StackPanel IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=usb}" Spacing="2">
-          <TextBlock Text="USB" Classes="h1" />
-          <Border Classes="badge-next"><TextBlock Text="Applies at next power on" /></Border>
-          <TextBlock Text="Controller" Classes="field" />
-          <ComboBox ItemsSource="{Binding UsbControllers}" SelectedItem="{Binding UsbController}" />
-          <TextBlock Text="Devices handed to the machine at power on" Classes="field" />
-          <TextBox Text="{Binding UsbDevices}" AcceptsReturn="True" MinHeight="70" FontFamily="monospace" PlaceholderText="vendor:product, one per line (e.g. 046d:c52b)" />
-          <TextBlock Text="A device given to the machine leaves this computer while the machine runs. A devices menu that lists everything plugged in, and connects devices while the machine runs, is coming next." Classes="help" />
+        <!-- USB -->
+        <StackPanel Classes="section" IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=usb}">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="USB" Classes="h1" />
+            <Border Grid.Column="1" Classes="badge-next"><TextBlock Text="Applies at next power on" /></Border>
+          </Grid>
+          <Border Classes="group">
+            <Border Classes="row first">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel>
+                  <TextBlock Text="Controller" Classes="label" />
+                  <TextBlock Text="USB 3 suits every current system; USB 2 is for older ones." Classes="help" />
+                </StackPanel>
+                <ComboBox Grid.Column="1" ItemsSource="{Binding UsbControllers}" SelectedItem="{Binding UsbController}" />
+              </Grid>
+            </Border>
+          </Border>
+          <TextBlock Text="ALWAYS CONNECTED" Classes="grouptitle" />
+          <Border Classes="group">
+            <StackPanel>
+              <ItemsControl x:Name="UsbRules" ItemsSource="{Binding UsbRules}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:UsbRuleRow">
+                    <Border Padding="18,12" BorderBrush="{DynamicResource QBorder}" BorderThickness="0,0,0,1">
+                      <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+                        <Border Classes="tile"><Path Classes="icon" Data="{StaticResource IconUsb}" /></Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                          <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                          <TextBlock Text="{Binding Id}" Classes="help" FontFamily="monospace" />
+                        </StackPanel>
+                        <Button Grid.Column="2" Classes="tool" Content="Remove" VerticalAlignment="Center"
+                                Command="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).RemoveUsbRuleCommand}" CommandParameter="{Binding}" />
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <Border Padding="18,14">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="28">
+                  <TextBlock Classes="help" Margin="0" VerticalAlignment="Center"
+                             Text="Devices of these kinds go to the machine at every power on and whenever they are plugged in while it runs. Add one from the machine's USB devices (tick Always connect), or by its id here." />
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <TextBox Text="{Binding NewUsbId}" PlaceholderText="046d:c52b" Width="130" FontFamily="monospace" VerticalAlignment="Center" />
+                    <Button Classes="tool" Content="Add" Command="{Binding AddUsbRuleCommand}" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+            </StackPanel>
+          </Border>
         </StackPanel>
 
-        <StackPanel IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=sound}" Spacing="2">
-          <TextBlock Text="Sound" Classes="h1" />
-          <Border Classes="badge-next"><TextBlock Text="Applies at next power on" /></Border>
-          <TextBlock Text="Sound card" Classes="field" />
-          <ComboBox ItemsSource="{Binding SoundCards}" SelectedItem="{Binding SoundCard}" />
-          <TextBlock Text="The machine's sound plays through the viewer window. Automatic picks a card the system has drivers for." Classes="help" />
+        <!-- Sound -->
+        <StackPanel Classes="section" IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=sound}">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="Sound" Classes="h1" />
+            <Border Grid.Column="1" Classes="badge-next"><TextBlock Text="Applies at next power on" /></Border>
+          </Grid>
+          <Border Classes="group">
+            <Border Classes="row first">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel>
+                  <TextBlock Text="Sound card" Classes="label" />
+                  <TextBlock Text="Sound plays through the viewer window. Automatic picks a card the system has drivers for." Classes="help" />
+                </StackPanel>
+                <ComboBox Grid.Column="1" ItemsSource="{Binding SoundCards}" SelectedItem="{Binding SoundCard}" />
+              </Grid>
+            </Border>
+          </Border>
         </StackPanel>
 
-        <StackPanel IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=display}" Spacing="2">
-          <TextBlock Text="Display" Classes="h1" />
-          <Border Classes="badge-next"><TextBlock Text="Applies at next power on" /></Border>
-          <TextBlock Text="Where the screen is shown" Classes="field" />
-          <ComboBox ItemsSource="{Binding DisplayBackends}" SelectedItem="{Binding DisplayBackend}" />
-          <TextBlock Text="Graphics adapter" Classes="field" />
-          <ComboBox ItemsSource="{Binding DisplayDevices}" SelectedItem="{Binding DisplayDevice}" />
-          <TextBlock Text="3D acceleration" Classes="field" />
-          <ComboBox ItemsSource="{Binding GlOptions}" SelectedItem="{Binding Gl}" />
-          <TextBlock Text="Speeds up Linux desktops with the VirtIO GPU. Turn it off if the screen stays black or the viewer will not start." Classes="help" />
-          <TextBlock Text="Starting resolution" Classes="field" />
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <NumericUpDown Value="{Binding Width}" Minimum="0" Maximum="7680" Increment="160" FormatString="0" Width="130" VerticalContentAlignment="Center" />
-            <TextBlock Text="×" VerticalAlignment="Center" />
-            <NumericUpDown Value="{Binding Height}" Minimum="0" Maximum="4320" Increment="90" FormatString="0" Width="130" VerticalContentAlignment="Center" />
-          </StackPanel>
-          <TextBlock Text="0 × 0 = 1280 × 800. With the guest tools the screen follows the viewer window's size anyway." Classes="help" />
-          <TextBlock Text="Viewer program" Classes="field" />
-          <ComboBox ItemsSource="{Binding ViewerOptions}" SelectedItem="{Binding Viewer}" />
+        <!-- Display -->
+        <StackPanel Classes="section" IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=display}">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="Display" Classes="h1" />
+            <Border Grid.Column="1" Classes="badge-next"><TextBlock Text="Applies at next power on" /></Border>
+          </Grid>
+          <Border Classes="group">
+            <StackPanel>
+              <Border Classes="row first">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Where the screen is shown" Classes="label" />
+                    <TextBlock Text="A viewer window brings clipboard sharing, USB redirection and resizing." Classes="help" />
+                  </StackPanel>
+                  <ComboBox Grid.Column="1" ItemsSource="{Binding DisplayBackends}" SelectedItem="{Binding DisplayBackend}" />
+                </Grid>
+              </Border>
+              <Border Classes="row">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Viewer program" Classes="label" />
+                    <TextBlock Text="The program that opens the screen." Classes="help" />
+                  </StackPanel>
+                  <ComboBox Grid.Column="1" ItemsSource="{Binding ViewerOptions}" SelectedItem="{Binding Viewer}" />
+                </Grid>
+              </Border>
+              <Border Classes="row">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Open full screen" Classes="label" />
+                    <TextBlock Text="The screen fills your monitor when it opens; with the guest tools the system takes your monitor's resolution. Leave full screen with the viewer's own key (Shift+F11 in remote-viewer)." Classes="help" />
+                  </StackPanel>
+                  <ToggleSwitch x:Name="FullScreen" Grid.Column="1" IsChecked="{Binding FullScreen}" />
+                </Grid>
+              </Border>
+              <Border Classes="row">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Graphics adapter" Classes="label" />
+                    <TextBlock Text="Automatic picks the one the system works best with." Classes="help" />
+                  </StackPanel>
+                  <ComboBox Grid.Column="1" ItemsSource="{Binding DisplayDevices}" SelectedItem="{Binding DisplayDevice}" />
+                </Grid>
+              </Border>
+              <Border Classes="row">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="3D acceleration" Classes="label" />
+                    <TextBlock Text="Speeds up Linux desktops with the VirtIO GPU. Turn it off if the screen stays black or the viewer will not start." Classes="help" />
+                  </StackPanel>
+                  <ComboBox Grid.Column="1" ItemsSource="{Binding GlOptions}" SelectedItem="{Binding Gl}" />
+                </Grid>
+              </Border>
+              <Border Classes="row">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Starting resolution" Classes="label" />
+                    <TextBlock Text="0 × 0 = 1280 × 800. With the guest tools the screen follows the viewer window's size anyway." Classes="help" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                    <NumericUpDown Value="{Binding Width}" Minimum="0" Maximum="7680" Increment="160" FormatString="0" Width="130" />
+                    <TextBlock Text="×" VerticalAlignment="Center" Classes="muted" />
+                    <NumericUpDown Value="{Binding Height}" Minimum="0" Maximum="4320" Increment="90" FormatString="0" Width="130" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+            </StackPanel>
+          </Border>
         </StackPanel>
 
-        <StackPanel IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=input}" Spacing="2">
-          <TextBlock Text="Keyboard and mouse" Classes="h1" />
-          <Border Classes="badge-next"><TextBlock Text="Applies at next power on" /></Border>
-          <TextBlock Text="Keyboard" Classes="field" />
-          <ComboBox ItemsSource="{Binding Keyboards}" SelectedItem="{Binding Keyboard}" />
-          <TextBlock Text="Pointer" Classes="field" />
-          <ComboBox ItemsSource="{Binding Pointers}" SelectedItem="{Binding Pointer}" />
-          <TextBlock Text="A tablet pointer follows your mouse exactly, with no capturing; keep it unless an old system needs a mouse." Classes="help" />
-          <TextBlock Text="Keyboard layout" Classes="field" />
-          <TextBox Text="{Binding Layout}" Width="160" HorizontalAlignment="Left" />
-          <TextBlock Text="QEMU's layout name (en-us, de, fr, en-gb…). Only some viewers need it; SPICE sends keys as you type them." Classes="help" />
+        <!-- Keyboard and mouse -->
+        <StackPanel Classes="section" IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=input}">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="Keyboard and mouse" Classes="h1" />
+            <Border Grid.Column="1" Classes="badge-next"><TextBlock Text="Applies at next power on" /></Border>
+          </Grid>
+          <Border Classes="group">
+            <StackPanel>
+              <Border Classes="row first">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Keyboard" Classes="label" />
+                    <TextBlock Text="Automatic suits every system." Classes="help" />
+                  </StackPanel>
+                  <ComboBox Grid.Column="1" ItemsSource="{Binding Keyboards}" SelectedItem="{Binding Keyboard}" />
+                </Grid>
+              </Border>
+              <Border Classes="row">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Pointer" Classes="label" />
+                    <TextBlock Text="A tablet pointer follows your mouse exactly, with no capturing; keep it unless an old system needs a mouse." Classes="help" />
+                  </StackPanel>
+                  <ComboBox Grid.Column="1" ItemsSource="{Binding Pointers}" SelectedItem="{Binding Pointer}" />
+                </Grid>
+              </Border>
+              <Border Classes="row">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Keyboard layout" Classes="label" />
+                    <TextBlock Text="QEMU's layout name (en-us, de, fr, en-gb…). Only some viewers need it; SPICE sends keys as you type them." Classes="help" />
+                  </StackPanel>
+                  <TextBox Grid.Column="1" Text="{Binding Layout}" Width="300" VerticalAlignment="Center" />
+                </Grid>
+              </Border>
+            </StackPanel>
+          </Border>
         </StackPanel>
 
-        <StackPanel IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=firmware}" Spacing="2">
-          <TextBlock Text="Firmware and TPM" Classes="h1" />
-          <Border Classes="badge-next"><TextBlock Text="Applies at next power on" /></Border>
-          <CheckBox Content="UEFI firmware" IsChecked="{Binding Uefi}" Margin="0,10,0,0" />
-          <TextBlock Text="Modern systems start with UEFI. Changing it on an installed system stops it starting: it was installed for one or the other." Classes="help" />
-          <CheckBox Content="Secure Boot" IsChecked="{Binding SecureBoot}" IsEnabled="{Binding Uefi}" Margin="0,10,0,0" />
-          <TextBlock Text="Only signed systems start. Windows 11 and most Linux work with it; some tools and older systems do not." Classes="help" />
-          <CheckBox Content="TPM 2.0" IsChecked="{Binding Tpm}" Margin="0,10,0,0" />
-          <TextBlock Text="A security chip Windows 11 requires; it also keeps BitLocker keys. Its data stays with the machine." Classes="help" />
+        <!-- Firmware and TPM -->
+        <StackPanel Classes="section" IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=firmware}">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="Firmware and TPM" Classes="h1" />
+            <Border Grid.Column="1" Classes="badge-next"><TextBlock Text="Applies at next power on" /></Border>
+          </Grid>
+          <Border Classes="group">
+            <StackPanel>
+              <Border Classes="row first">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="UEFI firmware" Classes="label" />
+                    <TextBlock Text="Modern systems start with UEFI. Changing it on an installed system stops it starting: it was installed for one or the other." Classes="help" />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="1" IsChecked="{Binding Uefi}" />
+                </Grid>
+              </Border>
+              <Border Classes="row" IsEnabled="{Binding Uefi}">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Secure Boot" Classes="label" />
+                    <TextBlock Text="Only signed systems start. Windows 11 needs it to install; most Linux works with it; some tools and older systems do not." Classes="help" />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="1" IsChecked="{Binding SecureBoot}" />
+                </Grid>
+              </Border>
+              <Border Classes="row">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="TPM 2.0" Classes="label" />
+                    <TextBlock Text="A security chip Windows 11 requires; it also keeps BitLocker keys. Its data stays with the machine." Classes="help" />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="1" IsChecked="{Binding Tpm}" />
+                </Grid>
+              </Border>
+            </StackPanel>
+          </Border>
         </StackPanel>
 
-        <StackPanel IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=serial}" Spacing="2">
-          <TextBlock Text="Serial port" Classes="h1" />
-          <Border Classes="badge-next"><TextBlock Text="Applies at next power on" /></Border>
-          <ComboBox ItemsSource="{Binding SerialOptions}" SelectedItem="{Binding Serial}" Margin="0,10,0,0" />
-          <TextBlock Text="Linux and BSD print their boot messages and a login prompt on it, shown in the machine's Console tab." Classes="help" />
+        <!-- Serial port -->
+        <StackPanel Classes="section" IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=serial}">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="Serial port" Classes="h1" />
+            <Border Grid.Column="1" Classes="badge-next"><TextBlock Text="Applies at next power on" /></Border>
+          </Grid>
+          <Border Classes="group">
+            <Border Classes="row first">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel>
+                  <TextBlock Text="Serial port" Classes="label" />
+                  <TextBlock Text="Linux and BSD print their boot messages and a login prompt on it, shown in the machine's Console tab." Classes="help" />
+                </StackPanel>
+                <ComboBox Grid.Column="1" ItemsSource="{Binding SerialOptions}" SelectedItem="{Binding Serial}" />
+              </Grid>
+            </Border>
+          </Border>
         </StackPanel>
 
-        <StackPanel IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=boot}" Spacing="2">
-          <TextBlock Text="Boot and devices" Classes="h1" />
-          <Border Classes="badge-next"><TextBlock Text="Applies at next power on" /></Border>
-          <TextBlock Text="Boot order" Classes="field" />
-          <ComboBox ItemsSource="{Binding BootOrders}" SelectedItem="{Binding BootOrder}" IsEnabled="{Binding !Uefi}" />
-          <TextBlock Text="For BIOS machines. A UEFI machine keeps its boot order in its firmware: use Power on to firmware setup (Ctrl+K) to change it there." Classes="help" />
-          <CheckBox Content="Show the boot menu for a few seconds at every power on" IsChecked="{Binding BootMenu}" Margin="0,10,0,0" />
-          <TextBlock Text="Lets you pick a device to start from with Esc. Power on to firmware setup does the same once." Classes="help" />
-          <CheckBox Content="Random-number generator" IsChecked="{Binding Rng}" Margin="0,14,0,0" />
-          <TextBlock Text="Gives the system a fast source of randomness for its encryption keys; keep it on." Classes="help" />
-          <CheckBox Content="Choose memory ballooning myself" IsChecked="{Binding !BalloonAuto}" Margin="0,14,0,0" />
-          <CheckBox Content="Memory ballooning" IsChecked="{Binding Balloon}" IsEnabled="{Binding !BalloonAuto}" Margin="24,4,0,0" />
-          <TextBlock Text="Lets the system give unused memory back to this computer. Automatic leaves it on except for older macOS releases." Classes="help" />
-          <TextBlock Text="Watchdog" Classes="field" />
-          <ComboBox ItemsSource="{Binding WatchdogOptions}" SelectedItem="{Binding Watchdog}" />
-          <TextBlock Text="A timer the system must keep resetting; if it hangs and stops, the machine is restarted (or powered off, or paused). Linux and Windows servers can use it." Classes="help" />
-          <CheckBox Content="Report crashes (pvpanic)" IsChecked="{Binding CrashReporting}" Margin="0,14,0,0" />
-          <TextBlock Text="The system tells VM Qontrol when it crashes, so the machine shows Crashed at once instead of looking frozen. Linux supports it; Windows needs the VirtIO drivers." Classes="help" />
+        <!-- Boot and devices -->
+        <StackPanel Classes="section" IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=boot}">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="Boot and devices" Classes="h1" />
+            <Border Grid.Column="1" Classes="badge-next"><TextBlock Text="Applies at next power on" /></Border>
+          </Grid>
+          <Border Classes="group">
+            <StackPanel>
+              <Border Classes="row first" IsEnabled="{Binding !Uefi}">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Boot order" Classes="label" />
+                    <TextBlock Text="For BIOS machines. A UEFI machine keeps its boot order in its firmware: use Power on to firmware setup (Ctrl+K) to change it there." Classes="help" />
+                  </StackPanel>
+                  <ComboBox Grid.Column="1" ItemsSource="{Binding BootOrders}" SelectedItem="{Binding BootOrder}" />
+                </Grid>
+              </Border>
+              <Border Classes="row">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Boot menu at every power on" Classes="label" />
+                    <TextBlock Text="Shows for a few seconds; pick a device to start from with Esc. Power on to firmware setup does the same once." Classes="help" />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="1" IsChecked="{Binding BootMenu}" />
+                </Grid>
+              </Border>
+            </StackPanel>
+          </Border>
+          <TextBlock Text="DEVICES" Classes="grouptitle" />
+          <Border Classes="group">
+            <StackPanel>
+              <Border Classes="row first">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Random-number generator" Classes="label" />
+                    <TextBlock Text="A fast source of randomness for the system's encryption keys; keep it on." Classes="help" />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="1" IsChecked="{Binding Rng}" />
+                </Grid>
+              </Border>
+              <Border Classes="row">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Memory ballooning" Classes="label" />
+                    <TextBlock Text="Lets the system give unused memory back to this computer. Automatic leaves it on except for older macOS releases." Classes="help" />
+                    <CheckBox Content="Automatic" IsChecked="{Binding BalloonAuto}" Margin="0,6,0,0" />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="1" IsChecked="{Binding Balloon}" IsEnabled="{Binding !BalloonAuto}" />
+                </Grid>
+              </Border>
+              <Border Classes="row">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Watchdog" Classes="label" />
+                    <TextBlock Text="A timer the system must keep resetting; if it hangs, the machine is restarted (or powered off, or paused). Linux and Windows servers can use it." Classes="help" />
+                  </StackPanel>
+                  <ComboBox Grid.Column="1" ItemsSource="{Binding WatchdogOptions}" SelectedItem="{Binding Watchdog}" />
+                </Grid>
+              </Border>
+              <Border Classes="row">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Report crashes (pvpanic)" Classes="label" />
+                    <TextBlock Text="The system says when it crashes, so the machine shows Crashed at once instead of looking frozen. Linux supports it; Windows needs the VirtIO drivers." Classes="help" />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="1" IsChecked="{Binding CrashReporting}" />
+                </Grid>
+              </Border>
+            </StackPanel>
+          </Border>
         </StackPanel>
 
-        <StackPanel IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=shares}" Spacing="8">
-          <TextBlock Text="Shared folders" Classes="h1" />
-          <Border Classes="badge-next"><TextBlock Text="Applies at next power on" /></Border>
+        <!-- Shared folders -->
+        <StackPanel Classes="section" IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=shares}">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="Shared folders" Classes="h1" />
+            <Border Grid.Column="1" Classes="badge-next"><TextBlock Text="Applies at next power on" /></Border>
+          </Grid>
           <TextBlock Classes="muted" TextWrapping="Wrap"
-                     Text="A folder of this computer the machine can use like its own: files saved on either side are there on the other at once. Fast (virtiofs)." />
+                     Text="A folder of this computer the machine uses like its own: files saved on either side are there on the other at once (virtiofs)." />
           <ItemsControl ItemsSource="{Binding Shares}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate><StackPanel Spacing="12" /></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:ShareRow">
-                <Border Classes="card" Margin="0,0,0,10">
-                  <StackPanel Spacing="8">
-                    <Grid ColumnDefinitions="*,Auto">
-                      <TextBlock Text="{Binding Path}" FontFamily="monospace" TextWrapping="Wrap" />
-                      <Button Grid.Column="1" Classes="tool danger" Content="Stop sharing" Command="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).RemoveShareCommand}" CommandParameter="{Binding}" />
-                    </Grid>
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                      <TextBlock Text="Name in the machine" VerticalAlignment="Center" />
-                      <TextBox Text="{Binding Tag}" Width="180" />
-                      <CheckBox Content="Read only" IsChecked="{Binding ReadOnly}" />
-                    </StackPanel>
-                    <TextBlock Text="In Linux, mount it with:" Classes="help" />
-                    <Border Classes="code"><SelectableTextBlock Text="{Binding MountHint}" FontFamily="monospace" FontSize="12" /></Border>
+                <Border Classes="group">
+                  <StackPanel>
+                    <Border Classes="row first">
+                      <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+                        <Border Classes="tile"><Path Classes="icon" Data="{StaticResource IconFolder}" /></Border>
+                        <TextBlock Grid.Column="1" Text="{Binding Path}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding Path}" />
+                        <Button Grid.Column="2" Classes="tool danger" Content="Stop sharing" VerticalAlignment="Center"
+                                Command="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).RemoveShareCommand}" CommandParameter="{Binding}" />
+                      </Grid>
+                    </Border>
+                    <Border Classes="row">
+                      <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                          <TextBlock Text="Name in the machine" Classes="label" />
+                          <TextBlock Text="The tag the system mounts it by." Classes="help" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="14">
+                          <CheckBox Content="Read only" IsChecked="{Binding ReadOnly}" VerticalAlignment="Center" />
+                          <TextBox Text="{Binding Tag}" Width="180" VerticalAlignment="Center" />
+                        </StackPanel>
+                      </Grid>
+                    </Border>
+                    <Border Classes="row">
+                      <StackPanel Spacing="6">
+                        <TextBlock Text="In Linux, mount it with" Classes="help" Margin="0" />
+                        <Border Classes="code"><SelectableTextBlock Text="{Binding MountHint}" FontFamily="monospace" FontSize="12" /></Border>
+                      </StackPanel>
+                    </Border>
                   </StackPanel>
                 </Border>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
           <Button x:Name="AddShare" Classes="tool" Content="Share a folder…" HorizontalAlignment="Left" />
-          <Border Classes="card" IsVisible="{Binding IsWindowsGuest}">
-            <TextBlock TextWrapping="Wrap" Classes="help"
-                       Text="Windows needs two things once: the VirtIO drivers (virtio-win, with its virtio-fs service) and WinFsp from winfsp.dev. Then start the &quot;VirtIO-FS Service&quot; in Services, and the folder appears as drive Z:." />
+          <Border Classes="group" IsVisible="{Binding IsWindowsGuest}">
+            <Border Classes="row first">
+              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                <Path Classes="icon" Data="{StaticResource IconInfo}" Stroke="{DynamicResource QAccent}" Width="18" Height="18" VerticalAlignment="Top" Margin="0,2,0,0" />
+                <TextBlock Grid.Column="1" TextWrapping="Wrap" Classes="help" Margin="0"
+                           Text="Windows needs two things once: the VirtIO drivers (virtio-win, with its virtio-fs service) and WinFsp from winfsp.dev. Then start the &quot;VirtIO-FS Service&quot; in Services, and the folder appears as drive Z:." />
+              </Grid>
+            </Border>
           </Border>
         </StackPanel>
 
-        <StackPanel IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=autoprotect}" Spacing="2">
-          <TextBlock Text="AutoProtect" Classes="h1" />
-          <Border Classes="badge-now"><TextBlock Text="Applies at once" /></Border>
-          <CheckBox x:Name="AutoProtectOn" Content="Take snapshots automatically while the machine runs" IsChecked="{Binding AutoProtectOn}" Margin="0,6,0,0" />
-          <TextBlock Text="A safety net: if something goes wrong inside the machine, go back to one of these from the Snapshots tab. Each one holds the running state, programs and all. Off is recommended unless you want that net; the snapshots you take yourself work either way." Classes="help" />
-          <TextBlock Text="How often" Classes="field" />
-          <ComboBox ItemsSource="{Binding AutoProtectIntervals}" SelectedItem="{Binding AutoProtectInterval}" IsEnabled="{Binding AutoProtectOn}" />
-          <TextBlock Text="Counted from when the machine started. Every hour is recommended; the machine pauses for a moment while each is taken." Classes="help" />
-          <TextBlock Text="How many to keep" Classes="field" />
-          <NumericUpDown Value="{Binding AutoProtectKeep}" Minimum="1" Maximum="50" Increment="1" FormatString="0" Width="160" HorizontalAlignment="Left" VerticalContentAlignment="Center" IsEnabled="{Binding AutoProtectOn}" />
-          <TextBlock Text="When there are more, the oldest automatic one is deleted. 3 is recommended: each keeps the disk changes since the one before plus a copy of the memory, so they use space. Snapshots you take yourself are never deleted." Classes="help" />
-          <TextBlock Text="Snapshots are taken while VM Qontrol is open." Classes="help" />
-        </StackPanel>
-
-        <StackPanel IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=advanced}" Spacing="2">
-          <TextBlock Text="Advanced" Classes="h1" />
-          <Border Classes="badge-next"><TextBlock Text="Applies at next power on" /></Border>
-          <TextBlock Text="Extra QEMU arguments" Classes="field" />
-          <TextBox Text="{Binding ExtraArgs}" AcceptsReturn="True" MinHeight="80" FontFamily="monospace" PlaceholderText="One argument per line, e.g. -device&#x0a;intel-iommu" />
-          <TextBlock Text="Added at the end of the command. For anything this window does not offer; a wrong argument stops the machine starting, and the reason is shown." Classes="help" />
-          <TextBlock Text="The command this machine starts with" Classes="field" />
-          <Border Classes="code">
-            <SelectableTextBlock Text="{Binding CommandPreview}" FontFamily="monospace" FontSize="12" TextWrapping="Wrap" />
+        <!-- AutoProtect -->
+        <StackPanel Classes="section" IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=autoprotect}">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="AutoProtect" Classes="h1" />
+            <Border Grid.Column="1" Classes="badge-now"><TextBlock Text="Applies at once" /></Border>
+          </Grid>
+          <Border Classes="group">
+            <StackPanel>
+              <Border Classes="row first">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Take snapshots automatically while the machine runs" Classes="label" />
+                    <TextBlock Text="A safety net: if something goes wrong inside the machine, go back to one from the Snapshots tab. Off is recommended unless you want that net; your own snapshots work either way. Snapshots are taken while VM Qontrol is open." Classes="help" />
+                  </StackPanel>
+                  <ToggleSwitch x:Name="AutoProtectOn" Grid.Column="1" IsChecked="{Binding AutoProtectOn}" />
+                </Grid>
+              </Border>
+              <Border Classes="row" IsEnabled="{Binding AutoProtectOn}">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="How often" Classes="label" />
+                    <TextBlock Text="Counted from when the machine started. Every hour is recommended; the machine pauses for a moment while each is taken." Classes="help" />
+                  </StackPanel>
+                  <ComboBox Grid.Column="1" ItemsSource="{Binding AutoProtectIntervals}" SelectedItem="{Binding AutoProtectInterval}" />
+                </Grid>
+              </Border>
+              <Border Classes="row" IsEnabled="{Binding AutoProtectOn}">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="How many to keep" Classes="label" />
+                    <TextBlock Text="With more, the oldest automatic one is deleted. 3 is recommended: each holds the disk changes since the one before plus a copy of the memory. Your own snapshots are never deleted." Classes="help" />
+                  </StackPanel>
+                  <NumericUpDown Grid.Column="1" Value="{Binding AutoProtectKeep}" Minimum="1" Maximum="50" Increment="1" FormatString="0" Width="150" />
+                </Grid>
+              </Border>
+            </StackPanel>
           </Border>
         </StackPanel>
 
-        <StackPanel IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=history}" Spacing="8">
+        <!-- Advanced -->
+        <StackPanel Classes="section" IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=advanced}">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="Advanced" Classes="h1" />
+            <Border Grid.Column="1" Classes="badge-next"><TextBlock Text="Applies at next power on" /></Border>
+          </Grid>
+          <Border Classes="group">
+            <StackPanel>
+              <Border Classes="row first">
+                <StackPanel Spacing="8">
+                  <StackPanel>
+                    <TextBlock Text="Extra QEMU arguments" Classes="label" />
+                    <TextBlock Text="Added at the end of the command, one per line. For anything this window does not offer; a wrong argument stops the machine starting, and the reason is shown." Classes="help" />
+                  </StackPanel>
+                  <TextBox Text="{Binding ExtraArgs}" AcceptsReturn="True" MinHeight="80" FontFamily="monospace" PlaceholderText="-device&#x0a;intel-iommu" />
+                </StackPanel>
+              </Border>
+              <Border Classes="row">
+                <StackPanel Spacing="8">
+                  <TextBlock Text="The command this machine starts with" Classes="label" />
+                  <Border Classes="code">
+                    <SelectableTextBlock Text="{Binding CommandPreview}" FontFamily="monospace" FontSize="12" TextWrapping="Wrap" />
+                  </Border>
+                </StackPanel>
+              </Border>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <!-- Change history -->
+        <StackPanel Classes="section" IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=history}">
           <TextBlock Text="Change history" Classes="h1" />
           <TextBlock Text="Every saved change, newest first. Restore puts the settings back as they were before that change." Classes="muted" TextWrapping="Wrap" />
-          <ItemsControl x:Name="History" ItemsSource="{Binding History}">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate x:DataType="m:SettingsChange">
-                <Border Classes="card" Margin="0,0,0,8">
-                  <Grid ColumnDefinitions="*,Auto">
-                    <StackPanel Spacing="4">
-                      <TextBlock Text="{Binding At, StringFormat='{}{0:g}'}" FontWeight="SemiBold" />
-                      <ItemsControl ItemsSource="{Binding Changes}">
-                        <ItemsControl.ItemTemplate>
-                          <DataTemplate x:DataType="x:String"><TextBlock Text="{Binding}" Classes="help" /></DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                      </ItemsControl>
-                    </StackPanel>
-                    <Button Grid.Column="1" Classes="tool" Content="Restore" VerticalAlignment="Top"
-                            Command="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).RestoreCommand}" CommandParameter="{Binding}" />
-                  </Grid>
-                </Border>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
+          <Border Classes="group" IsVisible="{Binding !HasHistory}">
+            <Border Padding="18,22">
+              <StackPanel Spacing="10" HorizontalAlignment="Center">
+                <Border Classes="tile" HorizontalAlignment="Center"><Path Classes="icon" Data="{StaticResource IconHistory}" /></Border>
+                <TextBlock Text="No changes saved yet" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                <TextBlock Text="Each time you save, what changed is listed here and can be put back." Classes="help" HorizontalAlignment="Center" />
+              </StackPanel>
+            </Border>
+          </Border>
+          <Border Classes="group" IsVisible="{Binding HasHistory}">
+            <ItemsControl x:Name="History" ItemsSource="{Binding History}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="m:SettingsChange">
+                  <Border Padding="18,14" BorderBrush="{DynamicResource QBorder}" BorderThickness="0,0,0,1">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+                      <Border Classes="tile" VerticalAlignment="Top"><Path Classes="icon" Data="{StaticResource IconHistory}" /></Border>
+                      <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding At, StringFormat='{}{0:g}'}" FontWeight="SemiBold" />
+                        <ItemsControl ItemsSource="{Binding Changes}">
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="x:String"><TextBlock Text="{Binding}" Classes="help" /></DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                      </StackPanel>
+                      <Button Grid.Column="2" Classes="tool" Content="Restore" VerticalAlignment="Top"
+                              Command="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).RestoreCommand}" CommandParameter="{Binding}" />
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </Border>
         </StackPanel>
       </Panel>
+      </Grid>
     </ScrollViewer>
   </DockPanel>
 </UserControl>

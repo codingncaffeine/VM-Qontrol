@@ -294,6 +294,9 @@ public sealed record DisplayConfig
 
     /// <summary>The viewer program: spicy, remote-viewer, or none.</summary>
     public string Viewer { get; set; } = "auto";
+
+    /// <summary>The viewer opens full screen (the guest's resolution follows the screen with the guest tools).</summary>
+    public bool FullScreen { get; set; }
 }
 
 public sealed record AudioConfig

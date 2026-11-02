@@ -39,6 +39,10 @@ public static class SettingsHistory
         Diff("CD/DVD and floppies", string.Join(", ", before.Media.Select(m => $"{m.Role} {Path.GetFileName(m.File)} {m.Connect}")), string.Join(", ", after.Media.Select(m => $"{m.Role} {Path.GetFileName(m.File)} {m.Connect}")));
         Diff("Network", string.Join(", ", before.Nics.Select(Nic)), string.Join(", ", after.Nics.Select(Nic)));
         Diff("Display", $"{before.Display.Backend} {before.Display.Device} GL {before.Display.Gl}", $"{after.Display.Backend} {after.Display.Device} GL {after.Display.Gl}");
+        Diff("Starting resolution", (before.Display.Width, before.Display.Height), (after.Display.Width, after.Display.Height),
+            v => v is ValueTuple<int?, int?> { Item1: { } w, Item2: { } h } ? $"{w} × {h}" : "automatic");
+        Diff("Viewer program", before.Display.Viewer, after.Display.Viewer);
+        Diff("Full screen", before.Display.FullScreen, after.Display.FullScreen, v => (bool?)v == true ? "on" : "off");
         Diff("Sound", before.Audio.Device, after.Audio.Device, v => v?.ToString() ?? "automatic");
         Diff("Keyboard", before.Input.Keyboard, after.Input.Keyboard, v => v?.ToString() ?? "automatic");
         Diff("Pointer", before.Input.Mouse, after.Input.Mouse, v => v?.ToString() ?? "automatic");

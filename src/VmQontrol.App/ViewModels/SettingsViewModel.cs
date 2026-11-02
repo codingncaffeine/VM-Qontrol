@@ -74,6 +74,16 @@ public sealed partial class ShareRow(ShareConfig share) : ObservableObject
     public ShareConfig ToConfig() => new() { Path = Path, Tag = Tag.Trim().Length > 0 ? Tag.Trim() : "share", ReadOnly = ReadOnly };
 }
 
+/// <summary>A USB device the machine always connects (a rule): by its kind, at power on and whenever plugged in.</summary>
+public sealed class UsbRuleRow(UsbDevice device)
+{
+    public UsbDevice Device { get; } = device;
+
+    public string Name => Device.Name ?? "USB device";
+
+    public string Id => $"{Device.VendorId}:{Device.ProductId}";
+}
+
 /// <summary>A forwarded port: a port on this computer that reaches a port in the machine.</summary>
 public sealed partial class ForwardRow(PortForward forward) : ObservableObject
 {
@@ -84,7 +94,20 @@ public sealed partial class ForwardRow(PortForward forward) : ObservableObject
     public PortForward ToConfig() => new(Protocol, (int)HostPort, (int)GuestPort);
 }
 
-public sealed record SettingsSection(string Key, string Title, string Group);
+public sealed record SettingsSection(string Key, string Title, string Group)
+{
+    private static readonly Dictionary<string, string> Icons = new()
+    {
+        ["general"] = "IconInfo", ["memory"] = "IconMemory", ["processors"] = "IconCpu", ["disks"] = "IconDisk", ["media"] = "IconDisc",
+        ["network"] = "IconNetwork", ["usb"] = "IconUsb", ["sound"] = "IconSound", ["display"] = "IconScreen", ["input"] = "IconKeyboard",
+        ["firmware"] = "IconShield", ["serial"] = "IconTerminal", ["boot"] = "IconBoot", ["shares"] = "IconFolder",
+        ["autoprotect"] = "IconClock", ["advanced"] = "IconCode", ["history"] = "IconHistory",
+    };
+
+    /// <summary>The section's icon in the side list.</summary>
+    public Avalonia.Media.Geometry? Icon =>
+        Avalonia.Application.Current?.TryGetResource(Icons.GetValueOrDefault(Key, "IconSettings"), null, out var g) == true ? g as Avalonia.Media.Geometry : null;
+}
 
 /// <summary>
 /// A machine's settings, every one of them, in words. Each field says what it does and what is recommended; each
@@ -226,7 +249,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         foreach (var f in nic.Forwards) Forwards.Add(new ForwardRow(f));
         foreach (var sh in m.Shares) Shares.Add(new ShareRow(sh));
         UsbController = UsbControllers.FirstOrDefault(o => o.Value == m.Usb.Controller) ?? UsbControllers[0];
-        UsbDevices = string.Join('\n', m.Usb.Passthrough.Select(u => $"{u.VendorId}:{u.ProductId}"));
+        foreach (var u in m.Usb.Passthrough) UsbRules.Add(new UsbRuleRow(u));
         SoundCard = SoundCards.FirstOrDefault(o => o.Value == m.Audio.Device) ?? SoundCards[0];
         DisplayBackend = DisplayBackends.First(o => o.Value == m.Display.Backend.ToString());
         DisplayDevice = DisplayDevices.FirstOrDefault(o => o.Value == m.Display.Device) ?? DisplayDevices[0];
@@ -234,6 +257,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         Width = m.Display.Width ?? 0;
         Height = m.Display.Height ?? 0;
         Viewer = ViewerOptions.FirstOrDefault(o => o.Value == m.Display.Viewer) ?? ViewerOptions[0];
+        FullScreen = m.Display.FullScreen;
         Keyboard = Keyboards.FirstOrDefault(o => o.Value == m.Input.Keyboard) ?? Keyboards[0];
         Pointer = Pointers.FirstOrDefault(o => o.Value == m.Input.Mouse) ?? Pointers[0];
         Layout = m.Input.Layout;
@@ -325,7 +349,30 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     // USB, sound, display, input, serial
     [ObservableProperty] private Option _usbController;
-    [ObservableProperty] private string _usbDevices;
+    public ObservableCollection<UsbRuleRow> UsbRules { get; } = [];
+
+    /// <summary>A device to add by its id ("046d:c52b"), for one that is not plugged in now.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(AddUsbRuleCommand))]
+    private string _newUsbId = "";
+
+    private bool CanAddUsbRule() => System.Text.RegularExpressions.Regex.IsMatch(NewUsbId.Trim(), "^[0-9a-fA-F]{4}:[0-9a-fA-F]{4}$")
+        && UsbRules.All(r => !string.Equals(r.Id, NewUsbId.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    [RelayCommand(CanExecute = nameof(CanAddUsbRule))]
+    private void AddUsbRule()
+    {
+        var parts = NewUsbId.Trim().ToLowerInvariant().Split(':');
+        UsbRules.Add(new UsbRuleRow(new UsbDevice(parts[0], parts[1])));
+        NewUsbId = "";
+    }
+
+    [RelayCommand]
+    private void RemoveUsbRule(UsbRuleRow row)
+    {
+        UsbRules.Remove(row);
+        AddUsbRuleCommand.NotifyCanExecuteChanged();
+    }
     [ObservableProperty] private Option _soundCard;
     [ObservableProperty] private Option _displayBackend;
     [ObservableProperty] private Option _displayDevice;
@@ -333,6 +380,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private decimal _width;
     [ObservableProperty] private decimal _height;
     [ObservableProperty] private Option _viewer;
+    [ObservableProperty] private bool _fullScreen;
     [ObservableProperty] private Option _keyboard;
     [ObservableProperty] private Option _pointer;
     [ObservableProperty] private string _layout;
@@ -357,6 +405,8 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     // History
     public ObservableCollection<SettingsChange> History { get; } = [];
+
+    public bool HasHistory => History.Count > 0;
 
     [ObservableProperty] private string _saveNote = "";
 
@@ -396,9 +446,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             Usb = new UsbConfig
             {
                 Controller = UsbController.Value,
-                Passthrough = UsbDevices.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                    .Select(l => l.Split(':')).Where(p => p.Length == 2).Select(p => new UsbDevice(p[0].ToLowerInvariant(), p[1].ToLowerInvariant(),
-                        o.Usb.Passthrough.FirstOrDefault(u => u.VendorId == p[0].ToLowerInvariant() && u.ProductId == p[1].ToLowerInvariant())?.Name)).ToList(),
+                Passthrough = UsbRules.Select(r => r.Device).ToList(),
             },
             Audio = new AudioConfig { Device = SoundCard.Value },
             Display = new DisplayConfig
@@ -409,6 +457,7 @@ public sealed partial class SettingsViewModel : ObservableObject
                 Width = Width > 0 && Height > 0 ? (int)Width : null,
                 Height = Width > 0 && Height > 0 ? (int)Height : null,
                 Viewer = Viewer.Value ?? "auto",
+                FullScreen = FullScreen,
             },
             Input = new InputConfig { Keyboard = Keyboard.Value, Mouse = Pointer.Value, Layout = Layout.Trim().Length > 0 ? Layout.Trim() : "en-us" },
             Serial = Serial.Value switch { "on" => true, "off" => false, _ => null },
@@ -622,6 +671,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             History.Clear();
             foreach (var c in t.Result) History.Add(c);
+            OnPropertyChanged(nameof(HasHistory));
         }), TaskScheduler.Default);
     }
 }

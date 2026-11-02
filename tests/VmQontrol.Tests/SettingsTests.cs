@@ -22,6 +22,34 @@ public sealed class SettingsTests
         Assert.Empty(SettingsHistory.Describe(before, before with { }));
     }
 
+    /// <summary>
+    /// Every display field is in the description: a save whose description is empty writes nothing, so a field left out
+    /// is a setting that can never be saved on its own (found 2026-11-02 for the viewer and the resolution).
+    /// </summary>
+    [Fact]
+    public void Display_changes_on_their_own_are_described()
+    {
+        var before = new MachineConfig { Name = "a" };
+        Assert.Equal(["Viewer program: auto → spicy"], SettingsHistory.Describe(before, before with { Display = before.Display with { Viewer = "spicy" } }));
+        Assert.Equal(["Starting resolution: automatic → 1920 × 1080"], SettingsHistory.Describe(before, before with { Display = before.Display with { Width = 1920, Height = 1080 } }));
+        Assert.Equal(["Full screen: off → on"], SettingsHistory.Describe(before, before with { Display = before.Display with { FullScreen = true } }));
+    }
+
+    [Fact]
+    public void Full_screen_is_passed_to_either_viewer()
+    {
+        using var profile = new TestProfile("viewer-args");
+        var running = new VmQontrol.Core.Runtime.RunningMachine("id", "Box", 1, profile.Root, profile.Root, DateTimeOffset.Now, null);
+        foreach (var name in new[] { "spicy", "remote-viewer" })
+        {
+            var program = Path.Combine(profile.Root, name);
+            File.WriteAllText(program, "");
+            var m = new MachineConfig { Name = "Box", Display = new DisplayConfig { Viewer = program, FullScreen = true } };
+            Assert.Contains("--full-screen", VmQontrol.Core.Runtime.ViewerLauncher.Command(m, running)!.Value.Args);
+            Assert.DoesNotContain("--full-screen", VmQontrol.Core.Runtime.ViewerLauncher.Command(m with { Display = m.Display with { FullScreen = false } }, running)!.Value.Args);
+        }
+    }
+
     [Fact]
     public void An_AutoProtect_change_alone_is_saved()
     {
@@ -77,7 +105,7 @@ public sealed class SettingsTests
             var view = window.GetVisualDescendants().OfType<SettingsView>().Single();
             Ui.Click(window, Named<ListBox>(view, "Sections").GetVisualDescendants().OfType<ListBoxItem>().First(i => (i.DataContext as SettingsSection)?.Key == "autoprotect"));
             Ui.Pump(0.2);
-            Ui.Click(window, Named<CheckBox>(view, "AutoProtectOn"));
+            Ui.Click(window, Named<ToggleSwitch>(view, "AutoProtectOn"));
             Ui.Pump(0.2);
             Ui.Capture(window, "phase6", "settings-autoprotect");
             Ui.Click(window, Named<Button>(view, "Save"));
@@ -90,6 +118,71 @@ public sealed class SettingsTests
         Assert.True(saved.Enabled, described);
         Assert.Equal(60, saved.IntervalMinutes);
         Assert.Equal(3, saved.Keep);
+    }
+
+    /// <summary>
+    /// Every section of Settings, captured in dark and light for a look (snapshots/settings-pages/). A machine with a
+    /// disk, a disc, a share, a USB rule and a port forward, so the list sections show their rows. The check: every
+    /// section shows exactly one visible page, and walking them all writes nothing to the machine.
+    /// </summary>
+    [Trait("Tier", "Window")]
+    [Fact]
+    public async Task Every_settings_section_shows_its_page_in_both_themes()
+    {
+        using var profile = new TestProfile("settings-pages");
+        var dir = Path.Combine(profile.Paths.DefaultLibrary, "Workstation");
+        Directory.CreateDirectory(dir);
+        var share = Path.Combine(profile.Root, "Projects");
+        Directory.CreateDirectory(share);
+        MachineStore.Save(new MachineConfig
+        {
+            Name = "Workstation",
+            Guest = new GuestConfig { Os = "linux" },
+            Disks = [new DiskConfig { File = "disk0.qcow2", SizeGiB = 64 }],
+            Media = [new MediaConfig { Role = MediaRole.Installer, File = Path.Combine(profile.Root, "ubuntu-24.04-desktop-amd64.iso") }],
+            Shares = [new ShareConfig { Path = share, Tag = "projects" }],
+            Usb = new UsbConfig { Passthrough = [new UsbDevice("046d", "c52b", "Logitech USB Receiver")] },
+            Nics = [new NicConfig { Forwards = [new PortForward("tcp", 8080, 80)] }],
+        }, Path.Combine(dir, "vm.json"));
+        var before = File.ReadAllText(Path.Combine(dir, "vm.json"));
+
+        var seen = await Ui.Run(() =>
+        {
+            var shell = new ShellViewModel(profile.Paths, AppSettings.Load(profile.Paths));
+            var window = new MainWindow { DataContext = shell, Width = 1320, Height = 900 };
+            window.Show();
+            _ = shell.StartAsync();
+            Ui.PumpUntil(() => shell.Machines.Count == 1, "the library");
+            Ui.Click(window, Named<ListBox>(window, "Library").GetVisualDescendants().OfType<ListBoxItem>().First());
+            Ui.PumpUntil(() => shell.Selected is not null, "the machine page");
+            Ui.Pump(0.3);
+            Ui.Click(window, Named<Button>(window.GetVisualDescendants().OfType<MachineView>().Single(), "OpenSettings"));
+            Ui.PumpUntil(() => shell.SettingsPage is not null, "the settings", 15);
+            Ui.Pump(0.3);
+            var view = window.GetVisualDescendants().OfType<SettingsView>().Single();
+            var pages = new List<(string Key, int Visible)>();
+            foreach (var theme in new[] { ThemeVariant.Dark, ThemeVariant.Light })
+            {
+                Avalonia.Application.Current!.RequestedThemeVariant = theme;
+                foreach (var item in Named<ListBox>(view, "Sections").GetVisualDescendants().OfType<ListBoxItem>().ToList())
+                {
+                    var key = ((SettingsSection)item.DataContext!).Key;
+                    Ui.Click(window, item);
+                    Ui.Pump(0.15);
+                    var visible = view.GetVisualDescendants().OfType<StackPanel>().Count(p => p.Classes.Contains("section") && p.IsVisible);
+                    if (theme == ThemeVariant.Dark) pages.Add((key, visible));
+                    Ui.Capture(window, "settings-pages", $"{(theme == ThemeVariant.Dark ? "dark" : "light")}-{key}");
+                }
+            }
+
+            Avalonia.Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
+            window.Close();
+            return pages;
+        });
+
+        Assert.Equal(17, seen.Count);
+        Assert.All(seen, p => Assert.True(p.Visible == 1, $"{p.Key}: {p.Visible} pages visible"));
+        Assert.Equal(before, File.ReadAllText(Path.Combine(dir, "vm.json")));
     }
 
     [Trait("Tier", "Window")]
