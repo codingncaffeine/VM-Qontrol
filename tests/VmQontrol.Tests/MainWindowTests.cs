@@ -399,7 +399,14 @@ public sealed class MainWindowTests
                 var status = shell.Status;
                 // The panel, for a look at its rows (this computer's real devices) with the new label.
                 var page = window.GetVisualDescendants().OfType<MachineView>().Single();
-                Ui.Click(window, Named<Button>(page, "OpenUsb"));
+                // The toolbar's USB menu: this computer's real devices, only looked at (never clicked), then Manage….
+                var usbButton = Named<Button>(page, "OpenUsb");
+                var usbMenu = (MenuFlyout)usbButton.Flyout!;
+                Ui.Click(window, usbButton);
+                Ui.PumpUntil(() => usbMenu.Items.OfType<MenuItem>().Any(m => m.Name == "ManageUsb"), "the USB menu", 10);
+                Ui.Pump(0.3);
+                usbMenu.Items.OfType<MenuItem>().First(m => m.Name == "ManageUsb").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent));
+                usbMenu.Hide();
                 Ui.PumpUntil(() => shell.UsbPanel is { } p && (p.Devices.Count > 0 || p.Note.Length > 0), "the USB panel", 10);
                 Ui.Pump(0.3);
                 Ui.Capture(window, "phase7", "usb-panel");
@@ -503,6 +510,43 @@ public sealed class MainWindowTests
                 await VmQontrol.Core.Runtime.MachineRunner.WaitForExitAsync(running, TimeSpan.FromSeconds(10), CancellationToken.None);
             }
         }
+    }
+
+    /// <summary>
+    /// The toolbar's USB menu as it draws: sample devices (never this computer's), one in the machine (ticked), in both
+    /// themes, in a real menu presenter so the app's menu style applies. Checks the ticks and the Manage item.
+    /// </summary>
+    [Trait("Tier", "Window")]
+    [Fact]
+    public async Task The_USB_menu_ticks_the_devices_in_the_machine()
+    {
+        var seen = await Ui.Run(() =>
+        {
+            VmQontrol.Core.Devices.HostUsbDevice D(string v, string p, string name, int speed) => new(v, p, name, "3", "4", "3-1", speed, true, false);
+            var devices = new List<(VmQontrol.Core.Devices.HostUsbDevice, bool)>
+            {
+                (D("1b1c", "1bb5", "CORSAIR M65 RGB ULTRA WIRELESS Gaming Mouse", 12), true),
+                (D("0781", "5583", "SanDisk Ultra Fit", 5000), false),
+                (D("046d", "085e", "Logitech BRIO", 5000), false),
+            };
+            var ticked = new List<string>();
+            foreach (var theme in new[] { ThemeVariant.Dark, ThemeVariant.Light })
+            {
+                Avalonia.Application.Current!.RequestedThemeVariant = theme;
+                var presenter = new MenuFlyoutPresenter { ItemsSource = VmQontrol.App.Views.MachineView.UsbMenuItems(devices, true, (_, _) => { }, () => { }) };
+                var window = new Window { Content = new Border { Padding = new Avalonia.Thickness(24), Child = presenter }, Width = 520, Height = 300, SizeToContent = SizeToContent.Height };
+                window.Show();
+                Ui.Pump(0.3);
+                Ui.Capture(window, "phase7", $"usb-menu-{(theme == ThemeVariant.Dark ? "dark" : "light")}");
+                ticked = presenter.Items.OfType<MenuItem>().Where(m => m.IsChecked).Select(m => (string)m.Tag!).ToList();
+                window.Close();
+            }
+
+            Avalonia.Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
+            return ticked;
+        });
+
+        Assert.Equal(["1b1c:1bb5"], seen);
     }
 
     /// <summary>

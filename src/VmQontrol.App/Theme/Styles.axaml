@@ -163,6 +163,22 @@
   </Style>
   <Style Selector="Ellipse.state.running"><Setter Property="Fill" Value="{DynamicResource QSuccess}" /></Style>
   <Style Selector="Ellipse.state.paused"><Setter Property="Fill" Value="{DynamicResource QWarning}" /></Style>
+  <!-- Menus (the toolbar's ⋯ and USB menus) in the app's own surfaces instead of Fluent's stock grey. -->
+  <Style Selector="MenuFlyoutPresenter">
+    <Setter Property="Background" Value="{DynamicResource QSurfaceRaised}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource QBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource QRadius}" />
+    <Setter Property="Padding" Value="4,6" />
+  </Style>
+  <Style Selector="MenuFlyoutPresenter MenuItem">
+    <Setter Property="CornerRadius" Value="{DynamicResource QRadiusSmall}" />
+    <Setter Property="Margin" Value="2,1" />
+  </Style>
+  <Style Selector="MenuFlyoutPresenter Separator">
+    <Setter Property="Background" Value="{DynamicResource QBorder}" />
+  </Style>
+
   <Style Selector="Border.pill">
     <Setter Property="CornerRadius" Value="999" />
     <Setter Property="Padding" Value="10,3" />

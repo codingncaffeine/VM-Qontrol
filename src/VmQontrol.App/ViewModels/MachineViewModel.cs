@@ -249,6 +249,38 @@ public sealed partial class MachineViewModel : ObservableObject
     [RelayCommand]
     private void OpenUsb() => _shell.OpenUsb(this);
 
+    /// <summary>The USB menu's devices: everything plugged in, and whether each is in this machine now. Call on a worker.</summary>
+    public async Task<IReadOnlyList<(HostUsbDevice Device, bool InMachine)>> UsbMenuAsync()
+    {
+        var devices = UsbHost.List();
+        var attached = Watcher is { } w ? await UsbHost.AttachedAsync(w).ConfigureAwait(false) : new HashSet<string>();
+        return devices.Select(d => (d, attached.Contains(d.QemuId) || attached.Contains(d.RuleId))).ToList();
+    }
+
+    /// <summary>One click in the USB menu: the device goes to the machine, or comes back to this computer.</summary>
+    public async Task ToggleUsbAsync(HostUsbDevice device, bool inMachine)
+    {
+        if (Watcher is not { } watcher) return;
+        if (!inMachine && !device.Writable && !UsbAccess.Available)
+        {
+            Ui.Post(() => _shell.ShowUsbSetup(device.Name));
+            return;
+        }
+
+        try
+        {
+            var attached = await UsbHost.AttachedAsync(watcher).ConfigureAwait(false);
+            if (inMachine && attached.Contains(device.RuleId)) await UsbHost.RemoveRuleAsync(watcher, device.VendorId, device.ProductId).ConfigureAwait(false);
+            else if (inMachine) await UsbHost.DetachAsync(watcher, device).ConfigureAwait(false);
+            else await UsbHost.AttachAsync(watcher, device).ConfigureAwait(false);
+            Ui.Post(() => _shell.Note(inMachine ? $"{device.Name} is back on this computer." : $"{device.Name} is in {Name} now."));
+        }
+        catch (Exception ex) when (ex is QmpException or IOException)
+        {
+            Ui.Post(() => _shell.Show(new NoticeViewModel($"{device.Name} could not be {(inMachine ? "given back" : "connected")}", [ex.Message], isError: true)));
+        }
+    }
+
     /// <summary>Ctrl+Alt+Del for the machine (Windows' sign-in screen asks for it; the desktop would take the keys itself).</summary>
     [RelayCommand]
     private Task SendCtrlAltDelAsync() => ControlAsync("got Ctrl+Alt+Del", (r, ct) => MachineRunner.SendKeysAsync(r, ["ctrl", "alt", "delete"], ct));
