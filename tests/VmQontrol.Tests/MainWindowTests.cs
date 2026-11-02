@@ -275,6 +275,63 @@ public sealed class MainWindowTests
     }
 
     /// <summary>
+    /// More → Make into a template: the page says Template, offers no Power on, and "New machine from this template"
+    /// makes a linked machine (linked is chosen for a template) that is an ordinary machine.
+    /// </summary>
+    [Trait("Tier", "Window")]
+    [Fact]
+    public async Task A_template_made_from_the_menu_makes_linked_machines()
+    {
+        Assert.SkipWhen(!File.Exists("/usr/bin/qemu-io"), "qemu-io is not installed");
+        using var profile = new TestProfile("template-window");
+        var lib = profile.Paths.DefaultLibrary;
+        var dir = Path.Combine(lib, "Golden");
+        Directory.CreateDirectory(dir);
+        await VmQontrol.Core.Runtime.QemuImg.CreateAsync(Path.Combine(dir, "disk0.qcow2"), "qcow2", 1, ct: TestContext.Current.CancellationToken);
+        MachineStore.Save(new MachineConfig { Name = "Golden", Disks = [new DiskConfig { File = "disk0.qcow2", SizeGiB = 1 }] }, Path.Combine(dir, "vm.json"));
+
+        var seen = await Ui.Run(() =>
+        {
+            var (window, shell) = Open(profile);
+            Ui.PumpUntil(() => shell.Machines.Count == 1, "the library");
+            Ui.Click(window, Named<ListBox>(window, "Library").GetVisualDescendants().OfType<ListBoxItem>().First());
+            Ui.PumpUntil(() => shell.Selected?.Name == "Golden", "the machine page");
+            Ui.Pump(0.3);
+            var page = window.GetVisualDescendants().OfType<MachineView>().Single();
+            var more = Named<Button>(page, "More");
+            Ui.Click(window, more);
+            Ui.Pump(0.3);
+            Ui.Click(window, ((MenuFlyout)more.Flyout!).Items.OfType<MenuItem>().First(m => (m.Header as string) == "Make into a template…"));
+            Ui.PumpUntil(() => shell.Notice is not null, "the template question");
+            Ui.Pump(0.2);
+            Ui.Click(window, Named<Button>(window, "NoticeConfirm"));
+            Ui.PumpUntil(() => shell.Selected is { IsTemplate: true }, "the template");
+            Ui.Pump(0.3);
+            var state = Named<TextBlock>(page, "StateText").Text;
+            var powerOn = Named<Button>(page, "PowerOn").IsVisible;
+            Ui.Capture(window, "phase6", "template");
+
+            Ui.Click(window, Named<Button>(page, "NewFromTemplate"));
+            Ui.PumpUntil(() => shell.Prompt is not null, "the new machine prompt");
+            Ui.Pump(0.3);
+            var linkedChosen = shell.Prompt!.Choice == 1;
+            Ui.Capture(window, "phase6", "new-from-template");
+            Ui.Click(window, Named<Button>(window, "PromptConfirm"));
+            Ui.PumpUntil(() => shell.Machines.Count == 2, "the new machine", 30);
+            Ui.Pump(0.3);
+            window.Close();
+            return (state, powerOn, linkedChosen);
+        });
+
+        Assert.Equal("Template", seen.state);
+        Assert.False(seen.powerOn);
+        Assert.True(seen.linkedChosen);
+        var made = Path.Combine(lib, "Golden 1");
+        Assert.False(MachineStore.Load(Path.Combine(made, "vm.json")).IsTemplate);
+        Assert.NotNull(DiskState.BackingFile(Path.Combine(made, "disk0.qcow2")));
+    }
+
+    /// <summary>
     /// Suspend on a running machine's page: it turns off as "Suspended", Power on reads "Resume", and Resume brings it back
     /// running with the saved state used up.
     /// </summary>

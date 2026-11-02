@@ -50,6 +50,8 @@ public static class MachineRunner
     /// <summary>Starts the machine and returns once QEMU is ready (or throws with QEMU's own reason).</summary>
     public static async Task<RunningMachine> StartAsync(MachineConfig m, string machineDirectory, QontrolPaths paths, HostCapabilities host, StartOptions options, CancellationToken ct = default)
     {
+        if (m.IsTemplate)
+            throw new StartRefusedException([$"{m.Name} is a template. A template is never started, so every machine made from it begins the same way: make a machine from it, or turn it back into a machine."]);
         if (Find(m, paths) is { } already) throw new StartRefusedException([$"{m.Name} is already running."]);
         var problems = MachineChecks.Problems(m, machineDirectory);
         if (problems.Count > 0) throw new StartRefusedException(problems);

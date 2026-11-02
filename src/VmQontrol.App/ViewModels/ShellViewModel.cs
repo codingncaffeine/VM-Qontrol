@@ -221,7 +221,7 @@ public sealed partial class ShellViewModel : ObservableObject
     {
         var term = Search.Trim();
         var shown = _all
-            .Where(m => term.Length == 0 || m.Name.Contains(term, StringComparison.OrdinalIgnoreCase) || m.GuestLabel.Contains(term, StringComparison.OrdinalIgnoreCase))
+            .Where(m => term.Length == 0 || m.Name.Contains(term, StringComparison.OrdinalIgnoreCase) || m.LibraryLabel.Contains(term, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(m => m.IsFavourite).ThenBy(m => m.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
         var keep = Selected;
         Machines.Clear();

@@ -34,7 +34,14 @@
 
       <!-- Power and actions: only what makes sense in the current state is shown. -->
       <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
-        <Button x:Name="PowerOn" Classes="primary" Command="{Binding PowerOnCommand}" IsVisible="{Binding IsOff}" IsEnabled="{Binding !Busy}"
+        <Button x:Name="NewFromTemplate" Classes="primary" Command="{Binding CloneCommand}" IsVisible="{Binding IsTemplate}"
+                ToolTip.Tip="Make a new machine that starts exactly as this template is">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBlock Text="+" FontWeight="SemiBold" />
+            <TextBlock Text="New machine from this template" />
+          </StackPanel>
+        </Button>
+        <Button x:Name="PowerOn" Classes="primary" Command="{Binding PowerOnCommand}" IsVisible="{Binding CanPowerOn}" IsEnabled="{Binding !Busy}"
                 ToolTip.Tip="{Binding PowerOnTip}">
           <StackPanel Orientation="Horizontal" Spacing="8">
             <Path Classes="iconfill" Data="{StaticResource IconPlay}" Fill="{DynamicResource QOnAccent}" />
@@ -109,7 +116,9 @@
               <MenuItem Header="Discard suspended state…" Command="{Binding DiscardSuspendedCommand}" IsVisible="{Binding CanDiscardSuspended}" />
               <MenuItem Header="Send Ctrl+Alt+Del" Command="{Binding SendCtrlAltDelCommand}" IsVisible="{Binding IsActive}" />
               <MenuItem Header="Save a screenshot" Command="{Binding SaveScreenshotCommand}" IsVisible="{Binding IsActive}" />
-              <MenuItem Header="Clone…" Command="{Binding CloneCommand}" />
+              <MenuItem Header="Clone…" Command="{Binding CloneCommand}" IsVisible="{Binding !IsTemplate}" />
+              <MenuItem Header="Make into a template…" Command="{Binding MakeTemplateCommand}" IsVisible="{Binding CanMakeTemplate}" />
+              <MenuItem Header="Turn back into a machine" Command="{Binding UndoTemplateCommand}" IsVisible="{Binding IsTemplate}" />
               <MenuItem Header="Open the machine's folder" Command="{Binding OpenFolderCommand}" />
               <MenuItem Header="Copy the QEMU command line" Command="{Binding CopyCommandLineCommand}" />
               <MenuItem Header="{Binding IsFavourite, Converter={x:Static vm:Text.FavouriteToggle}}" Command="{Binding ToggleFavouriteCommand}" />

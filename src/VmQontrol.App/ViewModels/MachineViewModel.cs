@@ -69,6 +69,16 @@ public sealed partial class MachineViewModel : ObservableObject
 
     public string GuestLabel => GuestNames.Describe(Machine.Guest);
 
+    /// <summary>The sidebar's line under the name: it has no state text, so a template says so here.</summary>
+    public string LibraryLabel => GuestLabel + (IsTemplate ? " · Template" : "");
+
+    /// <summary>A template is never started, only cloned (see <see cref="MachineConfig.IsTemplate"/>).</summary>
+    public bool IsTemplate => Machine.IsTemplate;
+
+    public bool CanPowerOn => IsOff && !IsTemplate;
+
+    public bool CanMakeTemplate => IsOff && !IsTemplate && !IsQuickemu;
+
     /// <summary>Two letters for the sidebar badge (no vendor logos).</summary>
     public string Badge => GuestNames.Badge(Machine.Guest);
 
@@ -97,7 +107,7 @@ public sealed partial class MachineViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StateText), nameof(IsRunning), nameof(IsOff), nameof(IsPaused), nameof(CanPause), nameof(IsActive), nameof(ScreenPlaceholder),
-        nameof(CanOpenFirmware), nameof(CanDiscardSuspended))]
+        nameof(CanOpenFirmware), nameof(CanDiscardSuspended), nameof(CanPowerOn), nameof(CanMakeTemplate))]
     private PowerState _state = PowerState.Off;
 
     /// <summary>Off with its state saved: Power on carries on from where it was.</summary>
@@ -166,7 +176,7 @@ public sealed partial class MachineViewModel : ObservableObject
     public string PowerOnTip => IsSuspended ? "Carry on from where the machine was suspended, with every program as it was" : "Start the machine and open its screen";
 
     /// <summary>The firmware screen means a fresh start, so a suspended machine offers Discard first.</summary>
-    public bool CanOpenFirmware => IsOff && !IsSuspended;
+    public bool CanOpenFirmware => IsOff && !IsSuspended && !IsTemplate;
 
     public bool CanDiscardSuspended => IsOff && IsSuspended;
 
@@ -176,10 +186,11 @@ public sealed partial class MachineViewModel : ObservableObject
         PowerState.Paused => "Paused",
         PowerState.ShuttingDown => "Shutting down…",
         PowerState.Crashed => "Crashed",
-        _ => IsSuspended ? "Suspended" : "Powered off",
+        _ => IsTemplate ? "Template" : IsSuspended ? "Suspended" : "Powered off",
     };
 
-    public string ScreenPlaceholder => State == PowerState.Off ? IsSuspended ? "Suspended" : "Powered off" : "Waiting for the screen…";
+    public string ScreenPlaceholder => State != PowerState.Off ? "Waiting for the screen…"
+        : IsTemplate ? "A template is never started: make a machine from it" : IsSuspended ? "Suspended" : "Powered off";
 
     public RunningMachine? Running => _watcher?.Machine;
 
@@ -242,14 +253,20 @@ public sealed partial class MachineViewModel : ObservableObject
             return;
         }
 
+        // From a template a linked clone is the usual choice: the template never changes, so sharing its disks is safe.
         var full = new PromptOption("Full clone",
             "A separate machine with copies of this one's disks, firmware settings and TPM. Recommended when the clone will live long or move to another computer. Needs as much free space as this machine's disks use, and takes minutes for a large disk.",
-            chosen: true);
+            chosen: !IsTemplate);
         var linked = new PromptOption("Linked clone",
-            $"Ready in seconds and needs almost no space: both machines share {Name}'s disks as they are now, kept read-only, and each keeps its own changes from then on. Best for trying things out. The shared disks stay until neither machine is left.");
-        var prompt = new PromptViewModel($"Clone {Name}",
-            ["Changes to either machine never touch the other."],
-            "Name of the new machine", $"{Name} (clone)", "Clone", t => t.Trim().Length > 0, options: [full, linked]);
+            IsTemplate
+                ? $"Recommended. Ready in seconds and needs almost no space: the new machine shares {Name}'s disks, kept read-only, and keeps its own changes. The shared disks stay until neither the template nor any machine made from it is left."
+                : $"Ready in seconds and needs almost no space: both machines share {Name}'s disks as they are now, kept read-only, and each keeps its own changes from then on. Best for trying things out. The shared disks stay until neither machine is left.",
+            chosen: IsTemplate);
+        var prompt = IsTemplate
+            ? new PromptViewModel($"New machine from {Name}", ["The new machine starts exactly as the template is; the template itself never changes."],
+                "Name of the new machine", $"{Name} 1", "Create machine", t => t.Trim().Length > 0, options: [full, linked])
+            : new PromptViewModel($"Clone {Name}", ["Changes to either machine never touch the other."],
+                "Name of the new machine", $"{Name} (clone)", "Clone", t => t.Trim().Length > 0, options: [full, linked]);
         _shell.ShowPrompt(prompt);
         if (await prompt.Answer.ConfigureAwait(false) is not { } name) return;
         var isLinked = prompt.Choice == 1;
@@ -263,7 +280,7 @@ public sealed partial class MachineViewModel : ObservableObject
                 var result = await Task.Run(() => MachineLifecycle.LinkedCloneAsync(Machine, Entry.Directory, _shell.LibraryRoot, name, progress)).ConfigureAwait(false);
                 dir = result.Directory;
                 // The original now writes to a layer of its own on the shared base.
-                Ui.Post(() => Machine = result.Original);
+                Ui.Post(() => Reload(result.Original));
             }
             else
             {
@@ -583,6 +600,39 @@ public sealed partial class MachineViewModel : ObservableObject
                     $"QEMU could not save the machine's state: {(ex is QmpException q ? q.Description : ex.Message)}",
                     "Shared folders and USB devices handed over from this computer keep a machine from being suspended. The machine is still running; Shut down works instead."], isError: true));
             });
+        }
+    }
+
+    [RelayCommand]
+    private async Task MakeTemplateAsync()
+    {
+        var notice = new NoticeViewModel($"Make {Name} a template?",
+            ["A template is never started, only used to make new machines, so each of them begins exactly as it is now: install and set up a system once, then make as many machines from it as you like.",
+             "Linked machines made from it share its disks and take seconds. You can turn it back into a machine at any time."],
+            confirm: "Make template");
+        _shell.Show(notice);
+        if (!await notice.Answer.ConfigureAwait(false)) return;
+        await SetTemplateAsync(true).ConfigureAwait(false);
+    }
+
+    [RelayCommand]
+    private Task UndoTemplateAsync() => SetTemplateAsync(false);
+
+    private async Task SetTemplateAsync(bool template)
+    {
+        var (machine, dir) = (Machine, Entry.Directory);
+        try
+        {
+            var changed = await Task.Run(() => MachineLifecycle.SetTemplate(machine, dir, template)).ConfigureAwait(false);
+            Ui.Post(() =>
+            {
+                Reload(changed);
+                _shell.Note(template ? $"{Name} is a template." : $"{Name} is a machine again.");
+            });
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException or UnauthorizedAccessException)
+        {
+            Ui.Post(() => _shell.Show(new NoticeViewModel(template ? $"{Name} cannot be a template" : $"{Name} is still a template", [ex.Message], isError: true)));
         }
     }
 

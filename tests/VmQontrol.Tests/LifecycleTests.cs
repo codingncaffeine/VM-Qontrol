@@ -160,6 +160,34 @@ public sealed class LifecycleTests
         Assert.Contains("read 2097152/2097152 bytes", await Run("qemu-io", "-c", "read -P 0xab 1M 2M", Path.Combine(dir, "disk0.qcow2")), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task A_template_is_never_started_and_its_machines_are_ordinary_machines()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        Assert.SkipWhen(!File.Exists("/usr/bin/qemu-io"), "qemu-io is not installed");
+        using var profile = new TestProfile("template");
+        var lib = profile.Paths.DefaultLibrary;
+        var (original, dir) = await Machine(lib, "Base", ct);
+
+        var template = MachineLifecycle.SetTemplate(original, dir, true);
+
+        Assert.True(MachineStore.Load(Path.Combine(dir, "vm.json")).IsTemplate);
+        var refused = await Assert.ThrowsAsync<StartRefusedException>(() => MachineRunner.StartAsync(template, dir, profile.Paths, VmQontrol.Core.Hosts.HostProbe.Probe(), new StartOptions { Headless = true }, ct));
+        Assert.Contains("template", refused.Message, StringComparison.Ordinal);
+        var (made, madeDir, _) = await MachineLifecycle.LinkedCloneAsync(template, dir, lib, "Made", ct: ct);
+        Assert.False(made.IsTemplate);
+        Assert.False(MachineStore.Load(Path.Combine(madeDir, "vm.json")).IsTemplate);
+        Assert.StartsWith("Made from the template Base", made.Notes, StringComparison.Ordinal);
+        Assert.Contains("read 2097152/2097152 bytes", await Run("qemu-io", "-c", "read -P 0xab 1M 2M", Path.Combine(madeDir, "disk0.qcow2")), StringComparison.Ordinal);
+
+        // A suspended machine or a quickemu machine is not made a template.
+        File.WriteAllText(MachineSuspend.StatePath(madeDir), "state");
+        Assert.Throws<InvalidOperationException>(() => MachineLifecycle.SetTemplate(made, madeDir, true));
+        Assert.Throws<InvalidOperationException>(() => MachineLifecycle.SetTemplate(made with { ImportedFrom = new ImportSource("quickemu", "/x.conf") }, madeDir, true));
+        Assert.False(MachineStore.Load(Path.Combine(madeDir, "vm.json")).IsTemplate);
+        Assert.False(MachineLifecycle.SetTemplate(template, dir, false).IsTemplate);
+    }
+
     private static async Task<(MachineConfig Machine, string Directory)> Machine(string lib, string name, CancellationToken ct)
     {
         var dir = Path.Combine(lib, name);

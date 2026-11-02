@@ -60,16 +60,32 @@ public static class MachineLifecycle
         {
             Id = Guid.NewGuid().ToString("N"),
             Name = name,
+            IsTemplate = false,
             ImportedFrom = null,
             Disks = disks,
             Media = source.Media.Select(m => m with { File = Full(m.File) }).ToList(),
             Firmware = source.Firmware with { VarsFile = "OVMF_VARS.fd", CodeFile = source.Firmware.CodeFile is { } c ? Full(c) : null },
             KernelBoot = source.KernelBoot is { } kb ? kb with { Kernel = Full(kb.Kernel), Initrd = kb.Initrd is { } initrd ? Full(initrd) : null } : null,
             Nics = nic is null ? source.Nics : [nic with { Mac = nic.Mac is null ? null : NewMac(), SshHostPort = null }, .. source.Nics.Skip(1)],
-            Notes = source.Notes.Length > 0 ? source.Notes : $"Cloned from {source.Name} on {DateTime.Now:d}.",
+            Notes = source.Notes.Length > 0 ? source.Notes : $"{(source.IsTemplate ? "Made from the template" : "Cloned from")} {source.Name} on {DateTime.Now:d}.",
         };
         MachineStore.Save(clone, Path.Combine(target, MachineStore.FileName));
         return (clone, target);
+    }
+
+    /// <summary>
+    /// Makes the machine a template, or turns a template back into a machine. A template must be off and not suspended:
+    /// its machines are made from its disks, and a saved running state would belong to none of them.
+    /// </summary>
+    public static MachineConfig SetTemplate(MachineConfig machine, string directory, bool template)
+    {
+        if (machine.ImportedFrom is not null)
+            throw new InvalidOperationException($"{machine.Name} is a quickemu machine, which VM Qontrol never changes. Clone it, then make the clone a template.");
+        if (template && MachineSuspend.IsSuspended(directory))
+            throw new InvalidOperationException($"{machine.Name} is suspended. Resume it and shut it down, or discard its suspended state, before making it a template.");
+        var changed = machine with { IsTemplate = template };
+        MachineStore.Save(changed, Path.Combine(directory, MachineStore.FileName));
+        return changed;
     }
 
     /// <summary>The library's folder of read-only bases that linked clones are layered on.</summary>

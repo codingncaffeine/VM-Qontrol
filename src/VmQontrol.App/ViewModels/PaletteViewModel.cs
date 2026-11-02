@@ -80,7 +80,7 @@ public sealed partial class PaletteViewModel(ShellViewModel shell) : ObservableO
             new("Refresh the library", "Library", () => _ = shell.RefreshAsync()),
             new("Show the host check", "Welcome", () => shell.Selected = null),
         };
-        foreach (var m in shell.Machines) items.Add(new($"Go to {m.Name}", m.GuestLabel, () => shell.Selected = m));
+        foreach (var m in shell.Machines) items.Add(new($"Go to {m.Name}", m.LibraryLabel, () => shell.Selected = m));
         if (shell.Selected is { } s)
         {
             void Add(string title, ICommand command, bool when = true)
@@ -88,7 +88,8 @@ public sealed partial class PaletteViewModel(ShellViewModel shell) : ObservableO
                 if (when) items.Add(new(title, s.Name, () => command.Execute(null)));
             }
 
-            Add(s.PowerOnText, s.PowerOnCommand, s.IsOff);
+            Add(s.PowerOnText, s.PowerOnCommand, s.CanPowerOn);
+            Add("New machine from this template", s.CloneCommand, s.IsTemplate);
             Add("Power on to firmware setup", s.PowerOnToFirmwareCommand, s.CanOpenFirmware);
             Add("Discard suspended state", s.DiscardSuspendedCommand, s.CanDiscardSuspended);
             Add("Open screen", s.OpenScreenCommand, s.IsActive);
@@ -102,7 +103,9 @@ public sealed partial class PaletteViewModel(ShellViewModel shell) : ObservableO
             Add("USB devices", s.OpenUsbCommand);
             Add("Send Ctrl+Alt+Del", s.SendCtrlAltDelCommand, s.IsActive);
             Add("Save a screenshot", s.SaveScreenshotCommand, s.IsActive);
-            Add("Clone", s.CloneCommand, s.IsOff);
+            Add("Clone", s.CloneCommand, s.IsOff && !s.IsTemplate);
+            Add("Make into a template", s.MakeTemplateCommand, s.CanMakeTemplate);
+            Add("Turn back into a machine", s.UndoTemplateCommand, s.IsTemplate);
             Add("Delete machine", s.DeleteMachineCommand, s.IsOff);
             Add("Open folder", s.OpenFolderCommand);
             Add("Copy command line", s.CopyCommandLineCommand);

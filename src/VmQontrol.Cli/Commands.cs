@@ -27,6 +27,8 @@ internal static class Commands
                               Make a new machine in the library (the system is detected from --iso when --os is left out).
                               --easy-install installs Windows, Ubuntu, Fedora/RHEL or Debian with no questions
                               (Linux needs --password; --power-off-when-done stops the machine after installing).
+          template MACHINE [--undo]
+                              Make a machine that is off into a template (never started, only cloned), or back.
           clone MACHINE NEW [--linked]
                               Copy a machine that is off. --linked shares its disks as they are now instead of copying
                               them (seconds, almost no space); both machines keep their own changes from then on.
@@ -71,6 +73,8 @@ internal static class Commands
                     return Detect(args[1], output, error);
                 case "create" when args.Length > 1:
                     return Create(args[1..], paths, output, error);
+                case "template" when args.Length > 1:
+                    return Template(args[1], !args.Contains("--undo"), paths, output, error);
                 case "clone" when args.Length > 2:
                     return Clone(args[1], args[2], args.Contains("--linked"), paths, output, error);
                 case "start" when args.Length > 1:
@@ -114,7 +118,7 @@ internal static class Commands
                         await MachineRunner.ScreenshotAsync(r, args[2]).ConfigureAwait(false);
                         output.WriteLine($"Saved {Path.GetFullPath(args[2])}");
                     });
-                case "inspect" or "detect" or "create" or "clone" or "start" or "status" or "shutdown" or "poweroff" or "suspend" or "discard-suspended" or "pause" or "resume" or "reset" or "screenshot":
+                case "inspect" or "detect" or "create" or "clone" or "template" or "start" or "status" or "shutdown" or "poweroff" or "suspend" or "discard-suspended" or "pause" or "resume" or "reset" or "screenshot":
                     error.WriteLine($"vmq {command}: something is missing ({(command == "detect" ? "the disc image" : command == "screenshot" ? "the machine and the file" : command == "clone" ? "the machine and the new name" : command == "create" ? "the name" : "the machine")}). Run 'vmq help' for the list.");
                     return 2;
                 default:
@@ -342,6 +346,35 @@ internal static class Commands
             LinuxEasyInstall = linuxEasy,
         });
         output.WriteLine($"Created {name} in {dir}.");
+        return 0;
+    }
+
+    private static int Template(string target, bool template, QontrolPaths paths, TextWriter output, TextWriter error)
+    {
+        var entry = Resolve(target, paths);
+        if (entry?.Machine is not { } m)
+        {
+            error.WriteLine($"vmq template: no machine called '{target}'.");
+            return 1;
+        }
+
+        if (MachineRunner.Find(m, paths) is not null)
+        {
+            error.WriteLine($"vmq template: power {m.Name} off first.");
+            return 1;
+        }
+
+        try
+        {
+            MachineLifecycle.SetTemplate(m, entry.Directory, template);
+        }
+        catch (InvalidOperationException ex)
+        {
+            error.WriteLine($"vmq template: {ex.Message}");
+            return 1;
+        }
+
+        output.WriteLine(template ? $"{m.Name} is a template: 'vmq clone {target} NEW --linked' makes machines from it." : $"{m.Name} is a machine again.");
         return 0;
     }
 

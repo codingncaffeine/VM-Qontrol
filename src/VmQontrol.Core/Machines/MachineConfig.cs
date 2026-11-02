@@ -21,6 +21,12 @@ public sealed record MachineConfig
 
     public string Notes { get; set; } = "";
 
+    /// <summary>
+    /// A template, as Workstation's: never started, only cloned, so every machine made from it begins in the same state.
+    /// Linked clones of a template share its disks.
+    /// </summary>
+    public bool IsTemplate { get; set; }
+
     public GuestConfig Guest { get; set; } = new();
 
     public FirmwareConfig Firmware { get; set; } = new();
