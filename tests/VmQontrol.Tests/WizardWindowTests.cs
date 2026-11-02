@@ -72,7 +72,11 @@ public sealed class WizardWindowTests
         Assert.Contains("Ubuntu", seen.summary, StringComparison.Ordinal);
         Assert.Equal("Linux", seen.GuestLabel.Split(' ')[0]);
         var machine = MachineStore.Load(Path.Combine(seen.Folder, "vm.json"));
-        Assert.Equal(16384, machine.MemoryMiB);
+        // What the wizard recommends depends on this computer; the rule does not: whole gigabytes, at most half of it.
+        var host = VmQontrol.Core.Hosts.HostProbe.Probe();
+        Assert.NotNull(machine.MemoryMiB);
+        Assert.Equal(0, machine.MemoryMiB!.Value % 1024);
+        Assert.InRange(machine.MemoryMiB.Value, 1024, Math.Max(1024, host.MemoryGB / 2 * 1024L));
         Assert.Contains(machine.Media, m => m.Role == MediaRole.Installer && m.File == iso);
         Assert.DoesNotContain(machine.Media, m => m.Role == MediaRole.Unattended);
     }

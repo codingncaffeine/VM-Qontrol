@@ -147,4 +147,12 @@ public sealed class EasyInstallTests
         Assert.Contains("AAAAA-BBBBB-CCCCC-DDDDD-EEEEE", WindowsAnswerFile.Build(pro with { ProductKey = "AAAAA-BBBBB-CCCCC-DDDDD-EEEEE" }, "10"), StringComparison.Ordinal);
         Assert.False(WindowsAnswerFile.HasKey(pro with { EditionName = "Windows 10 Home" }));
     }
+
+    [Theory]
+    [InlineData(16, 8192)]
+    [InlineData(15, 4096)] // quickemu's 8-16 GB band
+    [InlineData(8, 4096)]
+    [InlineData(64, 16384)]
+    public void Memory_is_recommended_in_whole_gigabytes_never_more_than_half_the_computer(int hostGb, long expected) =>
+        Assert.Equal(expected, Recommendations.For(new GuestConfig { Os = "linux" }, null, RecordedHost.Load() with { MemoryGB = hostGb }).MemoryMiB.Value);
 }

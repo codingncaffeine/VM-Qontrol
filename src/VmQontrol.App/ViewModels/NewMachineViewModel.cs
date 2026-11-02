@@ -483,8 +483,8 @@ public sealed partial class NewMachineViewModel : ObservableObject
         if (_host is null) return;
         var os = Guest.OsInfoId is { } id ? _osinfo?.Find(id) : null;
         var r = Recommendations.For(Guest, os, _host, GuestLabel);
-        MemoryGb = Math.Max(1, r.MemoryMiB.Value / 1024);
-        MemoryMinimumGb = Math.Max(1, r.MemoryMiB.Minimum / 1024);
+        MemoryGb = Math.Max(1, r.MemoryMiB.Value / 1024m);
+        MemoryMinimumGb = Math.Max(0.5m, r.MemoryMiB.Minimum / 1024m);
         MemoryMaximumGb = Math.Max(MemoryGb, _host.MemoryGB * 1000 / 1024 * 3 / 4);
         MemoryReason = r.MemoryMiB.Reason;
         Cores = r.Cores.Value;

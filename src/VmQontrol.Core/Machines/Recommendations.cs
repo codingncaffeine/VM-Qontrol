@@ -37,7 +37,8 @@ public static class Recommendations
             _ => osMinimum?.RamBytes is { } r ? r / (1024 * 1024) : 512,
         };
         var wanted = Math.Max(band, osRecommended?.RamBytes is { } rr ? rr / (1024 * 1024) : 0);
-        var cap = Math.Max(minimumMiB, host.MemoryGB * 1000L / 2);
+        // Half of this computer, in whole gigabytes (a 16 GB computer offers 8 GB, never 7.8).
+        var cap = Math.Max(minimumMiB, host.MemoryGB / 2 * 1024L);
         var memory = Math.Max(minimumMiB, Math.Min(wanted, cap));
         var memoryReason = memory == minimumMiB && wanted > memory
             ? $"{name} needs at least {Gb(minimumMiB)}; this computer cannot comfortably spare more."
