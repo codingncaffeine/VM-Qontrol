@@ -16,26 +16,33 @@ public partial class MachineView : UserControl
             _console = (DataContext as MachineViewModel)?.Console;
             if (_console is not null) _console.OutputAdded += OnOutput;
         };
-        if (this.FindControl<Button>("OpenUsb")?.Flyout is MenuFlyout usb) usb.Opening += (_, _) => FillUsbMenu(usb);
+        // One live collection: the menu's presenter takes its items when it opens, so the list is changed in place.
+        if (this.FindControl<Button>("OpenUsb")?.Flyout is MenuFlyout usb)
+        {
+            usb.ItemsSource = _usbItems;
+            usb.Opening += (_, _) => FillUsbMenu();
+        }
     }
 
     /// <summary>
     /// The USB menu, filled each time it opens: a placeholder at once, then every device plugged in (read on a worker),
     /// ticked when it is in the machine; Manage… opens the full panel (Always connect, details).
     /// </summary>
-    private void FillUsbMenu(MenuFlyout menu)
+    private readonly System.Collections.ObjectModel.ObservableCollection<Control> _usbItems = [];
+
+    private void FillUsbMenu()
     {
         if (DataContext is not MachineViewModel machine) return;
-        menu.Items.Clear();
-        menu.Items.Add(new MenuItem { Header = "Looking for devices…", IsEnabled = false });
+        _usbItems.Clear();
+        _usbItems.Add(new MenuItem { Header = "Looking for devices…", IsEnabled = false });
         _ = Task.Run(async () =>
         {
             var devices = await machine.UsbMenuAsync().ConfigureAwait(false);
             Ui.Post(() =>
             {
-                menu.Items.Clear();
+                _usbItems.Clear();
                 foreach (var item in UsbMenuItems(devices, machine.IsActive, (d, inMachine) => _ = Task.Run(() => machine.ToggleUsbAsync(d, inMachine)), () => machine.OpenUsbCommand.Execute(null)))
-                    menu.Items.Add(item);
+                    _usbItems.Add(item);
             });
         });
     }

@@ -170,6 +170,8 @@
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="{DynamicResource QRadius}" />
     <Setter Property="Padding" Value="4,6" />
+    <!-- A computer with many USB devices: the menu scrolls instead of covering the window. -->
+    <Setter Property="MaxHeight" Value="520" />
   </Style>
   <Style Selector="MenuFlyoutPresenter MenuItem">
     <Setter Property="CornerRadius" Value="{DynamicResource QRadiusSmall}" />
