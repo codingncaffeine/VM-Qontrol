@@ -192,6 +192,25 @@ public sealed class HostDriveTests
         }
     }
 
+    /// <summary>
+    /// Skips the test when udisks2 would need a password to open the loop device here (polkit's answer depends on the
+    /// session and on a recent password typed for it); the test never asks for one.
+    /// </summary>
+    internal static async Task SkipUnlessOpenableAsync(string device)
+    {
+        try
+        {
+            using var _ = await DriveAccess.OpenAsync(device, writable: true);
+        }
+        catch (DriveAccessException ex) when (ex.Message == DriveAccess.WouldAsk)
+        {
+            Assert.Skip("udisks2 would ask for a password to open a loop device in this session.");
+        }
+    }
+
+    [Fact]
+    public void Tests_never_let_polkit_ask_for_a_password() => Assert.False(DriveAccess.Interactive);
+
     private static MachineConfig Bare(string name) => new()
     {
         Name = name, MemoryMiB = 256, Cpu = new CpuConfig { Cores = 1 }, Firmware = new FirmwareConfig { Kind = FirmwareKind.Bios },
@@ -213,6 +232,7 @@ public sealed class HostDriveTests
         Assert.SkipWhen(loop is null, "udisks2 cannot set up a loop device here (no udisks2, or not the person at the computer).");
         Assert.False(File.Exists(loop.Device) && CanOpen(loop.Device), "control: this account must NOT be able to open the loop device itself, or udisks2 is not tested");
         var drive = Assert.Single(HostDrives.List(includeLoop: true), d => d.DevicePath == loop.Device);
+        await SkipUnlessOpenableAsync(loop.Device);
 
         var dir = Path.Combine(profile.Paths.DefaultLibrary, "hd");
         Directory.CreateDirectory(dir);
@@ -272,6 +292,7 @@ public sealed class HostDriveTests
         using var loop = LoopDrive.Create(Path.Combine(profile.Root, "drive.img"), "VMQ-HOSTDRIVE-01"u8.ToArray());
         Assert.SkipWhen(loop is null, "udisks2 cannot set up a loop device here.");
         var drive = Assert.Single(HostDrives.List(includeLoop: true), d => d.DevicePath == loop.Device);
+        await SkipUnlessOpenableAsync(loop.Device);
         var dir = Path.Combine(profile.Paths.DefaultLibrary, "alpine");
         Directory.CreateDirectory(dir);
         await QemuImg.RunAsync(ct, "create", "-q", "-f", "qcow2", "-b", image, "-F", "qcow2", Path.Combine(dir, "disk0.qcow2"));

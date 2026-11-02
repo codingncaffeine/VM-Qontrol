@@ -19,6 +19,15 @@ public static partial class DriveAccess
     private const int ORdOnly = 0, ORdWr = 2, OExcl = 0x80, OCloexec = 0x80000;
     private const string UDisks = "org.freedesktop.UDisks2";
 
+    /// <summary>
+    /// Whether polkit may ask for a password (it may for the person; never for a test, which must not put a dialog on
+    /// the desktop: a call that would need one fails at once instead).
+    /// </summary>
+    internal static bool Interactive { get; set; } = true;
+
+    /// <summary>The refusal a call gets when polkit would have asked for a password but <see cref="Interactive"/> is off.</summary>
+    public const string WouldAsk = "polkit would ask for an administrator's password to open the drive.";
+
     /// <summary>Opens <paramref name="devicePath"/> read-only, or for reading and writing when <paramref name="writable"/>.</summary>
     public static async Task<SafeFileHandle> OpenAsync(string devicePath, bool writable, CancellationToken ct = default)
     {
@@ -50,6 +59,7 @@ public static partial class DriveAccess
             throw new DriveAccessException(ex.ErrorName switch
             {
                 "org.freedesktop.UDisks2.Error.NotAuthorizedDismissed" => "The password prompt was closed, so the drive was not opened.",
+                "org.freedesktop.UDisks2.Error.NotAuthorizedCanObtain" or "org.freedesktop.UDisks2.Error.NotAuthorized" when !Interactive => WouldAsk,
                 "org.freedesktop.UDisks2.Error.NotAuthorized" or "org.freedesktop.UDisks2.Error.NotAuthorizedCanObtain" => "This account is not allowed to open the drive (polkit refused).",
                 "org.freedesktop.DBus.Error.ServiceUnknown" => "udisks2 is not running, so the drive cannot be opened for this account. The host check names the package.",
                 _ when ex.ErrorMessage.Contains("busy", StringComparison.OrdinalIgnoreCase) => $"{devicePath} is busy: this computer has it open (mounted, or used by another program). Unmount it first.",
@@ -65,7 +75,7 @@ public static partial class DriveAccess
     private static MessageBuffer OpenMessage(DBusConnection connection, string objectPath, bool writable)
     {
         using var writer = connection.GetMessageWriter();
-        writer.WriteMethodCallHeader(UDisks, objectPath, "org.freedesktop.UDisks2.Block", "OpenDevice", "sa{sv}", MessageFlags.AllowInteractiveAuthorization);
+        writer.WriteMethodCallHeader(UDisks, objectPath, "org.freedesktop.UDisks2.Block", "OpenDevice", "sa{sv}", Interactive ? MessageFlags.AllowInteractiveAuthorization : MessageFlags.None);
         writer.WriteString(writable ? "rw" : "r");
         var dict = writer.WriteDictionaryStart();
         if (writable)
@@ -73,6 +83,14 @@ public static partial class DriveAccess
             writer.WriteDictionaryEntryStart();
             writer.WriteString("flags");
             writer.WriteVariantInt32(OExcl);
+        }
+
+        if (!Interactive)
+        {
+            // udisks2 decides from this option, not from the message flag, whether polkit's agent may be asked.
+            writer.WriteDictionaryEntryStart();
+            writer.WriteString("auth.no_user_interaction");
+            writer.WriteVariantBool(true);
         }
 
         writer.WriteDictionaryEnd(dict);
