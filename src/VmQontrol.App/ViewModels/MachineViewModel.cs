@@ -342,6 +342,23 @@ public sealed partial class MachineViewModel : ObservableObject
     [RelayCommand]
     private void OpenUsb() => _shell.OpenUsb(this);
 
+    [RelayCommand]
+    private void OpenDrives() => _shell.OpenDrives(this);
+
+    public DrivesPanelViewModel OpenDrivesPanel() => _shell.OpenDrives(this);
+
+    /// <summary>Saves whether the machine connects a host drive at power on, and whether it may write to it. Call on a worker.</summary>
+    public void SetHostDrive(HostDrive drive, bool on, bool writable)
+    {
+        var before = Machine;
+        var list = before.HostDrives.Where(h => h.Path != drive.StablePath).ToList();
+        if (on) list.Add(new HostDriveConfig { Path = drive.StablePath, Name = drive.Describe(), Kind = drive.Kind, Writable = writable && drive.WriteRefusal is null });
+        var after = before with { HostDrives = list };
+        var target = IsQuickemu ? Path.Combine(HistoryDirectory, MachineStore.FileName) : Path.Combine(Folder, MachineStore.FileName);
+        SettingsHistory.Save(before, after, target, HistoryDirectory);
+        Ui.Post(() => Reload(after));
+    }
+
     /// <summary>The USB menu's devices: everything plugged in, and whether each is in this machine now. Call on a worker.</summary>
     public async Task<IReadOnlyList<(HostUsbDevice Device, bool InMachine)>> UsbMenuAsync()
     {
@@ -708,6 +725,7 @@ public sealed partial class MachineViewModel : ObservableObject
             {
                 _shell.Note(IsSuspended ? $"{Name} carried on where it was." : openScreen ? $"{Name} is running." : $"{Name} is running in the background. Open screen shows it.");
                 IsSuspended = false;
+                if (running.Notices.Count > 0) _shell.Show(new NoticeViewModel($"{Name} started without some host drives", running.Notices, isError: false));
             });
             if (openScreen && Machine.Display.Backend == DisplayBackend.Spice) OpenScreen();
         }

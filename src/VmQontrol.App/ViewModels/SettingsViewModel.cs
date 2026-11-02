@@ -84,6 +84,37 @@ public sealed class UsbRuleRow(UsbDevice device)
     public string Id => $"{Device.VendorId}:{Device.ProductId}";
 }
 
+/// <summary>A drive of this computer the machine connects at every power on.</summary>
+public sealed class HostDriveRow(HostDriveConfig drive)
+{
+    public HostDriveConfig Drive { get; } = drive;
+
+    public string Name => Drive.Name.Length > 0 ? Drive.Name : Drive.Path;
+
+    public string Detail => $"{(Drive.Writable ? "Writable" : "Read-only")} · {Drive.Path}";
+
+    public Avalonia.Media.Geometry? Icon =>
+        Avalonia.Application.Current?.TryGetResource(Drive.Kind == VmQontrol.Core.Devices.HostDriveKind.Optical ? "IconDisc" : "IconDisk", null, out var g) == true ? g as Avalonia.Media.Geometry : null;
+}
+
+/// <summary>A serial port of this computer: handed to the machine at power on or not, and whether this account may open it.</summary>
+public sealed partial class SerialPortRow(VmQontrol.Core.Devices.HostSerialPort port, bool connected, SettingsViewModel owner) : ObservableObject
+{
+    public VmQontrol.Core.Devices.HostSerialPort Port { get; } = port;
+
+    public string Name => Port.Description;
+
+    public string Detail => $"{Port.DevicePath} · {(Port.IsUsb ? "USB adapter" : "on the board")}{(Port.Accessible ? "" : $" · needs the {Port.Group ?? "serial"} group")}";
+
+    public bool NeedsAccess => !Port.Accessible;
+
+    [ObservableProperty]
+    private bool _connected = connected;
+
+    [RelayCommand]
+    private Task GiveAccessAsync() => owner.GiveSerialAccessAsync(this);
+}
+
 /// <summary>A forwarded port: a port on this computer that reaches a port in the machine.</summary>
 public sealed partial class ForwardRow(PortForward forward) : ObservableObject
 {
@@ -99,7 +130,7 @@ public sealed record SettingsSection(string Key, string Title, string Group)
     private static readonly Dictionary<string, string> Icons = new()
     {
         ["general"] = "IconInfo", ["memory"] = "IconMemory", ["processors"] = "IconCpu", ["disks"] = "IconDisk", ["media"] = "IconDisc",
-        ["network"] = "IconNetwork", ["usb"] = "IconUsb", ["sound"] = "IconSound", ["display"] = "IconScreen", ["input"] = "IconKeyboard",
+        ["network"] = "IconNetwork", ["usb"] = "IconUsb", ["hostdrives"] = "IconDisk", ["sound"] = "IconSound", ["display"] = "IconScreen", ["input"] = "IconKeyboard",
         ["firmware"] = "IconShield", ["serial"] = "IconTerminal", ["boot"] = "IconBoot", ["shares"] = "IconFolder",
         ["autoprotect"] = "IconClock", ["advanced"] = "IconCode", ["history"] = "IconHistory",
     };
@@ -140,6 +171,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         new("media", "CD/DVD and floppy", "Hardware"),
         new("network", "Network", "Hardware"),
         new("usb", "USB", "Hardware"),
+        new("hostdrives", "Host drives", "Hardware"),
         new("sound", "Sound", "Hardware"),
         new("display", "Display", "Hardware"),
         new("input", "Keyboard and mouse", "Hardware"),
@@ -201,7 +233,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public IReadOnlyList<Option> Pointers { get; } = [new(null, "Automatic"), new("tablet", "Tablet (pointer follows your mouse exactly)"), new("usb", "USB mouse"), new("ps2", "PS/2 mouse"), new("virtio", "VirtIO")];
 
-    public IReadOnlyList<Option> SerialOptions { get; } = [new(null, "Automatic (off for Windows and macOS)"), new("on", "On: shown in the Console tab"), new("off", "Off")];
+    public IReadOnlyList<Option> SerialOptions { get; } = [new(null, "Automatic"), new("on", "On: shown in the Console tab"), new("off", "Off")];
 
     public IReadOnlyList<Option> AutoProtectIntervals { get; } =
         [new("15", "Every 15 minutes"), new("30", "Every 30 minutes"), new("60", "Every hour"), new("240", "Every 4 hours"), new("1440", "Every day")];
@@ -250,6 +282,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         foreach (var sh in m.Shares) Shares.Add(new ShareRow(sh));
         UsbController = UsbControllers.FirstOrDefault(o => o.Value == m.Usb.Controller) ?? UsbControllers[0];
         foreach (var u in m.Usb.Passthrough) UsbRules.Add(new UsbRuleRow(u));
+        foreach (var d in m.HostDrives) HostDrives.Add(new HostDriveRow(d));
+        LoadSerialPorts(m);
         SoundCard = SoundCards.FirstOrDefault(o => o.Value == m.Audio.Device) ?? SoundCards[0];
         DisplayBackend = DisplayBackends.First(o => o.Value == m.Display.Backend.ToString());
         DisplayDevice = DisplayDevices.FirstOrDefault(o => o.Value == m.Display.Device) ?? DisplayDevices[0];
@@ -352,6 +386,66 @@ public sealed partial class SettingsViewModel : ObservableObject
     // USB, sound, display, input, serial
     [ObservableProperty] private Option _usbController;
     public ObservableCollection<UsbRuleRow> UsbRules { get; } = [];
+
+    public ObservableCollection<HostDriveRow> HostDrives { get; } = [];
+
+    /// <summary>This computer's serial ports, each ticked when the machine takes it; listed on a worker when the dialog opens.</summary>
+    public ObservableCollection<SerialPortRow> SerialPorts { get; } = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSerialNote))]
+    private string _serialNote = "";
+
+    public bool HasSerialNote => SerialNote.Length > 0;
+
+    public bool NoSerialPorts => SerialPorts.Count == 0;
+
+    private void LoadSerialPorts(MachineConfig m) => _ = Task.Run(() =>
+    {
+        var ports = VmQontrol.Core.Devices.HostSerial.List();
+        Ui.Post(() =>
+        {
+            SerialPorts.Clear();
+            foreach (var p in ports) SerialPorts.Add(new SerialPortRow(p, m.HostSerialPorts.Any(h => h.Path == p.StablePath || h.Path == p.DevicePath), this));
+            // Saved ports that are not plugged in now stay saved (an adapter in another USB port next time).
+            foreach (var h in m.HostSerialPorts.Where(h => ports.All(p => p.StablePath != h.Path && p.DevicePath != h.Path)))
+                SerialPorts.Add(new SerialPortRow(new VmQontrol.Core.Devices.HostSerialPort { Name = h.Path, DevicePath = h.Path, StablePath = h.Path, Description = h.Name.Length > 0 ? $"{h.Name} (not connected)" : h.Path, Accessible = true }, true, this));
+            OnPropertyChanged(nameof(NoSerialPorts));
+        });
+    });
+
+    /// <summary>Joins the group that owns serial ports through polkit; the membership takes effect at the next sign-in.</summary>
+    public async Task GiveSerialAccessAsync(SerialPortRow row)
+    {
+        var group = row.Port.Group ?? "uucp";
+        var user = Environment.UserName;
+        if (VmQontrol.Core.Devices.HostSerial.Listed(group, user))
+        {
+            Ui.Post(() => SerialNote = $"You are in the {group} group already; it takes effect when you sign out and back in.");
+            return;
+        }
+
+        Ui.Post(() => SerialNote = $"Asking for the password to add you to the {group} group…");
+        var why = await VmQontrol.Core.Devices.HostSerial.JoinAsync(group).ConfigureAwait(false);
+        Ui.Post(() => SerialNote = why is null
+            ? $"You are in the {group} group now. Sign out and back in once; then the machine can use {row.Name}."
+            : $"You were not added to the {group} group: {why}.");
+    }
+
+    [RelayCommand]
+    private void RemoveHostDrive(HostDriveRow row) => HostDrives.Remove(row);
+
+    /// <summary>The host drives panel, over these settings; what it saved is read back here when it closes, so the two never disagree.</summary>
+    [RelayCommand]
+    private void ChooseHostDrives()
+    {
+        var panel = _machine.OpenDrivesPanel();
+        panel.Closed += () => Ui.Post(() =>
+        {
+            HostDrives.Clear();
+            foreach (var d in _machine.Machine.HostDrives) HostDrives.Add(new HostDriveRow(d));
+        });
+    }
 
     /// <summary>A device to add by its id ("046d:c52b"), for one that is not plugged in now.</summary>
     [ObservableProperty]
@@ -469,6 +563,8 @@ public sealed partial class SettingsViewModel : ObservableObject
             Serial = Serial.Value switch { "on" => true, "off" => false, _ => null },
             ExtraArgs = ExtraArgs.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList(),
             Shares = Shares.Where(x => x.Path.Trim().Length > 0).Select(x => x.ToConfig()).ToList(),
+            HostDrives = HostDrives.Select(d => d.Drive).ToList(),
+            HostSerialPorts = SerialPorts.Where(p => p.Connected).Select(p => new HostSerialConfig { Path = p.Port.StablePath, Name = p.Port.Description.Replace(" (not connected)", "", StringComparison.Ordinal) }).ToList(),
             Devices = new DevicesConfig
             {
                 Rng = Rng ? null : false,

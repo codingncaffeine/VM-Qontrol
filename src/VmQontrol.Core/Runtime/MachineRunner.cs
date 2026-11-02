@@ -14,6 +14,9 @@ public sealed record RunningMachine(string Id, string Name, int Pid, string Runt
     public Task BootAssist { get; init; } = Task.CompletedTask;
 
     public RuntimePaths Paths => new(RuntimeDirectory);
+
+    /// <summary>What did not come with the machine (a host drive that is unplugged or was refused); plain sentences.</summary>
+    public IReadOnlyList<string> Notices { get; init; } = [];
 }
 
 /// <summary>The machine could not be started; <see cref="Reasons"/> are plain sentences for the user.</summary>
@@ -80,6 +83,29 @@ public static class MachineRunner
                 Log.Warn($"{m.Name}: USB {refusal}");
         }
 
+        // A host serial port that is unplugged or that this account may not open would stop QEMU from starting at all:
+        // it is left out, and the notice says why.
+        var notices = new List<string>();
+        if (m.HostSerialPorts.Count > 0)
+        {
+            var ports = Devices.HostSerial.List();
+            var usable = new List<HostSerialConfig>();
+            foreach (var s in m.HostSerialPorts)
+            {
+                var label = s.Name.Length > 0 ? s.Name : s.Path;
+                // A port the list does not know (a pseudo-terminal, an unusual driver) is used as named when it opens.
+                if (Devices.HostSerial.Find(s.Path, ports) is not { } here)
+                {
+                    if (!s.Path.StartsWith("/dev/disk/", StringComparison.Ordinal) && Devices.HostSerial.CanOpen(s.Path)) usable.Add(s);
+                    else notices.Add($"{label} is not connected to this computer.");
+                }
+                else if (!here.Accessible) notices.Add($"{label} was left out: this account may not open it yet. The machine's Settings, Serial port, give access.");
+                else usable.Add(s with { Path = here.DevicePath });
+            }
+
+            m = m with { HostSerialPorts = usable };
+        }
+
         var nic = m.Nics.FirstOrDefault();
         var ssh = nic is { SshForward: true, Mode: NetMode.User or NetMode.Restricted } ? nic.SshHostPort ?? PortAllocator.FirstFree(22220) : null;
         if (nic is { SshForward: true, Mode: NetMode.User or NetMode.Restricted } && ssh is null)
@@ -133,13 +159,16 @@ public static class MachineRunner
                 throw new StartRefusedException([$"A shared folder could not be shared: {(await process.StandardError.ReadToEndAsync(ct).ConfigureAwait(false)).Trim()}"]);
         }
 
+        var hostDrives = m.HostDrives.Count > 0;
+
         // A suspended machine carries on from its saved state (the firmware screen means starting afresh instead).
         var resuming = MachineSuspend.IsSuspended(machineDirectory) && !options.FirmwareSetup;
         if (options.FirmwareSetup) MachineSuspend.Discard(machineDirectory);
         List<string> Args(IReadOnlyList<string> built)
         {
             var list = new List<string>(built);
-            if (options.Paused) list.Add("-S");
+            // Host drives plug in before the firmware runs, so the machine waits stopped until they are in.
+            if (options.Paused || (hostDrives && !resuming)) list.Add("-S");
             if (resuming) list.AddRange(["-incoming", "defer"]);
             // QEMU detaches once it is ready; until then its errors come back on stderr and the exit code says whether it started.
             list.Add("-daemonize");
@@ -186,6 +215,9 @@ public static class MachineRunner
 
         if (ssh is { } bound) PortAllocator.Release(bound);
         var pid = ReadPid(runtime.Pid) ?? throw new StartRefusedException(["QEMU started but wrote no process id."]);
+        // Before the boot helpers below: they press keys the firmware must see running.
+        if (hostDrives && !resuming) notices.AddRange(await ConnectHostDrivesAsync(m, runtime, run: !options.Paused, ct).ConfigureAwait(false));
+        else if (hostDrives) notices.Add("The host drives were not connected: a machine carrying on from a saved state keeps the hardware it was saved with.");
         var installing = !resuming && !(m.Disks.Count > 0 && DiskState.IsUsed(Full(m.Disks[0].File)))
                          && m.Media.Any(x => x.Role == MediaRole.Installer && x.Connect != Connect.Never);
         var assist = options.FirmwareSetup && !options.Paused
@@ -193,7 +225,7 @@ public static class MachineRunner
             : installing && m.Guest.Os is "windows" or "windows-server" && m.Firmware.Kind == FirmwareKind.Uefi && !options.Paused
                 ? PressKeysAsync(runtime, m.Name, "ret", 40, "start the installer")
                 : Task.CompletedTask;
-        var running = new RunningMachine(m.Id, m.Name, pid, runtime.Directory, machineDirectory, DateTimeOffset.Now, ssh) { BootAssist = assist };
+        var running = new RunningMachine(m.Id, m.Name, pid, runtime.Directory, machineDirectory, DateTimeOffset.Now, ssh) { BootAssist = assist, Notices = notices };
         await File.WriteAllTextAsync(runtime.Lock, JsonSerializer.Serialize(new JsonObject
         {
             ["id"] = m.Id,
@@ -230,6 +262,38 @@ public static class MachineRunner
         }
 
         return running;
+    }
+
+    /// <summary>
+    /// Plugs the machine's host drives in while it waits stopped (-S), then lets it run. A drive that is unplugged, busy or
+    /// refused is left out and named; the machine still starts, as a computer does with an empty USB port.
+    /// </summary>
+    private static async Task<IReadOnlyList<string>> ConnectHostDrivesAsync(MachineConfig m, RuntimePaths runtime, bool run, CancellationToken ct)
+    {
+        var notices = new List<string>();
+        await using var qmp = await QmpClient.ConnectAsync(runtime.Control, TimeSpan.FromSeconds(5), ct).ConfigureAwait(false);
+        try
+        {
+            foreach (var drive in m.HostDrives)
+            {
+                try
+                {
+                    await LiveHostDrives.AttachAsync(qmp, drive, ct).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is Devices.DriveAccessException or QmpException or IOException)
+                {
+                    var why = ex is QmpException q ? q.Description : ex.Message;
+                    Log.Warn($"{m.Name}: host drive {drive.Path} not connected: {why}");
+                    notices.Add(why);
+                }
+            }
+        }
+        finally
+        {
+            if (run) await qmp.ExecuteAsync("cont", ct: CancellationToken.None).ConfigureAwait(false);
+        }
+
+        return notices;
     }
 
     /// <summary>

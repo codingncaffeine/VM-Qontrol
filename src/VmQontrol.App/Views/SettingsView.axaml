@@ -516,6 +516,45 @@
           </Border>
         </StackPanel>
 
+        <!-- Host drives -->
+        <StackPanel Classes="section" IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=hostdrives}">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="Host drives" Classes="h1" />
+            <Border Grid.Column="1" Classes="badge-next"><TextBlock Text="Applies at next power on" /></Border>
+          </Grid>
+          <TextBlock Classes="help" Margin="0,0,0,4" TextWrapping="Wrap"
+                     Text="A disk, a partition or a disc drive of this computer, handed to the machine as a USB drive: every guest has drivers for it. Drives are read-only unless writing was allowed; writing is never offered for a drive this computer is using." />
+          <TextBlock Text="CONNECTED AT POWER ON" Classes="grouptitle" />
+          <Border Classes="group">
+            <StackPanel>
+              <ItemsControl x:Name="HostDriveSettings" ItemsSource="{Binding HostDrives}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:HostDriveRow">
+                    <Border Padding="18,12" BorderBrush="{DynamicResource QBorder}" BorderThickness="0,0,0,1">
+                      <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+                        <Border Classes="tile"><Path Classes="icon" Data="{Binding Icon}" /></Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                          <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                          <TextBlock Text="{Binding Detail}" Classes="help" FontFamily="monospace" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Detail}" />
+                        </StackPanel>
+                        <Button Grid.Column="2" Classes="tool" Content="Remove" VerticalAlignment="Center"
+                                Command="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).RemoveHostDriveCommand}" CommandParameter="{Binding}" />
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <Border Padding="18,14">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="28">
+                  <TextBlock Classes="help" Margin="0" VerticalAlignment="Center" TextWrapping="Wrap"
+                             Text="Drives are chosen from the list of this computer's drives, where one can also be connected to the running machine, and writing allowed." />
+                  <Button Grid.Column="1" Classes="tool" Content="Choose host drives…" Command="{Binding ChooseHostDrivesCommand}" VerticalAlignment="Center" />
+                </Grid>
+              </Border>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
         <!-- Sound -->
         <StackPanel Classes="section" IsVisible="{Binding SectionKey, Converter={x:Static vm:Text.Equal}, ConverterParameter=sound}">
           <Grid ColumnDefinitions="*,Auto">
@@ -712,11 +751,44 @@
               <Grid ColumnDefinitions="*,Auto">
                 <StackPanel>
                   <TextBlock Text="Serial port" Classes="label" />
-                  <TextBlock Text="Linux and BSD print their boot messages and a login prompt on it, shown in the machine's Console tab." Classes="help" />
+                  <TextBlock Text="Linux and BSD print their boot messages and a login prompt on it, shown in the machine's Console tab. Automatic: on for them, off for Windows and macOS." Classes="help" />
                 </StackPanel>
                 <ComboBox Grid.Column="1" ItemsSource="{Binding SerialOptions}" SelectedItem="{Binding Serial}" />
               </Grid>
             </Border>
+          </Border>
+          <TextBlock Text="THIS COMPUTER'S SERIAL PORTS" Classes="grouptitle" />
+          <Border Classes="group">
+            <StackPanel>
+              <ItemsControl x:Name="HostSerialPorts" ItemsSource="{Binding SerialPorts}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:SerialPortRow">
+                    <Border Padding="18,12" BorderBrush="{DynamicResource QBorder}" BorderThickness="0,0,0,1">
+                      <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="14">
+                        <Border Classes="tile"><Path Classes="icon" Data="{StaticResource IconTerminal}" /></Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                          <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                          <TextBlock Text="{Binding Detail}" Classes="help" FontFamily="monospace" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Detail}" />
+                        </StackPanel>
+                        <Button Grid.Column="2" Classes="tool" Content="Give me access…" Command="{Binding GiveAccessCommand}" IsVisible="{Binding NeedsAccess}" VerticalAlignment="Center"
+                                ToolTip.Tip="Adds you to the group that owns serial ports (your password is asked for); it takes effect when you next sign in" />
+                        <ToggleSwitch Grid.Column="3" IsChecked="{Binding Connected}" OnContent="" OffContent="" VerticalAlignment="Center"
+                                      ToolTip.Tip="Hand this port to the machine at power on, as its next COM port" />
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <Border Padding="18,14">
+                <StackPanel Spacing="6">
+                  <TextBlock Classes="help" Margin="0" TextWrapping="Wrap" IsVisible="{Binding NoSerialPorts}"
+                             Text="This computer has no serial ports the system found." />
+                  <TextBlock Classes="help" Margin="0" TextWrapping="Wrap"
+                             Text="A port that is switched on becomes the machine's next COM port (COM2 when the console above has COM1). A USB serial adapter can instead be passed whole from USB devices, with the guest's own driver." />
+                  <TextBlock x:Name="SerialNote" Text="{Binding SerialNote}" IsVisible="{Binding HasSerialNote}" TextWrapping="Wrap" FontWeight="SemiBold" />
+                </StackPanel>
+              </Border>
+            </StackPanel>
           </Border>
         </StackPanel>
 

@@ -118,6 +118,7 @@
               <MenuItem x:Name="PowerOnBackground" Header="Power on in the background" Command="{Binding PowerOnInBackgroundCommand}" IsVisible="{Binding CanPowerOn}" ToolTip.Tip="Start without opening the screen; Open screen shows it whenever you want" />
               <MenuItem Header="Power on to firmware setup" Command="{Binding PowerOnToFirmwareCommand}" IsVisible="{Binding CanOpenFirmware}" />
               <MenuItem Header="Discard suspended state…" Command="{Binding DiscardSuspendedCommand}" IsVisible="{Binding CanDiscardSuspended}" />
+              <MenuItem x:Name="OpenDrivesItem" Header="Host drives…" Command="{Binding OpenDrivesCommand}" ToolTip.Tip="Hand a disk, a partition or a disc drive of this computer to the machine" />
               <MenuItem Header="Send Ctrl+Alt+Del" Command="{Binding SendCtrlAltDelCommand}" IsVisible="{Binding IsActive}" />
               <MenuItem Header="Save a screenshot" Command="{Binding SaveScreenshotCommand}" IsVisible="{Binding IsActive}" />
               <MenuItem Header="Clone…" Command="{Binding CloneCommand}" IsVisible="{Binding !IsTemplate}" />

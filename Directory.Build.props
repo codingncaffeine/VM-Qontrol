@@ -36,6 +36,7 @@
   <!-- Central package versions: bump here and nowhere else. -->
   <PropertyGroup>
     <AvaloniaVersion>12.1.4</AvaloniaVersion>
+    <TmdsDBusVersion>0.94.1</TmdsDBusVersion>
     <MvvmToolkitVersion>8.4.2</MvvmToolkitVersion>
     <TestSdkVersion>18.10.1</TestSdkVersion>
     <XunitVersion>3.2.2</XunitVersion>

@@ -208,6 +208,62 @@
       </Border>
     </Panel>
 
+    <!-- Host drives for one machine. -->
+    <Panel x:Name="DrivesLayer" IsVisible="{Binding DrivesPanel, Converter={x:Static ObjectConverters.IsNotNull}}" Background="{DynamicResource QScrim}">
+      <Border Classes="card" Width="900" MaxHeight="720" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="24,20"
+              DataContext="{Binding DrivesPanel}" x:DataType="vm:DrivesPanelViewModel" BoxShadow="0 12 40 0 #60000000">
+        <DockPanel>
+          <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,12">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="{Binding Title}" Classes="h1" />
+              <Button Grid.Column="1" Classes="icononly" Command="{Binding RefreshCommand}" ToolTip.Tip="Look again (after plugging a drive in or inserting a disc)">
+                <Path Classes="icon" Data="{StaticResource IconRefresh}" />
+              </Button>
+            </Grid>
+            <TextBlock Text="{Binding Explain}" Classes="muted" TextWrapping="Wrap" />
+          </StackPanel>
+          <StackPanel DockPanel.Dock="Bottom" Spacing="10" Margin="0,12,0,0">
+            <TextBlock x:Name="DrivesNote" Text="{Binding Note}" TextWrapping="Wrap" />
+            <Button Classes="secondary" Content="Done" Command="{Binding CloseCommand}" HorizontalAlignment="Right" />
+          </StackPanel>
+          <ScrollViewer Padding="0,0,14,0">
+            <StackPanel Spacing="10">
+              <ItemsControl x:Name="HostDriveRows" ItemsSource="{Binding Drives}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:DriveRow">
+                    <Border BorderBrush="{DynamicResource QBorder}" BorderThickness="0,0,0,1" Padding="0,12">
+                      <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" ColumnSpacing="14" Margin="{Binding Indent}">
+                        <Border Width="36" Height="36" CornerRadius="9" Background="{DynamicResource QAccentSoft}" VerticalAlignment="Center" IsVisible="{Binding !IsPartition}">
+                          <Path Classes="icon" Data="{Binding Icon}" Stroke="{DynamicResource QAccent}" Width="18" Height="18" Stretch="Uniform" />
+                        </Border>
+                        <Border Width="36" Height="36" VerticalAlignment="Center" IsVisible="{Binding IsPartition}">
+                          <Path Classes="icon" Data="M8,4 L8,14 L18,14" Stroke="{DynamicResource QTextMuted}" Width="14" Height="14" Stretch="Uniform" />
+                        </Border>
+                        <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                          <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}" />
+                          <TextBlock Text="{Binding Detail}" Classes="muted" FontFamily="monospace" FontSize="{DynamicResource QFontSmall}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Detail}" />
+                        </StackPanel>
+                        <Border Grid.Column="2" Classes="pill" Classes.ok="{Binding InMachine}" Classes.warn="{Binding IsBusyHere}" Classes.muted="{Binding IsHere}" VerticalAlignment="Center">
+                          <TextBlock Text="{Binding StateText}" />
+                        </Border>
+                        <CheckBox Grid.Column="3" Content="Writable" IsChecked="{Binding Writable}" IsEnabled="{Binding CanWrite}" VerticalAlignment="Center"
+                                  ToolTip.Tip="{Binding WriteTip}" ToolTip.ShowOnDisabled="True" />
+                        <CheckBox Grid.Column="4" Content="Always connect" IsChecked="{Binding Automatic}" VerticalAlignment="Center"
+                                  ToolTip.Tip="Connect this drive to the machine at every power on (it is left out, with a note, when it is not plugged in)" />
+                        <Panel Grid.Column="5" Width="96" VerticalAlignment="Center">
+                          <Button Classes="tool" Content="{Binding ActionText}" Command="{Binding ToggleCommand}" IsEnabled="{Binding CanMove}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+                        </Panel>
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </ScrollViewer>
+        </DockPanel>
+      </Border>
+    </Panel>
+
     <!-- Move to folder: a name, or one of the folders that exist. -->
     <Panel x:Name="FolderLayer" IsVisible="{Binding FolderPrompt, Converter={x:Static ObjectConverters.IsNotNull}}" Background="{DynamicResource QScrim}">
       <Border Classes="card" Width="440" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="22,18"

@@ -145,6 +145,7 @@ public sealed class SettingsTests
             Shares = [new ShareConfig { Path = share, Tag = "projects" }],
             Usb = new UsbConfig { Passthrough = [new UsbDevice("046d", "c52b", "Logitech USB Receiver")] },
             Nics = [new NicConfig { Forwards = [new PortForward("tcp", 8080, 80)] }],
+            HostDrives = [new HostDriveConfig { Path = "/dev/disk/by-id/usb-Kingston_DataTraveler_3.0_E0D55EA5-0:0", Name = "Kingston DataTraveler 3.0 (removable disk, 28.9 GiB)", Writable = true }],
         }, Path.Combine(dir, "vm.json"));
         var before = File.ReadAllText(Path.Combine(dir, "vm.json"));
 
@@ -182,7 +183,7 @@ public sealed class SettingsTests
             return pages;
         });
 
-        Assert.Equal(17, seen.Count);
+        Assert.Equal(18, seen.Count);
         Assert.All(seen, p => Assert.True(p.Visible == 1, $"{p.Key}: {p.Visible} pages visible"));
         Assert.Equal(before, File.ReadAllText(Path.Combine(dir, "vm.json")));
     }

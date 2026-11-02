@@ -55,6 +55,12 @@ public sealed record MachineConfig
     /// <summary>Serial port as a socket for the console tab; <c>null</c> = the profile's choice (off for Windows and macOS).</summary>
     public bool? Serial { get; set; }
 
+    /// <summary>Drives of this computer connected to the machine at power on (a whole disk, a partition or a disc drive).</summary>
+    public List<HostDriveConfig> HostDrives { get; set; } = [];
+
+    /// <summary>Serial ports of this computer the machine uses, as its next COM ports (connected at power on).</summary>
+    public List<HostSerialConfig> HostSerialPorts { get; set; } = [];
+
     /// <summary>Folders of this computer shared with the machine (virtiofs).</summary>
     public List<ShareConfig> Shares { get; set; } = [];
 
@@ -331,6 +337,30 @@ public sealed record UsbConfig
 
     /// <summary>Host devices handed to the guest at power on.</summary>
     public List<UsbDevice> Passthrough { get; set; } = [];
+}
+
+/// <summary>
+/// A drive of this computer the machine uses: <see cref="Path"/> is its /dev/disk/by-id link, so it is the same drive
+/// after a reboot or a replug. Read-only unless the person typed its name to allow writing.
+/// </summary>
+public sealed record HostDriveConfig
+{
+    public required string Path { get; set; }
+
+    /// <summary>What the person saw when they chose it ("Kingston DataTraveler (removable disk, 29.3 GiB)").</summary>
+    public string Name { get; set; } = "";
+
+    public Devices.HostDriveKind Kind { get; set; } = Devices.HostDriveKind.Disk;
+
+    public bool Writable { get; set; }
+}
+
+/// <summary>A serial port of this computer handed to the machine; <see cref="Path"/> is its by-id link or device.</summary>
+public sealed record HostSerialConfig
+{
+    public required string Path { get; set; }
+
+    public string Name { get; set; } = "";
 }
 
 public sealed record ImportSource(string Kind, string Path);

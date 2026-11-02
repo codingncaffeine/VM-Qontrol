@@ -112,6 +112,21 @@ public sealed partial class ShellViewModel : ObservableObject
         UsbPanel = panel;
     }
 
+    /// <summary>The host drives panel while it is open.</summary>
+    [ObservableProperty]
+    private DrivesPanelViewModel? _drivesPanel;
+
+    public DrivesPanelViewModel OpenDrives(MachineViewModel machine)
+    {
+        var panel = new DrivesPanelViewModel(machine, this);
+        panel.Closed += () => Ui.Post(() =>
+        {
+            if (DrivesPanel == panel) DrivesPanel = null;
+        });
+        DrivesPanel = panel;
+        return panel;
+    }
+
     public void OpenSettings(MachineViewModel machine) => _ = Task.Run(async () =>
     {
         var host = await HostAsync().ConfigureAwait(false);

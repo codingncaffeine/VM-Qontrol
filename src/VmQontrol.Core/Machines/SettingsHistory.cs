@@ -58,6 +58,8 @@ public static class SettingsHistory
         Diff("Crash reporting", before.Devices.CrashReporting, after.Devices.CrashReporting, v => (bool?)v == true ? "on" : "off");
         Diff("Boot order", before.Devices.BootOrder, after.Devices.BootOrder, v => v?.ToString() ?? "automatic");
         Diff("Boot menu", before.Devices.BootMenu, after.Devices.BootMenu, v => (bool?)v == true ? "on" : "off");
+        Diff("Host drives", string.Join(", ", before.HostDrives.Select(d => $"{d.Name}{(d.Writable ? " (writable)" : "")}")), string.Join(", ", after.HostDrives.Select(d => $"{d.Name}{(d.Writable ? " (writable)" : "")}")), v => (v as string) is { Length: > 0 } t ? t : "none");
+        Diff("Host serial ports", string.Join(", ", before.HostSerialPorts.Select(x => x.Name.Length > 0 ? x.Name : x.Path)), string.Join(", ", after.HostSerialPorts.Select(x => x.Name.Length > 0 ? x.Name : x.Path)), v => (v as string) is { Length: > 0 } t ? t : "none");
         Diff("Shared folders", string.Join(", ", before.Shares.Select(x => $"{x.Tag}={x.Path}{(x.ReadOnly ? " (read only)" : "")}")), string.Join(", ", after.Shares.Select(x => $"{x.Tag}={x.Path}{(x.ReadOnly ? " (read only)" : "")}")), v => (v as string) is { Length: > 0 } t ? t : "none");
         Diff("AutoProtect", AutoProtectText(before.AutoProtect), AutoProtectText(after.AutoProtect));
         Diff("Extra QEMU arguments", string.Join(' ', before.ExtraArgs), string.Join(' ', after.ExtraArgs), v => (v as string) is { Length: > 0 } s ? s : "none");

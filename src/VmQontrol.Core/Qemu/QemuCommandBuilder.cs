@@ -399,10 +399,11 @@ public static class QemuCommandBuilder
             }
         }
 
-        // VM Qontrol's own machines always have this controller for devices handed over while running: an xHCI one takes
+        // VM Qontrol's own machines always have this controller for devices handed over while running (USB devices, and
+        // host drives, which plug in as USB disks): an xHCI one takes
         // every speed, where a USB 2 (EHCI) bus refuses the full-speed mice, keyboards and receivers most people pass
         // (QEMU: "speed mismatch", then it resets the device over and over). Imported quickemu machines keep quickemu's line.
-        if (m.Usb.Passthrough.Count > 0 || (m.ImportedFrom is null && os != "macos"))
+        if (m.Usb.Passthrough.Count > 0 || m.HostDrives.Count > 0 || (m.ImportedFrom is null && os != "macos"))
         {
             args.AddRange(["-device", $"{passthroughController},id=hostpass"]);
             foreach (var u in m.Usb.Passthrough)
@@ -446,6 +447,9 @@ public static class QemuCommandBuilder
         args.AddRange(["-monitor", "none", "-qmp", $"unix:{ctx.Runtime.Qmp},server=on,wait=off", "-qmp", $"unix:{ctx.Runtime.Control},server=on,wait=off"]);
         var serial = m.Serial ?? os is not ("macos" or "windows" or "windows-server");
         args.AddRange(serial ? ["-serial", $"unix:{ctx.Runtime.Serial},server=on,wait=off"] : ["-serial", "none"]);
+        // Host serial ports follow as the machine's next COM ports (COM2 when the console has COM1).
+        for (var i = 0; i < m.HostSerialPorts.Count; i++)
+            args.AddRange(["-chardev", $"serial,id=hostserial{i},path={m.HostSerialPorts[i].Path}", "-device", $"isa-serial,chardev=hostserial{i},id=hostserial{i}-port"]);
         args.AddRange(m.ExtraArgs);
 
         return new QemuLaunch

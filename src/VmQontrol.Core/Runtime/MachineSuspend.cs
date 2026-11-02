@@ -61,6 +61,12 @@ public static class MachineSuspend
         var file = StatePath(running.MachineDirectory);
         var partial = file + ".partial";
         await using var qmp = await MachineRunner.ControlAsync(running, ct).ConfigureAwait(false);
+        if ((await LiveHostDrives.ListAsync(qmp, ct).ConfigureAwait(false)).Count > 0)
+        {
+            // The host may change the drive while the machine sleeps, and the guest would wake to a disk that moved under it.
+            throw new QmpException("migrate", "HostDrive", "A machine using a drive of this computer cannot be suspended: the drive could change while it sleeps. Disconnect the host drives first, or shut the machine down.");
+        }
+
         var wasRunning = (await qmp.ExecuteAsync("query-status", ct: ct).ConfigureAwait(false))?["status"]?.GetValue<string>() == "running";
         try
         {

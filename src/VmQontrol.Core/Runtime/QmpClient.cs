@@ -23,7 +23,7 @@ public sealed class QmpException(string command, string @class, string descripti
 /// their answers by id, events arrive on <see cref="Events"/>, and <see cref="Closed"/> completes when QEMU goes away.
 /// Everything here is asynchronous; nothing blocks the caller's thread.
 /// </summary>
-public sealed class QmpClient : IAsyncDisposable
+public sealed partial class QmpClient : IAsyncDisposable
 {
     private readonly Socket _socket;
     private readonly StreamReader _reader;
@@ -107,6 +107,79 @@ public sealed class QmpClient : IAsyncDisposable
         using var _ = ct.Register(() => answer.TrySetCanceled(ct));
         return await answer.Task.ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Runs a command that takes an open file with it (add-fd, getfd): the file goes over the socket as SCM_RIGHTS with
+    /// the command's bytes, which is how QEMU, running as the person, is handed a drive only udisks2 could open.
+    /// </summary>
+    public async Task<JsonNode?> ExecuteWithFileAsync(string command, JsonObject? arguments, System.Runtime.InteropServices.SafeHandle file, CancellationToken ct = default)
+    {
+        var id = Interlocked.Increment(ref _nextId);
+        var answer = new TaskCompletionSource<JsonNode?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _pending[id] = (command, answer);
+        var message = new JsonObject { ["execute"] = command, ["id"] = id };
+        if (arguments is not null) message["arguments"] = arguments;
+        var bytes = Encoding.UTF8.GetBytes(message.ToJsonString() + "\n");
+        await _writeGate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            if (_closed.Task.IsCompleted) throw new IOException("The machine has stopped; its QMP socket is closed.");
+            var added = false;
+            file.DangerousAddRef(ref added);
+            try
+            {
+                // The socket is non-blocking underneath; a one-line command fits the buffer, so a retry is the rare case.
+                for (var tries = 0; ; tries++)
+                {
+                    var sent = SendWithFile(_socket.Handle, bytes, (int)file.DangerousGetHandle());
+                    if (sent == bytes.Length) break;
+                    var errno = System.Runtime.InteropServices.Marshal.GetLastPInvokeError();
+                    if (sent < 0 && errno == 11 && tries < 100) { await Task.Delay(10, ct).ConfigureAwait(false); continue; }
+                    _pending.TryRemove(id, out _);
+                    throw new IOException(sent < 0 ? $"The file could not be handed to QEMU ({System.Runtime.InteropServices.Marshal.GetPInvokeErrorMessage(errno)})." : "QEMU took only part of the command.");
+                }
+            }
+            finally
+            {
+                if (added) file.DangerousRelease();
+            }
+        }
+        finally
+        {
+            _writeGate.Release();
+        }
+
+        using var cancel = ct.Register(() => answer.TrySetCanceled(ct));
+        return await answer.Task.ConfigureAwait(false);
+    }
+
+    private static unsafe long SendWithFile(nint socket, byte[] bytes, int fd)
+    {
+        // struct msghdr and one cmsghdr carrying an int, laid out for 64-bit Linux (glibc and musl agree on little-endian).
+        const int Level = 1 /* SOL_SOCKET */, Type = 1 /* SCM_RIGHTS */;
+        var control = stackalloc byte[24]; // CMSG_SPACE(sizeof(int))
+        new Span<byte>(control, 24).Clear();
+        *(ulong*)control = 20; // CMSG_LEN(sizeof(int))
+        *(int*)(control + 8) = Level;
+        *(int*)(control + 12) = Type;
+        *(int*)(control + 16) = fd;
+        fixed (byte* data = bytes)
+        {
+            var iov = stackalloc nint[2];
+            iov[0] = (nint)data;
+            iov[1] = bytes.Length;
+            var msg = stackalloc byte[56];
+            new Span<byte>(msg, 56).Clear();
+            *(nint*)(msg + 16) = (nint)iov;
+            *(ulong*)(msg + 24) = 1;
+            *(nint*)(msg + 32) = (nint)control;
+            *(ulong*)(msg + 40) = 24;
+            return SendMsg((int)socket, (nint)msg, 0x4000 /* MSG_NOSIGNAL */);
+        }
+    }
+
+    [System.Runtime.InteropServices.LibraryImport("libc", EntryPoint = "sendmsg", SetLastError = true)]
+    private static partial long SendMsg(int socket, nint message, int flags);
 
     /// <summary>A command whose answer QEMU may not send because it exits first (quit).</summary>
     public async Task ExecuteExpectingExitAsync(string command, CancellationToken ct = default)

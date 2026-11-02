@@ -17,7 +17,8 @@ what it does and what the recommended value is. No daemon, no root, and one port
 - A settings dialog covering the whole machine: memory, processors, disks, CD/DVD, network, USB, sound, display,
   TPM, firmware and boot options. Each setting shows when it takes effect.
 - Snapshots taken while a machine runs, full and linked clones, templates, suspend and resume.
-- USB passthrough, shared folders, clipboard sharing, NAT with port forwarding, bridged networking and private
+- USB passthrough, host drives (a whole disk, a partition or a CD/DVD drive, read-only unless you allow writing),
+  host serial ports, shared folders, clipboard sharing, NAT with port forwarding, bridged networking and private
   networks between machines.
 - PCI passthrough with CPU pinning and hugepages for gaming and GPU workloads.
 - Import from quickemu, VMware, VirtualBox, OVA and libvirt.

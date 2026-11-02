@@ -2,7 +2,14 @@
 
   <PropertyGroup>
     <RootNamespace>VmQontrol.Core</RootNamespace>
+    <!-- sendmsg with SCM_RIGHTS (handing QEMU an open drive) and open(2) with O_EXCL. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The D-Bus client Avalonia already ships on Linux; udisks2 opens host drives through it. -->
+    <PackageReference Include="Tmds.DBus.Protocol" Version="$(TmdsDBusVersion)" />
+  </ItemGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="VmQontrol.Tests" />

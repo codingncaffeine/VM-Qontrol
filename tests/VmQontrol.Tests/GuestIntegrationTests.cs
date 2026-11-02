@@ -15,7 +15,7 @@ namespace VmQontrol.Tests;
 [Trait("Tier", "Guest")]
 public sealed class GuestIntegrationTests
 {
-    private const string Image = "nocloud_alpine-3.22.4-x86_64-bios-cloudinit-r0.qcow2";
+    internal const string Image = "nocloud_alpine-3.22.4-x86_64-bios-cloudinit-r0.qcow2";
 
     [Fact]
     public async Task The_guest_agent_reports_the_guest_address_and_shuts_the_guest_down()
