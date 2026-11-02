@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Stand-in QEMU for the quickemu oracle: capability queries go to the real QEMU, a launch only records its argv
+# (one argument per line) and stays alive long enough for quickemu's liveness check. It never boots anything.
+real=/usr/bin/qemu-system-x86_64
+for a in "$@"; do case "$a" in --version|help|-M) exec "$real" "$@";; esac; done
+printf '%s\n' "$@" > "${ORACLE_ARGS:?}"
+sleep 1

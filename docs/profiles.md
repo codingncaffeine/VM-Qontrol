@@ -1,0 +1,29 @@
+# Guest profiles and the QEMU command line
+
+VM Qontrol builds each machine's QEMU command with quickemu 4.9.9's rules, so a machine behaves as it would under
+quickemu: the same CPU model and flags per guest (Hyper-V enlightenments for Windows, the macOS CPU and SMC setup),
+the same chipset, display adapter, sound card, network adapter, USB controllers and firmware.
+
+The test suite holds this to quickemu itself. `tools/record-oracle.sh` runs the real quickemu on 20 reference
+configurations (every guest family and the main options) with a stand-in QEMU that only records its arguments, and
+`QuickemuParityTests` requires the same command, argument for argument, from VM Qontrol for the same host.
+
+## Where VM Qontrol differs on purpose
+
+| What | quickemu | VM Qontrol | Why |
+|------|----------|------------|-----|
+| Machine control | Human monitor on a socket | `-monitor none` and QMP on a socket | QMP is QEMU's machine interface: power, media, USB, snapshots and events without parsing text. |
+| Sockets and process id | Beside the disk | The user's runtime folder (`$XDG_RUNTIME_DIR/vmqontrol/<id>`) | A socket path may not exceed 107 bytes, and machine folders on long paths would break. |
+| Serial port | Socket beside the disk, or off for Windows and macOS | Socket in the runtime folder, same on/off rule | Same reason; it feeds the console tab. |
+| Display backend | GTK window by default | SPICE and an external viewer by default | One viewer for every machine, with clipboard, USB redirection and resizing. |
+| 3D acceleration | On unless `glxinfo` reports an old GPU | On when the host has a GPU render node | Without a render node QEMU cannot start with GL at all. |
+| Headless launch | Not offered | No screen, no SPICE, `-audiodev none` | Background work and every test run, which must never make a sound. |
+| Imported machines | — | Read in place, never written | A quickemu machine keeps working with quickemu. |
+
+## Known quickemu behaviour kept for parity
+
+- An odd number of cores on an SMT host loses one (5 cores → 2 cores × 2 threads). Kept so an imported machine
+  starts with the same topology; new VM Qontrol machines will offer even counts.
+- The installer disc is attached only while the system disk is unused (smaller than 1.5 MB), as quickemu decides.
+- Firmware discovery takes the last matching pair in quickemu's list. Alpine's `/usr/share/OVMF/OVMF_CODE.fd` is
+  included; Alpine has no Secure Boot build.

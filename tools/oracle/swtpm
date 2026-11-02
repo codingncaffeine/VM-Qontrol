@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Stand-in swtpm: makes the control socket quickemu waits for, then goes away. No TPM state is written.
+while [ $# -gt 0 ]; do case "$1" in --ctrl) path="${2#*path=}"; shift;; esac; shift; done
+python3 -I -c 'import socket,sys,time; s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.listen(1); time.sleep(3)' "$path" &
+sleep 0.1

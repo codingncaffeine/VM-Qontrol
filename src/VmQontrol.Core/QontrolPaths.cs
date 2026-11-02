@@ -13,6 +13,24 @@ public sealed record QontrolPaths(string Config, string Data, string State, stri
 
     public string SettingsFile => Path.Combine(Config, "settings.json");
 
+    /// <summary>
+    /// Where running machines keep their sockets: the user's runtime folder (short, private, cleared at log out), because a
+    /// unix socket path may not exceed 107 bytes. An isolated profile gets a folder of its own beside the real one.
+    /// </summary>
+    public string Runtime
+    {
+        get
+        {
+            var baseDir = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR") is { Length: > 0 } r ? r : Path.Combine(Path.GetTempPath(), $"vmqontrol-{Environment.UserName}");
+            if (!Isolated) return Path.Combine(baseDir, "vmqontrol");
+            var tag = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(Config)))[..8].ToLowerInvariant();
+            return Path.Combine(baseDir, $"vmqontrol-{tag}");
+        }
+    }
+
+    /// <summary>A machine's runtime folder, named by the start of its id.</summary>
+    public string RuntimeFor(string machineId) => Path.Combine(Runtime, machineId[..Math.Min(12, machineId.Length)]);
+
     public static QontrolPaths ForCurrentUser() => FromEnvironment(Environment.GetEnvironmentVariable);
 
     public static QontrolPaths FromEnvironment(Func<string, string?> env)
