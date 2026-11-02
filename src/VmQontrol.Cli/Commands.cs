@@ -7,6 +7,7 @@ using VmQontrol.Core.Machines;
 using VmQontrol.Core.Media;
 using VmQontrol.Core.OsInfo;
 using VmQontrol.Core.Qemu;
+using VmQontrol.Core.Runtime;
 
 namespace VmQontrol.Cli;
 
@@ -20,10 +21,19 @@ internal static class Commands
           inspect MACHINE     Show a machine's settings, anything missing, and the QEMU command it would start.
                               MACHINE is a quickemu .conf, a vm.json, a machine folder, or a name in the library.
           detect FILE.iso     Name the operating system on an installer disc.
+          create NAME [--iso FILE] [--os OS] [--disk-gib N] [--memory-mib N] [--cores N] [--bios] [--tpm]
+                              Make a new machine in the library (the system is detected from --iso when --os is left out).
+          start MACHINE [--headless] [--paused]
+                              Power the machine on. With a screen, the viewer opens.
+          status MACHINE      Whether the machine is running, its process and its SSH port.
+          shutdown MACHINE    Ask the guest to shut down (the power button).
+          poweroff MACHINE    Turn the machine off at once (unsaved work in the guest is lost).
+          pause / resume / reset MACHINE
+          screenshot MACHINE FILE.png
           version             Print the version and licence.
           help                Show this help.
 
-        Nothing here starts, changes or writes a machine.
+        list, inspect and detect only read. MACHINE is a name in the library, a vm.json, a machine folder or a quickemu .conf.
         VMQONTROL_HOME=DIR keeps every setting, log and machine under DIR instead of the usual folders.
         """;
 
@@ -49,15 +59,58 @@ internal static class Commands
                     return Inspect(args[1], paths, host(), output, error);
                 case "detect" when args.Length > 1:
                     return Detect(args[1], output, error);
-                case "inspect" or "detect":
-                    error.WriteLine($"vmq {command}: say which {(command == "inspect" ? "machine" : "file")}. Run 'vmq help' for the list.");
+                case "create" when args.Length > 1:
+                    return Create(args[1..], paths, output, error);
+                case "start" when args.Length > 1:
+                    return Start(args[1], args.Contains("--headless"), args.Contains("--paused"), paths, host, output, error);
+                case "status" when args.Length > 1:
+                    return Control(args[1], paths, output, error, async r =>
+                    {
+                        output.WriteLine($"{r.Name}: {await MachineRunner.StatusAsync(r).ConfigureAwait(false)} (process {r.Pid}){(r.SshPort is { } p ? $", SSH: ssh -p {p} user@localhost" : "")}");
+                        // The guest's own addresses, when its agent answers (it is absent until guest tools are installed).
+                        var addresses = await new GuestAgentClient(r.Paths.Agent).AddressesAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+                        if (addresses is { Count: > 0 }) output.WriteLine($"  Guest addresses: {string.Join(", ", addresses.Select(a => $"{a.Address} ({a.Interface})"))}");
+                        else if (addresses is null) output.WriteLine("  Guest agent: not answering (install the guest tools to see the guest's address)");
+                    }, notRunning: 0);
+                case "shutdown" when args.Length > 1:
+                    return Control(args[1], paths, output, error, r => MachineRunner.ShutDownAsync(r));
+                case "poweroff" when args.Length > 1:
+                    return Control(args[1], paths, output, error, async r =>
+                    {
+                        await MachineRunner.PowerOffAsync(r).ConfigureAwait(false);
+                        await MachineRunner.WaitForExitAsync(r, TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+                    });
+                case "pause" when args.Length > 1:
+                    return Control(args[1], paths, output, error, r => MachineRunner.PauseAsync(r));
+                case "resume" when args.Length > 1:
+                    return Control(args[1], paths, output, error, r => MachineRunner.ResumeAsync(r));
+                case "reset" when args.Length > 1:
+                    return Control(args[1], paths, output, error, r => MachineRunner.ResetAsync(r));
+                case "screenshot" when args.Length > 2:
+                    return Control(args[1], paths, output, error, async r =>
+                    {
+                        await MachineRunner.ScreenshotAsync(r, args[2]).ConfigureAwait(false);
+                        output.WriteLine($"Saved {Path.GetFullPath(args[2])}");
+                    });
+                case "inspect" or "detect" or "create" or "start" or "status" or "shutdown" or "poweroff" or "pause" or "resume" or "reset" or "screenshot":
+                    error.WriteLine($"vmq {command}: something is missing ({(command == "detect" ? "the disc image" : command == "screenshot" ? "the machine and the file" : command == "create" ? "the name" : "the machine")}). Run 'vmq help' for the list.");
                     return 2;
                 default:
                     error.WriteLine($"vmq: unknown command '{command}'. Run 'vmq help' for the list.");
                     return 2;
             }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        catch (StartRefusedException ex)
+        {
+            foreach (var reason in ex.Reasons) error.WriteLine($"vmq {command}: {reason}");
+            return 1;
+        }
+        catch (QmpException ex)
+        {
+            error.WriteLine($"vmq {command}: {ex.Message}");
+            return 1;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or System.Net.Sockets.SocketException)
         {
             error.WriteLine($"vmq {command}: {ex.Message}");
             return 1;
@@ -152,6 +205,92 @@ internal static class Commands
             : $"System:    {match.Os.Name} or {string.Join(" or ", match.Ambiguous.Select(a => a.Name))} (the disc label fits each)");
         var guest = GuestMapping.ToGuest(match.Os);
         output.WriteLine($"Profile:   {guest.Os}{(guest.Release.Length > 0 ? " " + guest.Release : "")}");
+        return 0;
+    }
+
+    private static int Create(string[] args, QontrolPaths paths, TextWriter output, TextWriter error)
+    {
+        var name = args[0];
+        string? Option(string flag) => Array.IndexOf(args, flag) is var i and >= 0 && i + 1 < args.Length ? args[i + 1] : null;
+        long? Number(string flag) => long.TryParse(Option(flag), NumberStyles.None, CultureInfo.InvariantCulture, out var v) ? v : null;
+        var dir = System.IO.Path.Combine(paths.DefaultLibrary, name);
+        if (Directory.Exists(dir))
+        {
+            error.WriteLine($"vmq create: {dir} already exists.");
+            return 1;
+        }
+
+        var iso = Option("--iso") is { } f ? System.IO.Path.GetFullPath(f) : null;
+        var guest = new GuestConfig { Os = Option("--os") ?? "linux" };
+        if (iso is not null && Option("--os") is null)
+        {
+            if (IsoVolume.Read(iso) is not { } volume)
+            {
+                error.WriteLine($"vmq create: {iso} is not a disc image.");
+                return 1;
+            }
+
+            if (OsInfoDb.LoadInstalled()?.Identify(volume) is { } match)
+            {
+                guest = GuestMapping.ToGuest(match.Os);
+                output.WriteLine($"Detected {match.Os.Name}{(match.Ambiguous.Count > 0 ? $" (or {string.Join(", ", match.Ambiguous.Select(a => a.Name))}; pass --os to choose)" : "")}.");
+            }
+        }
+
+        var isWindows = guest.Os is "windows" or "windows-server";
+        var machine = new MachineConfig
+        {
+            Name = name,
+            Guest = guest,
+            MemoryMiB = Number("--memory-mib"),
+            Cpu = new CpuConfig { Cores = (int?)Number("--cores") },
+            Firmware = new FirmwareConfig { Kind = args.Contains("--bios") ? FirmwareKind.Bios : FirmwareKind.Uefi },
+            Tpm = args.Contains("--tpm") || (isWindows && guest.Release == "11"),
+            Disks = [new DiskConfig { File = "disk0.qcow2", SizeGiB = Number("--disk-gib") ?? (isWindows ? 64 : guest.Os == "macos" ? 128 : 32) }],
+            Media = iso is null ? [] : [new MediaConfig { Role = MediaRole.Installer, File = iso, Connect = Connect.UntilInstalled }],
+        };
+        Directory.CreateDirectory(dir);
+        MachineStore.Save(machine, System.IO.Path.Combine(dir, MachineStore.FileName));
+        output.WriteLine($"Created {name} in {dir}.");
+        return 0;
+    }
+
+    private static int Start(string target, bool headless, bool paused, QontrolPaths paths, Func<HostCapabilities> host, TextWriter output, TextWriter error)
+    {
+        var entry = Resolve(target, paths);
+        if (entry?.Machine is not { } m)
+        {
+            error.WriteLine($"vmq start: no machine called '{target}'.");
+            return 1;
+        }
+
+        var running = MachineRunner.StartAsync(m, entry.Directory, paths, host(), new StartOptions { Headless = headless, Paused = paused }).GetAwaiter().GetResult();
+        output.WriteLine($"{m.Name} is running (process {running.Pid}){(running.SshPort is { } p ? $"; SSH: ssh -p {p} user@localhost" : "")}.");
+        if (!headless && m.Display.Backend == DisplayBackend.Spice)
+        {
+            var viewer = ViewerLauncher.Open(m, running);
+            output.WriteLine(viewer is null ? "No SPICE viewer is installed (spicy or remote-viewer); install one to see the screen." : $"Opened {viewer}.");
+        }
+
+        return 0;
+    }
+
+    private static int Control(string target, QontrolPaths paths, TextWriter output, TextWriter error, Func<RunningMachine, Task> action, int notRunning = 1)
+    {
+        var entry = Resolve(target, paths);
+        if (entry?.Machine is not { } m)
+        {
+            error.WriteLine($"vmq: no machine called '{target}'.");
+            return 1;
+        }
+
+        if (MachineRunner.Find(m, paths) is not { } running)
+        {
+            (notRunning == 0 ? output : error).WriteLine($"{m.Name}: off");
+            return notRunning;
+        }
+
+        action(running).GetAwaiter().GetResult();
         return 0;
     }
 

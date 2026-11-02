@@ -51,44 +51,7 @@ public static class LibraryScanner
         return entries;
     }
 
-    /// <summary>
-    /// What is missing for a machine to start: its disk may be made at first power on, but an installer, a firmware file or
-    /// a boot loader that is not there means it cannot boot. Each problem is one plain sentence.
-    /// </summary>
-    public static IReadOnlyList<string> MissingFiles(LibraryEntry entry)
-    {
-        var problems = new List<string>();
-        if (entry.Machine is not { } m) return problems;
-        string Full(string f) => System.IO.Path.IsPathRooted(f) ? f : System.IO.Path.Combine(entry.Directory, f);
-        var diskMissing = m.Disks.Count == 0 || !File.Exists(Full(m.Disks[0].File));
-        foreach (var media in m.Media)
-        {
-            var path = Full(media.File);
-            if (media.Role == MediaRole.Unattended) continue;
-            if (!File.Exists(path))
-            {
-                if (media.Role is MediaRole.Installer or MediaRole.Recovery && !diskMissing) continue;
-                problems.Add($"The {Describe(media.Role)} {path} is missing.");
-            }
-            else if (media.Role is MediaRole.Installer or MediaRole.Drivers && System.IO.Path.GetExtension(path).Equals(".iso", StringComparison.OrdinalIgnoreCase)
-                     && new FileInfo(path).Length > 0 && Media.IsoVolume.Read(path) is null)
-            {
-                problems.Add($"The {Describe(media.Role)} {path} is not a disc image (it may be an error page saved by a failed download).");
-            }
-        }
-
-        if (diskMissing && !m.Media.Any(x => x.Role is MediaRole.Installer or MediaRole.Recovery && File.Exists(Full(x.File))))
-            problems.Add("The machine has no disk yet and nothing to install from.");
-        return problems;
-    }
-
-    private static string Describe(MediaRole role) => role switch
-    {
-        MediaRole.Installer => "installer disc",
-        MediaRole.Drivers => "driver disc",
-        MediaRole.Recovery => "recovery image",
-        MediaRole.Bootloader => "boot loader",
-        MediaRole.Floppy => "floppy image",
-        _ => "file",
-    };
+    /// <summary>What is missing for a library entry's machine to start (see <see cref="MachineChecks.Problems"/>).</summary>
+    public static IReadOnlyList<string> MissingFiles(LibraryEntry entry) =>
+        entry.Machine is { } m ? MachineChecks.Problems(m, entry.Directory) : [];
 }

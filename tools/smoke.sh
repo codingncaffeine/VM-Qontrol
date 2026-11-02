@@ -18,10 +18,27 @@ export VMQONTROL_HOME="$out/home"
 export PULSE_SERVER=unix:/nonexistent/vmq PIPEWIRE_REMOTE=/nonexistent/vmq
 unset WAYLAND_DISPLAY WAYLAND_SOCKET
 export VMQONTROL_WAYLAND=0
+runtime_before=$(ls -d "${XDG_RUNTIME_DIR:-/tmp}"/vmqontrol-* 2>/dev/null)
+# The isolated profile's runtime folder is outside scratch (socket paths must stay short); remove it if left empty.
+tidy() { for d in "${XDG_RUNTIME_DIR:-/tmp}"/vmqontrol-*/; do d=${d%/}; [ -d "$d" ] && ! grep -qxF "$d" <<< "$runtime_before" && rmdir "$d" 2>/dev/null; done; true; }
+trap tidy EXIT
 fail() { echo "SMOKE FAILED: $*"; [ -n "${apid:-}" ] && kill -TERM "$apid" 2>/dev/null; exit 1; }
 
 "$cli" version | head -1 | grep -q '^vmq ' || fail "vmq version"
 echo "smoke: vmq answers"
+
+# A whole machine life through vmq: headless and silent, 256 MB, BIOS, a blank disk (it boots to the firmware screen).
+"$cli" create smoke-vm --bios --memory-mib 256 --cores 1 > /dev/null || fail "vmq create"
+qemu-img create -q -f qcow2 "$VMQONTROL_HOME/VMs/smoke-vm/disk0.qcow2" 1G || fail "qemu-img create"
+"$cli" start smoke-vm --headless | grep -q "is running" || fail "vmq start"
+"$cli" status smoke-vm | grep -q ": running" || fail "vmq status did not say running"
+"$cli" screenshot smoke-vm "$out/screen.png" > /dev/null || fail "vmq screenshot"
+head -c 8 "$out/screen.png" | od -An -tx1 | grep -q "89 50 4e 47" || fail "the screenshot is not a PNG"
+"$cli" pause smoke-vm && "$cli" status smoke-vm | grep -q ": paused" || fail "vmq pause"
+"$cli" resume smoke-vm && "$cli" status smoke-vm | grep -q ": running" || fail "vmq resume"
+"$cli" poweroff smoke-vm || fail "vmq poweroff"
+"$cli" status smoke-vm | grep -q ": off" || fail "the machine is still running after poweroff"
+echo "smoke: a machine started, paused, resumed, took a screenshot and powered off through vmq"
 
 xvfb-run -a dbus-run-session --config-file="$root/packaging/isolated-bus.conf" "$app" > "$out/app.out" 2>&1 &
 wrapper=$!

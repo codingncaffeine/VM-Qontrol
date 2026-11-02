@@ -39,7 +39,7 @@ jobs:
         run: dotnet build VmQontrol.slnx -c Release -warnaserror
 
       - name: Tests (push tier)
-        run: dotnet test tests/VmQontrol.Tests -c Release --no-build --filter "Tier!=Window&Tier!=Integration"
+        run: dotnet test tests/VmQontrol.Tests -c Release --no-build --filter "Tier!=Window&Tier!=Integration&Tier!=Guest"
 
   # musl: Alpine users build from source with Alpine's own SDK; every push proves that still works.
   alpine:
@@ -59,4 +59,4 @@ jobs:
         run: dotnet build VmQontrol.slnx -c Release -warnaserror
 
       - name: Tests (push tier)
-        run: dotnet test tests/VmQontrol.Tests -c Release --no-build --filter "Tier!=Window&Tier!=Integration"
+        run: dotnet test tests/VmQontrol.Tests -c Release --no-build --filter "Tier!=Window&Tier!=Integration&Tier!=Guest"

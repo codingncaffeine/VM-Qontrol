@@ -25,12 +25,15 @@ internal sealed class TestProfile : IDisposable
 
     public void Dispose()
     {
-        try
+        foreach (var dir in new[] { Root, Paths.Runtime })
         {
-            Directory.Delete(Root, recursive: true);
-        }
-        catch (IOException)
-        {
+            try
+            {
+                if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            }
+            catch (IOException)
+            {
+            }
         }
     }
 

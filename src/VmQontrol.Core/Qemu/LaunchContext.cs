@@ -5,7 +5,14 @@ namespace VmQontrol.Core.Qemu;
 /// <summary>Where a running machine's sockets and process id live: a short path, because a unix socket path is limited to 107 bytes.</summary>
 public sealed record RuntimePaths(string Directory)
 {
+    /// <summary>The supervisor's QMP connection (held for the machine's life by the app).</summary>
     public string Qmp => Path.Combine(Directory, "qmp.sock");
+
+    /// <summary>A second QMP socket for short commands (vmq), because one QMP socket serves one client at a time.</summary>
+    public string Control => Path.Combine(Directory, "control.sock");
+
+    /// <summary>Written while the machine runs: who started it and from where.</summary>
+    public string Lock => Path.Combine(Directory, "lock.json");
 
     public string Spice => Path.Combine(Directory, "spice.sock");
 

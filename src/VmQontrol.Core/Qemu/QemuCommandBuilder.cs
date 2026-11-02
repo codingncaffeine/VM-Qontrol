@@ -388,7 +388,7 @@ public static class QemuCommandBuilder
         }
 
         // VM Qontrol talks to the machine over QMP only; the human monitor is off.
-        args.AddRange(["-monitor", "none", "-qmp", $"unix:{ctx.Runtime.Qmp},server=on,wait=off"]);
+        args.AddRange(["-monitor", "none", "-qmp", $"unix:{ctx.Runtime.Qmp},server=on,wait=off", "-qmp", $"unix:{ctx.Runtime.Control},server=on,wait=off"]);
         var serial = m.Serial ?? os is not ("macos" or "windows" or "windows-server");
         args.AddRange(serial ? ["-serial", $"unix:{ctx.Runtime.Serial},server=on,wait=off"] : ["-serial", "none"]);
         args.AddRange(m.ExtraArgs);

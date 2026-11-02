@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # The gate before a push: the build with warnings as errors, then the suite N times (default 2) on two CPUs, offline
 # and with no sound server. Run it in the background and keep working; push once it says GATE PASSED.
-# Every push runs every test but the Window and Integration tiers; --full adds them, as a release needs.
+# Every push runs every test but the Window, Integration and Guest tiers; --full adds them, as a release needs
+# (the Guest tier boots a real Alpine guest: run tools/fetch-test-image.sh once first).
 #   tools/gate.sh [--full] [N]
 set -uo pipefail
 cd "$(dirname "$0")/.."
 source tools/env.sh
-tier=(--filter "Tier!=Window&Tier!=Integration")
+tier=(--filter "Tier!=Window&Tier!=Integration&Tier!=Guest")
 if [ "${1:-}" = --full ]; then tier=(); shift; fi
 N="${1:-2}"
 # Silent by construction: no sound server reachable from any test.

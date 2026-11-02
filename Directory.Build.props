@@ -26,6 +26,13 @@
     <VersionPrefix>0.0.1</VersionPrefix>
   </PropertyGroup>
 
+  <!-- VM Qontrol runs QEMU/KVM and is Linux-only (glibc and musl): Unix-only APIs need no per-call guards. -->
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.Versioning.SupportedOSPlatformAttribute">
+      <_Parameter1>linux</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
   <!-- Central package versions: bump here and nowhere else. -->
   <PropertyGroup>
     <AvaloniaVersion>12.1.4</AvaloniaVersion>
