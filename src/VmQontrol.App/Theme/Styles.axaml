@@ -53,4 +53,121 @@
     <Setter Property="Background" Value="{DynamicResource QSurface}" />
     <Setter Property="BorderBrush" Value="{DynamicResource QBorder}" />
   </Style>
+  <!-- Icons -->
+  <Style Selector="Path.icon">
+    <Setter Property="Stroke" Value="{Binding $parent[ContentPresenter].Foreground, FallbackValue={StaticResource QText}}" />
+    <Setter Property="StrokeThickness" Value="1.8" />
+    <Setter Property="StrokeLineCap" Value="Round" />
+    <Setter Property="StrokeJoin" Value="Round" />
+    <Setter Property="Stretch" Value="Uniform" />
+    <Setter Property="Width" Value="16" />
+    <Setter Property="Height" Value="16" />
+  </Style>
+  <Style Selector="Path.icon.favourite">
+    <Setter Property="Stroke" Value="{DynamicResource QWarning}" />
+    <Setter Property="Fill" Value="{DynamicResource QWarning}" />
+  </Style>
+  <Style Selector="Path.iconfill">
+    <Setter Property="Fill" Value="{Binding $parent[ContentPresenter].Foreground, FallbackValue={StaticResource QText}}" />
+    <Setter Property="Stretch" Value="Uniform" />
+    <Setter Property="Width" Value="14" />
+    <Setter Property="Height" Value="14" />
+  </Style>
+
+  <!-- Toolbar buttons: icon and words, quiet until hovered. -->
+  <Style Selector="Button.tool">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{DynamicResource QBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource QRadius}" />
+    <Setter Property="Padding" Value="12,8" />
+  </Style>
+  <Style Selector="Button.tool:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource QSurfaceRaised}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource QAccent}" />
+  </Style>
+  <Style Selector="Button.danger">
+    <Setter Property="Foreground" Value="{DynamicResource QDanger}" />
+  </Style>
+  <Style Selector="Button.primary.danger">
+    <Setter Property="Background" Value="{DynamicResource QDanger}" />
+    <Setter Property="Foreground" Value="{DynamicResource QOnAccent}" />
+  </Style>
+  <Style Selector="Button.icononly">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Padding" Value="6" />
+    <Setter Property="CornerRadius" Value="{DynamicResource QRadiusSmall}" />
+  </Style>
+
+  <!-- Guest badge -->
+  <Style Selector="Border.badge">
+    <Setter Property="Background" Value="{DynamicResource QBadgeOther}" />
+    <Setter Property="CornerRadius" Value="10" />
+  </Style>
+  <Style Selector="Border.badge.windows"><Setter Property="Background" Value="{DynamicResource QBadgeWindows}" /></Style>
+  <Style Selector="Border.badge.linux"><Setter Property="Background" Value="{DynamicResource QBadgeLinux}" /></Style>
+  <Style Selector="Border.badge.apple"><Setter Property="Background" Value="{DynamicResource QBadgeApple}" /></Style>
+  <Style Selector="Border.badge.bsd"><Setter Property="Background" Value="{DynamicResource QBadgeBsd}" /></Style>
+  <Style Selector="Border.badge TextBlock">
+    <Setter Property="Foreground" Value="White" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!-- State dot and pill -->
+  <Style Selector="Ellipse.state">
+    <Setter Property="Width" Value="8" />
+    <Setter Property="Height" Value="8" />
+    <Setter Property="Fill" Value="{DynamicResource QTextMuted}" />
+  </Style>
+  <Style Selector="Ellipse.state.running"><Setter Property="Fill" Value="{DynamicResource QSuccess}" /></Style>
+  <Style Selector="Ellipse.state.paused"><Setter Property="Fill" Value="{DynamicResource QWarning}" /></Style>
+  <Style Selector="Border.pill">
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="Padding" Value="10,3" />
+    <Setter Property="Background" Value="{DynamicResource QSurfaceRaised}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource QBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="Border.pill TextBlock">
+    <Setter Property="FontSize" Value="{DynamicResource QFontSmall}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="Border.pill.ok TextBlock"><Setter Property="Foreground" Value="{DynamicResource QSuccess}" /></Style>
+  <Style Selector="Border.pill.warn TextBlock"><Setter Property="Foreground" Value="{DynamicResource QWarning}" /></Style>
+  <Style Selector="Border.pill.bad TextBlock"><Setter Property="Foreground" Value="{DynamicResource QDanger}" /></Style>
+  <Style Selector="Border.pill.muted TextBlock"><Setter Property="Foreground" Value="{DynamicResource QTextMuted}" /></Style>
+
+  <!-- Cards with a status edge -->
+  <Style Selector="Border.card.problem">
+    <Setter Property="BorderBrush" Value="{DynamicResource QWarning}" />
+  </Style>
+  <Style Selector="Border.code">
+    <Setter Property="Background" Value="{DynamicResource QBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource QBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource QRadiusSmall}" />
+    <Setter Property="Padding" Value="10,6" />
+  </Style>
+  <Style Selector="Border.code TextBlock">
+    <Setter Property="FontFamily" Value="monospace" />
+    <Setter Property="FontSize" Value="13" />
+  </Style>
+
+  <!-- Sidebar list -->
+  <Style Selector="ListBox.library">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="ListBox.library ListBoxItem">
+    <Setter Property="Padding" Value="8,7" />
+    <Setter Property="Margin" Value="0,1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource QRadius}" />
+  </Style>
+  <Style Selector="ListBox.library ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource QAccentSoft}" />
+  </Style>
+  <Style Selector="ListBox.library ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource QSurfaceRaised}" />
+  </Style>
 </Styles>

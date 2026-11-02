@@ -12,6 +12,9 @@ public class App : Application
     /// <summary>The profile's folders, set by <see cref="Program"/> (or a test) before the app starts.</summary>
     public static QontrolPaths? Paths { get; set; }
 
+    /// <summary>The settings, read by <see cref="Program"/> before the UI thread starts.</summary>
+    public static AppSettings? Settings { get; set; }
+
     /// <summary>Starts the UI stall watch once Avalonia owns the UI thread (set by <see cref="Program"/>, not by tests).</summary>
     public static bool WatchUiThread { get; set; }
 
@@ -31,7 +34,13 @@ public class App : Application
     {
         // The watch posts to the dispatcher from its own thread, so it may only start once the dispatcher exists here.
         if (WatchUiThread) UiStallWatch.Start(Environment.GetEnvironmentVariable("VMQONTROL_UI_TRACE") == "1");
-        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop) desktop.MainWindow = new MainWindow();
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            var paths = Paths ?? QontrolPaths.ForCurrentUser();
+            var shell = new ViewModels.ShellViewModel(paths, Settings ?? AppSettings.Load(paths));
+            desktop.MainWindow = new MainWindow { DataContext = shell };
+            _ = shell.StartAsync();
+        }
         base.OnFrameworkInitializationCompleted();
     }
 }

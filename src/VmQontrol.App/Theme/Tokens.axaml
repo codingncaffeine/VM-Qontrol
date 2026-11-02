@@ -18,6 +18,8 @@
       <Color x:Key="QSuccessColor">#3DD68C</Color>
       <Color x:Key="QWarningColor">#F5B83D</Color>
       <Color x:Key="QDangerColor">#FF5D5D</Color>
+      <Color x:Key="QScrimColor">#B3000000</Color>
+      <Color x:Key="QScreenColor">#05070B</Color>
     </ResourceDictionary>
     <ResourceDictionary x:Key="Light">
       <Color x:Key="QBackgroundColor">#F4F6FA</Color>
@@ -34,6 +36,8 @@
       <Color x:Key="QSuccessColor">#16A365</Color>
       <Color x:Key="QWarningColor">#B7790A</Color>
       <Color x:Key="QDangerColor">#D93636</Color>
+      <Color x:Key="QScrimColor">#80141A24</Color>
+      <Color x:Key="QScreenColor">#10141C</Color>
     </ResourceDictionary>
   </ResourceDictionary.ThemeDictionaries>
 
@@ -51,6 +55,15 @@
   <SolidColorBrush x:Key="QSuccess" Color="{DynamicResource QSuccessColor}" />
   <SolidColorBrush x:Key="QWarning" Color="{DynamicResource QWarningColor}" />
   <SolidColorBrush x:Key="QDanger" Color="{DynamicResource QDangerColor}" />
+
+  <SolidColorBrush x:Key="QScrim" Color="{DynamicResource QScrimColor}" />
+  <SolidColorBrush x:Key="QScreen" Color="{DynamicResource QScreenColor}" />
+  <!-- Guest family badges: the same in both themes, white letters on each. -->
+  <SolidColorBrush x:Key="QBadgeWindows" Color="#2F7BE5" />
+  <SolidColorBrush x:Key="QBadgeLinux" Color="#D9961A" />
+  <SolidColorBrush x:Key="QBadgeApple" Color="#7D828C" />
+  <SolidColorBrush x:Key="QBadgeBsd" Color="#C8423B" />
+  <SolidColorBrush x:Key="QBadgeOther" Color="#7A5AE0" />
 
   <CornerRadius x:Key="QRadiusSmall">6</CornerRadius>
   <CornerRadius x:Key="QRadius">10</CornerRadius>

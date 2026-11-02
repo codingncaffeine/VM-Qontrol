@@ -37,6 +37,7 @@ internal static class Program
         Log.Initialize("vmqontrol", paths.Logs);
         if (paths.Isolated) Log.Info($"Isolated profile under {QontrolPaths.HomeVariable}");
         App.Paths = paths;
+        App.Settings = AppSettings.Load(paths);
         App.WatchUiThread = true;
 
         try

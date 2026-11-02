@@ -1,40 +1,103 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:VmQontrol.App.ViewModels"
+        xmlns:views="using:VmQontrol.App.Views"
         x:Class="VmQontrol.App.Views.MainWindow"
+        x:DataType="vm:ShellViewModel"
         Title="VM Qontrol"
         Icon="avares://vmqontrol/Assets/icon-256.png"
-        Width="1280" Height="800" MinWidth="900" MinHeight="560"
+        Width="1320" Height="860" MinWidth="960" MinHeight="600"
         WindowStartupLocation="CenterScreen">
-  <Grid ColumnDefinitions="272,*">
-    <!-- Library sidebar: the machines, their folders and the search box live here. -->
-    <Border Grid.Column="0" Background="{DynamicResource QSidebar}" BorderBrush="{DynamicResource QBorder}" BorderThickness="0,0,1,0">
-      <DockPanel Margin="16,18">
-        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="4,0,0,18">
-          <Image Source="avares://vmqontrol/Assets/logo-64.png" Width="34" Height="34" />
-          <TextBlock Text="VM Qontrol" Classes="h1" VerticalAlignment="Center" />
-        </StackPanel>
-        <TextBox x:Name="Search" DockPanel.Dock="Top" Classes="search" PlaceholderText="Search machines" Margin="0,0,0,18" />
-        <TextBlock DockPanel.Dock="Top" Text="LIBRARY" Classes="section" Margin="4,0,0,8" />
-        <TextBlock x:Name="LibraryEmpty" Text="No machines yet." Classes="muted" Margin="4,0" TextWrapping="Wrap" />
-      </DockPanel>
-    </Border>
+  <Window.KeyBindings>
+    <KeyBinding Gesture="F5" Command="{Binding RefreshCommand}" />
+  </Window.KeyBindings>
+  <Panel>
+    <DockPanel>
+      <!-- Status bar: the last thing that happened. -->
+      <Border DockPanel.Dock="Bottom" Background="{DynamicResource QSidebar}" BorderBrush="{DynamicResource QBorder}" BorderThickness="0,1,0,0" Padding="16,6">
+        <TextBlock x:Name="StatusLine" Text="{Binding Status}" Classes="muted" FontSize="{DynamicResource QFontSmall}" />
+      </Border>
 
-    <!-- The selected machine's page; with none, the welcome page. -->
-    <ScrollViewer Grid.Column="1">
-      <StackPanel x:Name="Welcome" Margin="{DynamicResource QPagePadding}" MaxWidth="760" HorizontalAlignment="Left" Spacing="22">
-        <StackPanel Spacing="6">
-          <TextBlock Text="Welcome to VM Qontrol" Classes="hero" />
-          <TextBlock Classes="muted" TextWrapping="Wrap"
-                     Text="Create, run and fine-tune virtual machines on this computer. Every setting is explained where you change it, with the recommended value beside it." />
-        </StackPanel>
-        <Border Classes="card">
-          <StackPanel Spacing="6">
-            <TextBlock Text="Your machines will appear here" FontWeight="SemiBold" />
-            <TextBlock Classes="muted" TextWrapping="Wrap"
-                       Text="Machines you already made with quickemu are found in your VMs folder and listed in the library." />
-          </StackPanel>
+      <Grid ColumnDefinitions="280,*">
+        <!-- Library sidebar. -->
+        <Border Background="{DynamicResource QSidebar}" BorderBrush="{DynamicResource QBorder}" BorderThickness="0,0,1,0">
+          <DockPanel Margin="14,16">
+            <Button DockPanel.Dock="Top" Classes="icononly" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                    Command="{Binding ShowHomeCommand}" Margin="0,0,0,16" ToolTip.Tip="The welcome page and the host check">
+              <StackPanel Orientation="Horizontal" Spacing="10">
+                <Image Source="avares://vmqontrol/Assets/logo-64.png" Width="34" Height="34" />
+                <TextBlock Text="VM Qontrol" Classes="h1" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <TextBox x:Name="Search" DockPanel.Dock="Top" Classes="search" PlaceholderText="Search machines   (Ctrl+F)"
+                     Text="{Binding Search}" Margin="0,0,0,16" />
+            <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="4,0,0,6">
+              <TextBlock Text="LIBRARY" Classes="section" VerticalAlignment="Center" />
+              <Button Grid.Column="1" Classes="icononly" Command="{Binding RefreshCommand}" ToolTip.Tip="Look for machines again (F5)">
+                <Path Classes="icon" Data="{StaticResource IconRefresh}" Width="14" Height="14" />
+              </Button>
+            </Grid>
+            <TextBlock x:Name="LibraryEmpty" DockPanel.Dock="Top" Text="No machines yet." Classes="muted" Margin="4,0" TextWrapping="Wrap"
+                       IsVisible="{Binding LibraryEmpty}" />
+            <ListBox x:Name="Library" Classes="library" ItemsSource="{Binding Machines}" SelectedItem="{Binding Selected}">
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:MachineViewModel">
+                  <Grid ColumnDefinitions="Auto,*,Auto">
+                    <Border Classes="badge" Classes.windows="{Binding FamilyWindows}" Classes.linux="{Binding FamilyLinux}" Classes.apple="{Binding FamilyApple}" Classes.bsd="{Binding FamilyBsd}"
+                            Width="34" Height="34">
+                      <TextBlock Text="{Binding Badge}" FontSize="13" />
+                    </Border>
+                    <StackPanel Grid.Column="1" Margin="10,0,6,0" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Text="{Binding GuestLabel}" Classes="muted" FontSize="{DynamicResource QFontSmall}" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                      <Path Classes="iconfill" Data="{StaticResource IconStar}" Width="11" Height="11" Fill="{DynamicResource QWarning}" IsVisible="{Binding IsFavourite}" />
+                      <Ellipse Classes="state" Classes.running="{Binding IsRunning}" Classes.paused="{Binding IsPaused}" ToolTip.Tip="{Binding StateText}" />
+                    </StackPanel>
+                  </Grid>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </DockPanel>
         </Border>
-      </StackPanel>
-    </ScrollViewer>
-  </Grid>
+
+        <!-- The page: welcome, or the selected machine. -->
+        <Panel Grid.Column="1">
+          <views:WelcomeView x:Name="Welcome" IsVisible="{Binding ShowWelcome}" />
+          <ContentControl x:Name="MachinePage" Content="{Binding Selected}" IsVisible="{Binding ShowMachine}">
+            <ContentControl.ContentTemplate>
+              <DataTemplate x:DataType="vm:MachineViewModel">
+                <views:MachineView />
+              </DataTemplate>
+            </ContentControl.ContentTemplate>
+          </ContentControl>
+        </Panel>
+      </Grid>
+    </DockPanel>
+
+    <!-- A notice over the window: errors with their reasons, and questions that need an answer. -->
+    <Panel x:Name="NoticeLayer" IsVisible="{Binding HasNotice}" Background="{DynamicResource QScrim}">
+      <Border Classes="card" MaxWidth="560" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="24,20" DataContext="{Binding Notice}"
+              x:DataType="vm:NoticeViewModel" BoxShadow="0 12 40 0 #60000000">
+        <StackPanel Spacing="14">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <Path Classes="icon" Data="{StaticResource IconWarning}" Stroke="{DynamicResource QDanger}" IsVisible="{Binding IsError}" Width="20" Height="20" />
+            <TextBlock x:Name="NoticeTitle" Text="{Binding Title}" Classes="h1" TextWrapping="Wrap" />
+          </StackPanel>
+          <ItemsControl ItemsSource="{Binding Lines}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="x:String">
+                <SelectableTextBlock Text="{Binding}" TextWrapping="Wrap" Margin="0,3" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
+            <Button x:Name="NoticeDismiss" Classes="secondary" Content="{Binding DismissText}" Command="{Binding DismissCommand}" />
+            <Button x:Name="NoticeConfirm" Classes="primary" Classes.danger="{Binding IsDanger}" Content="{Binding ConfirmText}" Command="{Binding ConfirmCommand}" IsVisible="{Binding HasConfirm}" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+    </Panel>
+  </Panel>
 </Window>

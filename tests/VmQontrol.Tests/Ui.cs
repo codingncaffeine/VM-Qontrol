@@ -64,6 +64,37 @@ internal static class Ui
         }
     }, TestContext.Current.CancellationToken);
 
+    /// <summary>Pumps until <paramref name="condition"/> holds; fails the test after <paramref name="seconds"/>.</summary>
+    public static void PumpUntil(Func<bool> condition, string what, double seconds = 15)
+    {
+        var until = DateTime.UtcNow.AddSeconds(seconds);
+        while (!condition())
+        {
+            Assert.True(DateTime.UtcNow < until, $"timed out waiting for {what}");
+            Pump(0.05);
+        }
+    }
+
+    /// <summary>A left click at a control's centre, through the window's input like a real pointer.</summary>
+    public static void Click(Avalonia.Controls.Window window, Avalonia.Controls.Control target)
+    {
+        var centre = target.TranslatePoint(new Point(target.Bounds.Width / 2, target.Bounds.Height / 2), window) ?? throw new InvalidOperationException("the control is not in the window");
+        window.MouseMove(centre);
+        window.MouseDown(centre, Avalonia.Input.MouseButton.Left);
+        window.MouseUp(centre, Avalonia.Input.MouseButton.Left);
+        Pump(0.1);
+    }
+
+    /// <summary>Saves what the window shows now to snapshots/&lt;batch&gt;/&lt;name&gt;.png for review.</summary>
+    public static void Capture(Avalonia.Controls.Window window, string batch, string name)
+    {
+        Pump(0.1);
+        var dir = Path.Combine(Path.GetDirectoryName(TestProfile.ScratchRoot)!, "snapshots", batch);
+        Directory.CreateDirectory(dir);
+        using var frame = window.CaptureRenderedFrame();
+        frame?.Save(Path.Combine(dir, name + ".png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+    }
+
     /// <summary>Lets the dispatcher run for <paramref name="seconds"/> (layout, posted work, timers).</summary>
     public static void Pump(double seconds)
     {

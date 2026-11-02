@@ -1,0 +1,162 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:VmQontrol.App.ViewModels"
+             x:Class="VmQontrol.App.Views.MachineView"
+             x:DataType="vm:MachineViewModel">
+  <ScrollViewer>
+    <StackPanel Margin="{DynamicResource QPagePadding}" Spacing="20">
+      <!-- Header: who the machine is and what it is doing. -->
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <Border Classes="badge" Classes.windows="{Binding FamilyWindows}" Classes.linux="{Binding FamilyLinux}" Classes.apple="{Binding FamilyApple}" Classes.bsd="{Binding FamilyBsd}"
+                Width="52" Height="52" CornerRadius="14" VerticalAlignment="Top">
+          <TextBlock Text="{Binding Badge}" FontSize="20" />
+        </Border>
+        <StackPanel Grid.Column="1" Margin="16,0,0,0" Spacing="6">
+          <TextBlock x:Name="MachineName" Text="{Binding Name}" Classes="hero" />
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <Border Classes="pill" Classes.ok="{Binding IsRunning}" Classes.warn="{Binding IsPaused}" Classes.muted="{Binding IsOff}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Ellipse Classes="state" Classes.running="{Binding IsRunning}" Classes.paused="{Binding IsPaused}" VerticalAlignment="Center" />
+                <TextBlock x:Name="StateText" Text="{Binding StateText}" />
+              </StackPanel>
+            </Border>
+            <TextBlock Text="{Binding GuestLabel}" Classes="muted" VerticalAlignment="Center" />
+            <TextBlock Text="·" Classes="muted" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding KindLabel}" Classes="muted" VerticalAlignment="Center" />
+          </StackPanel>
+        </StackPanel>
+        <Button Grid.Column="2" Classes="icononly" VerticalAlignment="Top" Command="{Binding ToggleFavouriteCommand}"
+                ToolTip.Tip="Favourites are listed first in the library">
+          <Path Classes="icon" Data="{StaticResource IconStar}" Classes.favourite="{Binding IsFavourite}" />
+        </Button>
+      </Grid>
+
+      <!-- Power and actions: only what makes sense in the current state is shown. -->
+      <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
+        <Button x:Name="PowerOn" Classes="primary" Command="{Binding PowerOnCommand}" IsVisible="{Binding IsOff}" IsEnabled="{Binding !Busy}"
+                ToolTip.Tip="Start the machine and open its screen">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Path Classes="iconfill" Data="{StaticResource IconPlay}" Fill="{DynamicResource QOnAccent}" />
+            <TextBlock Text="Power on" />
+          </StackPanel>
+        </Button>
+        <Button x:Name="OpenScreen" Classes="primary" Command="{Binding OpenScreenCommand}" IsVisible="{Binding IsActive}"
+                ToolTip.Tip="Open the machine's screen in a viewer window">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Path Classes="icon" Data="{StaticResource IconScreen}" Stroke="{DynamicResource QOnAccent}" />
+            <TextBlock Text="Open screen" />
+          </StackPanel>
+        </Button>
+        <Button x:Name="ShutDown" Classes="tool" Command="{Binding ShutDownCommand}" IsVisible="{Binding IsRunning}"
+                ToolTip.Tip="Ask the guest to close its programs and turn itself off, like pressing a computer's power button">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Path Classes="icon" Data="{StaticResource IconPower}" />
+            <TextBlock Text="Shut down" />
+          </StackPanel>
+        </Button>
+        <Button x:Name="Pause" Classes="tool" Command="{Binding PauseCommand}" IsVisible="{Binding CanPause}"
+                ToolTip.Tip="Freeze the machine where it is; Resume carries on exactly there">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Path Classes="iconfill" Data="{StaticResource IconPause}" />
+            <TextBlock Text="Pause" />
+          </StackPanel>
+        </Button>
+        <Button x:Name="Resume" Classes="tool" Command="{Binding ResumeCommand}" IsVisible="{Binding IsPaused}">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Path Classes="iconfill" Data="{StaticResource IconPlay}" />
+            <TextBlock Text="Resume" />
+          </StackPanel>
+        </Button>
+        <Button Classes="tool" Command="{Binding ResetCommand}" IsVisible="{Binding IsActive}"
+                ToolTip.Tip="Restart at once, like a computer's reset button (unsaved work is lost)">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Path Classes="icon" Data="{StaticResource IconReset}" />
+            <TextBlock Text="Reset" />
+          </StackPanel>
+        </Button>
+        <Button x:Name="PowerOff" Classes="tool danger" Command="{Binding PowerOffCommand}" IsVisible="{Binding IsActive}"
+                ToolTip.Tip="Turn off at once, like pulling the plug (unsaved work is lost)">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Path Classes="iconfill" Data="{StaticResource IconStop}" Fill="{DynamicResource QDanger}" />
+            <TextBlock Text="Power off" />
+          </StackPanel>
+        </Button>
+        <Button Classes="tool" Command="{Binding OpenFolderCommand}" ToolTip.Tip="Open the folder that holds this machine's files">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Path Classes="icon" Data="{StaticResource IconFolder}" />
+            <TextBlock Text="Open folder" />
+          </StackPanel>
+        </Button>
+        <Button Classes="tool" Command="{Binding CopyCommandLineCommand}" ToolTip.Tip="Copy the exact QEMU command this machine starts with">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Path Classes="icon" Data="{StaticResource IconCopy}" />
+            <TextBlock Text="Copy command line" />
+          </StackPanel>
+        </Button>
+      </WrapPanel>
+
+      <!-- Anything that stops the machine starting, in plain words. -->
+      <Border x:Name="Problems" Classes="card problem" IsVisible="{Binding HasProblems}">
+        <StackPanel Spacing="8">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Path Classes="icon" Data="{StaticResource IconWarning}" Stroke="{DynamicResource QWarning}" />
+            <TextBlock Text="This machine cannot start yet" FontWeight="SemiBold" />
+          </StackPanel>
+          <ItemsControl ItemsSource="{Binding Problems}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="x:String">
+                <TextBlock Text="{Binding}" TextWrapping="Wrap" Classes="muted" Margin="0,2" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
+      <Grid ColumnDefinitions="3*,2*" ColumnSpacing="20">
+        <!-- The screen, refreshed every two seconds while the machine runs. -->
+        <StackPanel Spacing="12">
+          <Border Background="{DynamicResource QScreen}" CornerRadius="{DynamicResource QRadiusLarge}" ClipToBounds="True"
+                  BorderBrush="{DynamicResource QBorder}" BorderThickness="1">
+            <Grid>
+              <Viewbox Stretch="Uniform" MinHeight="240">
+                <Panel Width="1280" Height="800">
+                  <Image x:Name="Screen" Source="{Binding Screen}" Stretch="Uniform" IsVisible="{Binding HasScreen}" />
+                </Panel>
+              </Viewbox>
+              <TextBlock Text="{Binding ScreenPlaceholder}" IsVisible="{Binding !HasScreen}" Classes="muted"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Grid>
+          </Border>
+          <Border Classes="card" IsVisible="{Binding IsActive}">
+            <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto" RowSpacing="6">
+              <TextBlock Text="Address" Classes="muted" />
+              <SelectableTextBlock Grid.Column="1" Text="{Binding GuestAddress, FallbackValue='Waiting for the guest tools…', TargetNullValue='Waiting for the guest tools…'}" />
+              <TextBlock Grid.Row="1" Text="SSH" Classes="muted" IsVisible="{Binding SshCommand, Converter={x:Static ObjectConverters.IsNotNull}}" />
+              <SelectableTextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SshCommand}" FontFamily="monospace" />
+            </Grid>
+          </Border>
+        </StackPanel>
+
+        <!-- The hardware, in words. -->
+        <Border Grid.Column="1" Classes="card" VerticalAlignment="Top">
+          <StackPanel Spacing="10">
+            <TextBlock Text="HARDWARE" Classes="section" />
+            <ItemsControl x:Name="Details" ItemsSource="{Binding Details}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:DetailRow">
+                  <Grid ColumnDefinitions="110,*" Margin="0,4">
+                    <TextBlock Text="{Binding Label}" Classes="muted" />
+                    <TextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Border Classes="code" Margin="0,6,0,0">
+              <TextBlock Text="{Binding Folder}" TextWrapping="Wrap" FontSize="12" />
+            </Border>
+          </StackPanel>
+        </Border>
+      </Grid>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

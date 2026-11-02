@@ -1,0 +1,66 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:VmQontrol.App.ViewModels"
+             x:Class="VmQontrol.App.Views.WelcomeView"
+             x:DataType="vm:ShellViewModel">
+  <ScrollViewer>
+    <StackPanel Margin="{DynamicResource QPagePadding}" MaxWidth="860" HorizontalAlignment="Left" Spacing="22">
+      <StackPanel Spacing="6">
+        <TextBlock Text="Welcome to VM Qontrol" Classes="hero" />
+        <TextBlock Classes="muted" TextWrapping="Wrap"
+                   Text="Create, run and fine-tune virtual machines on this computer. Every setting is explained where you change it, with the recommended value beside it." />
+      </StackPanel>
+
+      <!-- Where machines live, and what is in the library. -->
+      <Border Classes="card">
+        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+          <StackPanel Spacing="4">
+            <TextBlock Text="Your library" FontWeight="SemiBold" />
+            <TextBlock Classes="muted" TextWrapping="Wrap">
+              <Run Text="Machines are kept in " /><Run Text="{Binding LibraryText}" FontWeight="SemiBold" /><Run Text=". Machines made with quickemu there are listed too, and stay usable with quickemu." />
+            </TextBlock>
+          </StackPanel>
+          <Button Grid.Column="1" Classes="tool" VerticalAlignment="Top" Command="{Binding RefreshCommand}" ToolTip.Tip="Look for machines again">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Path Classes="icon" Data="{StaticResource IconRefresh}" />
+              <TextBlock Text="Refresh" />
+            </StackPanel>
+          </Button>
+        </Grid>
+      </Border>
+
+      <!-- The host check. -->
+      <StackPanel Spacing="10">
+        <TextBlock Text="THIS COMPUTER" Classes="section" />
+        <TextBlock x:Name="CheckSummary" Text="{Binding Welcome.Summary}" TextWrapping="Wrap" FontWeight="SemiBold" />
+        <Border Classes="card" Padding="0">
+          <ItemsControl x:Name="Checks" ItemsSource="{Binding Welcome.Checks}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:CheckRow">
+                <Border BorderBrush="{DynamicResource QBorder}" BorderThickness="0,0,0,1" Padding="18,12">
+                  <Grid ColumnDefinitions="92,220,*" RowDefinitions="Auto,Auto">
+                    <Border Classes="pill" Classes.ok="{Binding IsOk}" Classes.muted="{Binding IsOptional}" Classes.warn="{Binding IsWarning}" Classes.bad="{Binding IsMissing}"
+                            HorizontalAlignment="Left" VerticalAlignment="Top">
+                      <TextBlock Text="{Binding Badge}" />
+                    </Border>
+                    <TextBlock Grid.Column="1" Text="{Binding Title}" FontWeight="SemiBold" Margin="0,2,12,0" TextWrapping="Wrap" />
+                    <TextBlock Grid.Column="2" Text="{Binding Detail}" Classes="muted" TextWrapping="Wrap" Margin="0,2,0,0" />
+                    <Grid Grid.Column="1" Grid.ColumnSpan="2" Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,8,0,0" IsVisible="{Binding HasFix}">
+                      <Border Classes="code">
+                        <SelectableTextBlock Text="{Binding Fix}" FontFamily="monospace" FontSize="13" />
+                      </Border>
+                      <Button Grid.Column="1" Classes="icononly" Margin="6,0,0,0" ToolTip.Tip="Copy the command"
+                              Command="{Binding $parent[UserControl].((vm:ShellViewModel)DataContext).CopyFixCommand}" CommandParameter="{Binding Fix}">
+                        <Path Classes="icon" Data="{StaticResource IconCopy}" />
+                      </Button>
+                    </Grid>
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </Border>
+      </StackPanel>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>
