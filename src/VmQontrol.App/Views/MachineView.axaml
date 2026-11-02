@@ -21,6 +21,15 @@
                 <TextBlock x:Name="StateText" Text="{Binding StateText}" />
               </StackPanel>
             </Border>
+            <Border x:Name="RecordingPill" Classes="pill bad" IsVisible="{Binding IsRecording}" VerticalAlignment="Center" Padding="8,2,4,2">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Ellipse Width="7" Height="7" Fill="{DynamicResource QDanger}" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding RecordingText}" VerticalAlignment="Center" />
+                <Button x:Name="StopRecording" Classes="icononly" Command="{Binding StopRecordingCommand}" Padding="4,1" ToolTip.Tip="Stop recording and save the video">
+                  <Path Classes="icon" Data="{StaticResource IconStop}" Width="10" Height="10" Stretch="Uniform" Fill="{DynamicResource QDanger}" StrokeThickness="0" />
+                </Button>
+              </StackPanel>
+            </Border>
             <TextBlock Text="{Binding GuestLabel}" Classes="muted" VerticalAlignment="Center" />
             <TextBlock Text="·" Classes="muted" VerticalAlignment="Center" />
             <TextBlock Text="{Binding KindLabel}" Classes="muted" VerticalAlignment="Center" />
@@ -121,6 +130,8 @@
               <MenuItem x:Name="OpenDrivesItem" Header="Host drives…" Command="{Binding OpenDrivesCommand}" ToolTip.Tip="Hand a disk, a partition or a disc drive of this computer to the machine" />
               <MenuItem Header="Send Ctrl+Alt+Del" Command="{Binding SendCtrlAltDelCommand}" IsVisible="{Binding IsActive}" />
               <MenuItem Header="Save a screenshot" Command="{Binding SaveScreenshotCommand}" IsVisible="{Binding IsActive}" />
+              <MenuItem x:Name="RecordScreenItem" Header="Record the screen" Command="{Binding StartRecordingCommand}" IsVisible="{Binding CanRecord}"
+                        ToolTip.Tip="Record what the machine shows into a video in your Videos folder (no sound); stop from the red mark beside its state" />
               <MenuItem Header="Clone…" Command="{Binding CloneCommand}" IsVisible="{Binding !IsTemplate}" />
               <MenuItem Header="Make into a template…" Command="{Binding MakeTemplateCommand}" IsVisible="{Binding CanMakeTemplate}" />
               <MenuItem Header="Turn back into a machine" Command="{Binding UndoTemplateCommand}" IsVisible="{Binding IsTemplate}" />

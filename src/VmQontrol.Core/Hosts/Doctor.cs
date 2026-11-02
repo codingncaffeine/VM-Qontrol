@@ -42,6 +42,7 @@ public static class Doctor
         ["usb-helper"] = new() { [DistroFamily.Arch] = "spice-gtk", [DistroFamily.Debian] = "spice-client-glib-usb-acl-helper", [DistroFamily.Fedora] = "spice-glib", [DistroFamily.Alpine] = "spice-gtk", [DistroFamily.OpenSuse] = "spice-gtk" },
         ["viewer"] = new() { [DistroFamily.Arch] = "virt-viewer", [DistroFamily.Debian] = "virt-viewer", [DistroFamily.Fedora] = "virt-viewer", [DistroFamily.Alpine] = "virt-viewer", [DistroFamily.OpenSuse] = "virt-viewer" },
         ["osinfo"] = new() { [DistroFamily.Arch] = "osinfo-db", [DistroFamily.Debian] = "osinfo-db", [DistroFamily.Fedora] = "osinfo-db", [DistroFamily.Alpine] = "osinfo-db", [DistroFamily.OpenSuse] = "osinfo-db" },
+        ["ffmpeg"] = new() { [DistroFamily.Arch] = "ffmpeg", [DistroFamily.Debian] = "ffmpeg", [DistroFamily.Fedora] = "ffmpeg-free", [DistroFamily.Alpine] = "ffmpeg", [DistroFamily.OpenSuse] = "ffmpeg" },
         ["virtiofsd"] = new() { [DistroFamily.Arch] = "virtiofsd", [DistroFamily.Debian] = "virtiofsd", [DistroFamily.Fedora] = "virtiofsd", [DistroFamily.Alpine] = "virtiofsd", [DistroFamily.OpenSuse] = "virtiofsd" },
         ["passt"] = new() { [DistroFamily.Arch] = "passt", [DistroFamily.Debian] = "passt", [DistroFamily.Fedora] = "passt", [DistroFamily.Alpine] = "passt", [DistroFamily.OpenSuse] = "passt" },
         ["quickemu"] = new() { [DistroFamily.Arch] = "quickemu", [DistroFamily.Debian] = "quickemu", [DistroFamily.Fedora] = "quickemu" },

@@ -119,7 +119,7 @@ public sealed partial class MachineViewModel : ObservableObject
     private bool _suspending;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsActive), nameof(StateText))]
+    [NotifyPropertyChangedFor(nameof(IsActive), nameof(StateText), nameof(CanRecord))]
     private bool _busy;
 
     [ObservableProperty]
@@ -422,7 +422,7 @@ public sealed partial class MachineViewModel : ObservableObject
     private async Task SaveScreenshotAsync()
     {
         if (_watcher is not { } watcher) return;
-        var pictures = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures) is { Length: > 0 } p ? p : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var pictures = UserFolder(Environment.SpecialFolder.MyPictures, "Pictures");
         var file = Path.Combine(pictures, $"{Name} {DateTime.Now:yyyy-MM-dd HH.mm.ss}.png");
         try
         {
@@ -434,6 +434,88 @@ public sealed partial class MachineViewModel : ObservableObject
         {
             Ui.Post(() => _shell.Show(new NoticeViewModel("The screen could not be saved", [ex.Message], isError: true)));
         }
+    }
+
+    /// <summary>The person's Pictures or Videos folder; inside the profile when it is isolated (a trial or a test).</summary>
+    private string UserFolder(Environment.SpecialFolder folder, string name) =>
+        _shell.Paths.Isolated ? Path.Combine(_shell.Paths.Data, name)
+        : Environment.GetFolderPath(folder) is { Length: > 0 } f ? f : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), name);
+
+    // ── Screen recording: frames of the guest's display into a video (D26).
+
+    private ScreenRecorder? _recorder;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanRecord))]
+    private bool _isRecording;
+
+    [ObservableProperty]
+    private string _recordingText = "";
+
+    public bool CanRecord => IsActive && !IsRecording;
+
+    [RelayCommand]
+    private async Task StartRecordingAsync()
+    {
+        if (_watcher is not { } watcher || _recorder is not null) return;
+        var encoders = await RecordingFormat.EncodersAsync().ConfigureAwait(false);
+        if (encoders is null || RecordingFormat.Choose(encoders) is not { } format)
+        {
+            var install = Doctor.InstallCommand(Doctor.DetectThisDistro(), "ffmpeg");
+            Ui.Post(() => _shell.Show(new NoticeViewModel("Recording needs ffmpeg",
+                [encoders is null ? "ffmpeg turns the machine's screen into a video, and it is not installed." : "This computer's ffmpeg has no H.264 or VP9 encoder.", "Install it, then choose Record the screen again."],
+                code: install)));
+            return;
+        }
+
+        var videos = UserFolder(Environment.SpecialFolder.MyVideos, "Videos");
+        var file = Path.Combine(videos, $"{Name} {DateTime.Now:yyyy-MM-dd HH.mm.ss}{format.Extension}");
+        try
+        {
+            var recorder = await ScreenRecorder.StartAsync(watcher, file, format).ConfigureAwait(false);
+            _recorder = recorder;
+            Ui.Post(() =>
+            {
+                IsRecording = true;
+                RecordingText = "Recording 0:00";
+                _shell.Note($"Recording {Name}'s screen.");
+            });
+            _ = Task.Run(() => FollowRecordingAsync(recorder));
+        }
+        catch (Exception ex) when (ex is QmpException or IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
+        {
+            Ui.Post(() => _shell.Show(new NoticeViewModel("The screen could not be recorded", [ex.Message], isError: true)));
+        }
+    }
+
+    /// <summary>The elapsed time in the pill, and the end of a recording the machine ended by stopping.</summary>
+    private async Task FollowRecordingAsync(ScreenRecorder recorder)
+    {
+        while (_recorder == recorder)
+        {
+            await Task.Delay(500).ConfigureAwait(false);
+            var t = DateTimeOffset.Now - recorder.Started;
+            Ui.Post(() => RecordingText = $"Recording {(int)t.TotalMinutes}:{t.Seconds:00}");
+            if (recorder.Ended is not null || !IsActive)
+            {
+                await StopRecordingAsync().ConfigureAwait(false);
+                return;
+            }
+        }
+    }
+
+    [RelayCommand]
+    private async Task StopRecordingAsync()
+    {
+        if (Interlocked.Exchange(ref _recorder, null) is not { } recorder) return;
+        var problem = await recorder.StopAsync().ConfigureAwait(false);
+        await recorder.DisposeAsync().ConfigureAwait(false);
+        Ui.Post(() =>
+        {
+            IsRecording = false;
+            if (problem is null) _shell.Note($"Saved the recording to {recorder.Output}{(recorder.Ended is { } why ? $" ({why})" : "")}.");
+            else _shell.Show(new NoticeViewModel("The recording could not be finished", [problem], isError: true));
+        });
     }
 
     [RelayCommand]
