@@ -22,6 +22,9 @@ public sealed record AppSettings
 
     public bool WelcomeDismissed { get; set; }
 
+    /// <summary>The VirtIO driver disc (virtio-win.iso) last chosen, offered again for the next Windows machine.</summary>
+    public string? DriversIso { get; set; }
+
     public static AppSettings Load(QontrolPaths paths)
     {
         try

@@ -1,3 +1,4 @@
+using Avalonia.Platform.Storage;
 using Avalonia.Controls;
 using VmQontrol.App.ViewModels;
 
@@ -16,12 +17,33 @@ public partial class MachineView : UserControl
             _console = (DataContext as MachineViewModel)?.Console;
             if (_console is not null) _console.OutputAdded += OnOutput;
         };
+        if (this.FindControl<Button>("InsertDriversDisc") is { } insert)
+            insert.Click += async (_, _) =>
+            {
+                if (DataContext is not MachineViewModel m) return;
+                var path = m.KnownDriversDisc ?? await PickDriversDiscAsync();
+                if (path is not null) _ = Task.Run(() => m.InsertDriversDiscAsync(path));
+            };
+        if (this.FindControl<Button>("ChooseDriversDisc") is { } choose)
+            choose.Click += async (_, _) =>
+            {
+                if (DataContext is MachineViewModel m && await PickDriversDiscAsync() is { } path) _ = Task.Run(() => m.InsertDriversDiscAsync(path));
+            };
         // One live collection: the menu's presenter takes its items when it opens, so the list is changed in place.
         if (this.FindControl<Button>("OpenUsb")?.Flyout is MenuFlyout usb)
         {
             usb.ItemsSource = _usbItems;
             usb.Opening += (_, _) => FillUsbMenu();
         }
+    }
+
+    private async Task<string?> PickDriversDiscAsync()
+    {
+        if (TopLevel.GetTopLevel(this)?.StorageProvider is not { } storage) return null;
+        var iso = new Avalonia.Platform.Storage.FilePickerFileType("Disc images") { Patterns = ["*.iso", "*.ISO"] };
+        var files = await storage.OpenFilePickerAsync(new Avalonia.Platform.Storage.FilePickerOpenOptions
+            { Title = "Choose the VirtIO driver disc (virtio-win.iso)", AllowMultiple = false, FileTypeFilter = [iso, Avalonia.Platform.Storage.FilePickerFileTypes.All] });
+        return files.Count > 0 ? files[0].TryGetLocalPath() : null;
     }
 
     /// <summary>

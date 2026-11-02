@@ -184,6 +184,52 @@
                   <SelectableTextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SshCommand}" FontFamily="monospace" />
                 </Grid>
               </Border>
+
+              <!-- Guest tools: whether the agent answers, and the exact steps to install them. -->
+              <Border x:Name="GuestToolsCard" Classes="card">
+                <StackPanel Spacing="10">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <Ellipse Classes="state" Classes.running="{Binding GuestToolsOk}" Classes.paused="{Binding GuestToolsWarn}" VerticalAlignment="Center" />
+                      <TextBlock Text="GUEST TOOLS" Classes="section" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <Button x:Name="GuestToolsHow" Grid.Column="1" Classes="tool" Command="{Binding ToggleGuestToolsStepsCommand}"
+                            Content="{Binding GuestToolsStepsButton}" />
+                  </Grid>
+                  <TextBlock Text="{Binding GuestToolsStatus}" TextWrapping="Wrap" />
+                  <StackPanel x:Name="GuestToolsSteps" Spacing="10" IsVisible="{Binding ShowGuestToolsSteps}">
+                    <TextBlock Text="{Binding GuestToolsAdvice.Summary}" Classes="help" TextWrapping="Wrap" />
+                    <ItemsControl ItemsSource="{Binding GuestToolsAdvice.Steps}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                          <Grid ColumnDefinitions="18,*" Margin="0,3">
+                            <TextBlock Text="›" Classes="muted" />
+                            <TextBlock Grid.Column="1" Text="{Binding}" TextWrapping="Wrap" />
+                          </Grid>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Border Classes="code" IsVisible="{Binding GuestToolsAdvice.Command, Converter={x:Static ObjectConverters.IsNotNull}}">
+                      <SelectableTextBlock x:Name="GuestToolsCommand" Text="{Binding GuestToolsAdvice.Command}" FontFamily="monospace" TextWrapping="Wrap" />
+                    </Border>
+                    <ItemsControl ItemsSource="{Binding GuestToolsAdvice.AfterSteps}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                          <Grid ColumnDefinitions="18,*" Margin="0,3">
+                            <TextBlock Text="›" Classes="muted" />
+                            <TextBlock Grid.Column="1" Text="{Binding}" TextWrapping="Wrap" />
+                          </Grid>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <WrapPanel IsVisible="{Binding GuestToolsAdvice.NeedsDriversDisc}" ItemSpacing="8" LineSpacing="8">
+                      <Button x:Name="InsertDriversDisc" Classes="primary" Content="Insert the driver disc" />
+                      <Button x:Name="ChooseDriversDisc" Classes="tool" Content="Choose virtio-win.iso…" />
+                      <Button Classes="tool" Content="Where to get it" Command="{Binding OpenDriversDiscPageCommand}" />
+                    </WrapPanel>
+                  </StackPanel>
+                </StackPanel>
+              </Border>
             </StackPanel>
 
             <!-- The hardware, in words. -->

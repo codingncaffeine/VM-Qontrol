@@ -367,6 +367,18 @@ public sealed partial class ShellViewModel : ObservableObject
         if (keep is not null && shown.Contains(keep)) Selected = keep;
     }
 
+    /// <summary>Keeps the VirtIO driver disc's path for next time. Any thread.</summary>
+    public void RememberDriversIso(string path)
+    {
+        Ui.Post(() =>
+        {
+            if (Settings.DriversIso == path) return;
+            Settings = Settings with { DriversIso = path };
+            var settings = Settings;
+            _ = Task.Run(() => settings.Save(Paths));
+        });
+    }
+
     public void SetFavourite(MachineViewModel machine, bool favourite)
     {
         machine.IsFavourite = favourite;

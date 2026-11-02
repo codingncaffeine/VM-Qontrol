@@ -108,7 +108,7 @@ public sealed partial class MachineViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StateText), nameof(IsRunning), nameof(IsOff), nameof(IsPaused), nameof(CanPause), nameof(IsActive), nameof(ScreenPlaceholder),
-        nameof(CanOpenFirmware), nameof(CanDiscardSuspended), nameof(CanPowerOn), nameof(CanMakeTemplate))]
+        nameof(CanOpenFirmware), nameof(CanDiscardSuspended), nameof(CanPowerOn), nameof(CanMakeTemplate), nameof(GuestToolsStatus), nameof(GuestToolsDot), nameof(GuestToolsWarn), nameof(GuestToolsOk))]
     private PowerState _state = PowerState.Off;
 
     /// <summary>Off with its state saved: Power on carries on from where it was.</summary>
@@ -226,6 +226,99 @@ public sealed partial class MachineViewModel : ObservableObject
         catch (QmpException ex)
         {
             return ex.Message;
+        }
+    }
+
+    // ── Guest tools: whether the agent answers, and how to install the tools when it does not.
+
+    private string? _guestReleaseId;
+
+    /// <summary>The guest agent answered the last poll; <c>null</c> = not asked yet (off, or just started).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(GuestToolsStatus))]
+    [NotifyPropertyChangedFor(nameof(GuestToolsDot))]
+    [NotifyPropertyChangedFor(nameof(GuestToolsWarn))]
+    [NotifyPropertyChangedFor(nameof(GuestToolsOk))]
+    private bool? _guestToolsAnswering;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(GuestToolsStepsButton))]
+    private bool _showGuestToolsSteps;
+
+    public string GuestToolsStepsButton => ShowGuestToolsSteps ? "Hide the steps" : "How to install";
+
+    public bool GuestToolsWarn => GuestToolsDot == "warn";
+
+    public bool GuestToolsOk => GuestToolsDot == "ok";
+
+    public GuestToolsAdvice GuestToolsAdvice => GuestTools.Advise(Machine.Guest, _guestReleaseId);
+
+    public string GuestToolsStatus => !IsActive ? "Power the machine on to check for them." : GuestToolsAnswering switch
+    {
+        true => "Running: the address, a clean shut down and the clock work through them.",
+        false => "Not answering. Either the system is still starting, or the tools are not installed yet.",
+        null => "Checking…",
+    };
+
+    /// <summary>"ok", "warn" or "off": the colour of the status dot.</summary>
+    public string GuestToolsDot => !IsActive || GuestToolsAnswering is null ? "off" : GuestToolsAnswering == true ? "ok" : "warn";
+
+    [RelayCommand]
+    private void ToggleGuestToolsSteps() => ShowGuestToolsSteps = !ShowGuestToolsSteps;
+
+    [RelayCommand]
+    private void OpenDriversDiscPage() => OpenUrl(GuestTools.DriversDiscPage);
+
+    /// <summary>The driver disc to offer without asking: the machine's own, else the last one chosen. <c>null</c> = ask for the file.</summary>
+    public string? KnownDriversDisc =>
+        GuestTools.MachineDriversDisc(Machine, Folder) ?? (_shell.Settings.DriversIso is { } d && File.Exists(d) ? d : null);
+
+    /// <summary>
+    /// Puts the VirtIO driver disc in the machine's drive: at once while it runs, else (or when every drive is in use)
+    /// as a disc kept in the drive from the next power on. Call on a worker.
+    /// </summary>
+    public async Task InsertDriversDiscAsync(string path)
+    {
+        _shell.RememberDriversIso(path);
+
+        if (Watcher is { } watcher)
+        {
+            try
+            {
+                await LiveMedia.ChangeAsync(watcher, null, path).ConfigureAwait(false);
+                Ui.Post(() => _shell.Note($"The VirtIO driver disc is in {Name}'s drive. Open it in File Explorer."));
+                return;
+            }
+            catch (QmpException ex)
+            {
+                Log.Warn($"{Name}: the driver disc did not go in live ({ex.Message}); kept for the next power on.");
+            }
+        }
+
+        var before = Machine;
+        if (!before.Media.Any(x => x.Role == MediaRole.Drivers && x.File == path))
+        {
+            var media = before.Media.Where(x => x.Role != MediaRole.Drivers).Append(new MediaConfig { Role = MediaRole.Drivers, File = path }).ToList();
+            var after = before with { Media = media };
+            var target = IsQuickemu ? Path.Combine(HistoryDirectory, MachineStore.FileName) : Path.Combine(Folder, MachineStore.FileName);
+            SettingsHistory.Save(before, after, target, HistoryDirectory);
+            Ui.Post(() => Reload(after));
+        }
+
+        Ui.Post(() => _shell.Note(IsActive
+            ? $"{Name} has no free disc drive now; the driver disc goes in at its next power on."
+            : $"The driver disc goes in {Name}'s drive when it powers on."));
+    }
+
+    private static void OpenUrl(string url)
+    {
+        try
+        {
+            using var _ = Process.Start(new ProcessStartInfo("xdg-open") { ArgumentList = { url }, UseShellExecute = false });
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            Log.Warn($"Could not open {url} ({ex.Message}).");
         }
     }
 
@@ -494,6 +587,7 @@ public sealed partial class MachineViewModel : ObservableObject
         Console.Disconnect();
         Screen = null;
         GuestAddress = null;
+        GuestToolsAnswering = null;
         SshCommand = null;
         _shell.Note(_suspending ? $"{Name} is suspended." : $"{Name} powered off.");
         _suspending = false;
@@ -551,7 +645,16 @@ public sealed partial class MachineViewModel : ObservableObject
         {
             var addresses = await agent.AddressesAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
             var text = addresses is { Count: > 0 } ? string.Join(", ", addresses.Where(a => !a.IPv6).Select(a => a.Address).DefaultIfEmpty(addresses[0].Address)) : null;
-            Ui.Post(() => GuestAddress = text);
+            // The guest's own name for its distribution sharpens the install command (asked once, when the agent first answers).
+            string? releaseId = null;
+            if (addresses is not null && _guestReleaseId is null && (await agent.OsInfoAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false))?["id"] is { } id)
+                releaseId = id.GetValue<string>();
+            Ui.Post(() =>
+            {
+                GuestAddress = text;
+                GuestToolsAnswering = addresses is not null;
+                if (releaseId is not null) { _guestReleaseId = releaseId; OnPropertyChanged(nameof(GuestToolsAdvice)); }
+            });
             await Task.WhenAny(watcher.Exited, Task.Delay(10_000)).ConfigureAwait(false);
         }
     }
