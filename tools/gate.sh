@@ -16,12 +16,14 @@ command -v taskset > /dev/null || { echo "gate: needs taskset"; exit 2; }
 exec 9> "${XDG_RUNTIME_DIR:-$TMPDIR}/vmqontrol-gate.lock"
 flock -n 9 || { echo "gate: another gate is running"; exit 2; }
 mkdir -p scratch/gate
+# The gate builds into its own folder, so it never replaces the vmq binary a running install or probe script is using.
+art=(--artifacts-path scratch/gate/art)
 
 echo "── window tests placed in a tier"
 tools/test-tiers.sh || { echo "GATE FAILED: test tiers"; exit 1; }
 
 echo "── build, warnings as errors"
-if ! dotnet build VmQontrol.slnx -c Release -warnaserror --nologo -v q > scratch/gate/build.log 2>&1 9>&-; then
+if ! dotnet build VmQontrol.slnx -c Release -warnaserror --nologo -v q "${art[@]}" > scratch/gate/build.log 2>&1 9>&-; then
     grep -E "error" scratch/gate/build.log | sort -u | head -20
     echo "GATE FAILED: the build"
     exit 1
@@ -30,7 +32,7 @@ fi
 rc=0
 for i in $(seq 1 "$N"); do
     log="scratch/gate/run-$i.log"
-    taskset -c 0,1 dotnet test tests/VmQontrol.Tests -c Release --no-build "${tier[@]}" > "$log" 2>&1 9>&-
+    taskset -c 0,1 dotnet test tests/VmQontrol.Tests -c Release --no-build "${art[@]}" "${tier[@]}" > "$log" 2>&1 9>&-
     line=$(grep -E "^(Passed|Failed)!" "$log" | tail -1 | cut -c1-100)
     echo "run $i of $N: ${line:-no result, see $log}"
     if ! grep -qE "^Passed!" "$log"; then
