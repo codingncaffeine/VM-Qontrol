@@ -36,4 +36,43 @@ public sealed class MachineStoreTests
         var ex = Assert.Throws<InvalidDataException>(() => MachineStore.Load(file));
         Assert.Contains("newer VM Qontrol", ex.Message, StringComparison.Ordinal);
     }
+
+    /// <summary>A file written by an older version (or by hand) lacks newer settings: each must keep its default, never become null.</summary>
+    [Fact]
+    public void A_minimal_vm_json_loads_with_every_missing_setting_at_its_default()
+    {
+        using var profile = new TestProfile("store");
+        var file = Path.Combine(profile.Root, MachineStore.FileName);
+        File.WriteAllText(file, """{"schemaVersion": 1, "name": "old"}""");
+        var m = MachineStore.Load(file);
+        Assert.NotNull(m.Nics);
+        Assert.Single(m.Nics);
+        Assert.NotNull(m.Disks);
+        Assert.NotNull(m.Media);
+        Assert.NotNull(m.Guest);
+        Assert.Equal("linux", m.Guest.Os);
+        Assert.NotNull(m.Firmware);
+        Assert.NotNull(m.Cpu);
+        Assert.NotNull(m.Display);
+        Assert.NotNull(m.Audio);
+        Assert.NotNull(m.Input);
+        Assert.Equal("en-us", m.Input.Layout);
+        Assert.NotNull(m.Usb);
+        Assert.NotNull(m.Usb.Passthrough);
+        Assert.NotNull(m.ExtraArgs);
+        Assert.False(string.IsNullOrEmpty(m.Id));
+    }
+
+    [Fact]
+    public void Settings_missing_newer_fields_keep_their_defaults()
+    {
+        using var profile = new TestProfile("settings");
+        Directory.CreateDirectory(profile.Paths.Config);
+        File.WriteAllText(profile.Paths.SettingsFile, """{"viewer": "spicy"}""");
+        var settings = VmQontrol.Core.AppSettings.Load(profile.Paths);
+        Assert.Equal("spicy", settings.Viewer);
+        Assert.NotNull(settings.Favourites);
+        Assert.NotNull(settings.Folders);
+        Assert.Equal([profile.Paths.DefaultLibrary], settings.LibraryRoots);
+    }
 }

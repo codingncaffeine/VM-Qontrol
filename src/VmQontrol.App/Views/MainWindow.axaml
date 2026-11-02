@@ -15,7 +15,10 @@
     <DockPanel>
       <!-- Status bar: the last thing that happened. -->
       <Border DockPanel.Dock="Bottom" Background="{DynamicResource QSidebar}" BorderBrush="{DynamicResource QBorder}" BorderThickness="0,1,0,0" Padding="16,6">
-        <TextBlock x:Name="StatusLine" Text="{Binding Status}" Classes="muted" FontSize="{DynamicResource QFontSmall}" />
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock x:Name="StatusLine" Text="{Binding Status}" Classes="muted" FontSize="{DynamicResource QFontSmall}" />
+          <TextBlock Grid.Column="1" Text="Ctrl+K  all commands" Classes="muted" FontSize="{DynamicResource QFontSmall}" />
+        </Grid>
       </Border>
 
       <Grid ColumnDefinitions="280,*">
@@ -75,6 +78,27 @@
         </Panel>
       </Grid>
     </DockPanel>
+
+    <!-- Ctrl+K: every action in one search box. -->
+    <Panel x:Name="PaletteLayer" IsVisible="{Binding Palette.IsOpen}" Background="{DynamicResource QScrim}">
+      <Border Classes="card" Width="560" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,90,0,0" Padding="10"
+              DataContext="{Binding Palette}" x:DataType="vm:PaletteViewModel" BoxShadow="0 12 40 0 #60000000">
+        <StackPanel Spacing="8">
+          <TextBox x:Name="PaletteQuery" Classes="search" Text="{Binding Query}" PlaceholderText="Type a command or a machine name" />
+          <ListBox x:Name="PaletteList" Classes="library" ItemsSource="{Binding Items}" SelectedItem="{Binding Highlighted}" MaxHeight="380">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:PaletteItem">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Text="{Binding Title}" />
+                  <TextBlock Grid.Column="1" Text="{Binding Context}" Classes="muted" FontSize="{DynamicResource QFontSmall}" VerticalAlignment="Center" />
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+          <TextBlock Text="Enter runs it · ↑↓ choose · Esc closes" Classes="muted" FontSize="{DynamicResource QFontSmall}" Margin="6,0" />
+        </StackPanel>
+      </Border>
+    </Panel>
 
     <!-- A notice over the window: errors with their reasons, and questions that need an answer. -->
     <Panel x:Name="NoticeLayer" IsVisible="{Binding HasNotice}" Background="{DynamicResource QScrim}">

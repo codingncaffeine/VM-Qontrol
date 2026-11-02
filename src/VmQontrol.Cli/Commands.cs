@@ -79,6 +79,8 @@ internal static class Commands
                     {
                         await MachineRunner.PowerOffAsync(r).ConfigureAwait(false);
                         await MachineRunner.WaitForExitAsync(r, TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+                        // Clears the runtime folder the machine left.
+                        if (Resolve(args[1], paths)?.Machine is { } stopped) MachineRunner.Find(stopped, paths);
                     });
                 case "pause" when args.Length > 1:
                     return Control(args[1], paths, output, error, r => MachineRunner.PauseAsync(r));

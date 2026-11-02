@@ -36,6 +36,24 @@ public sealed class GuestAgentClient(string socketPath)
         return result;
     }
 
+    /// <summary>The guest's total bytes received and sent on its network interfaces (loopback excluded), when the agent reports them.</summary>
+    public async Task<(long In, long Out)?> AddressesAndTrafficAsync(TimeSpan timeout, CancellationToken ct = default)
+    {
+        if (await CallAsync("guest-network-get-interfaces", null, timeout, ct).ConfigureAwait(false) is not JsonArray interfaces) return null;
+        long rx = 0, tx = 0;
+        var any = false;
+        foreach (var nic in interfaces.OfType<JsonObject>())
+        {
+            var name = nic["name"]?.GetValue<string>() ?? "";
+            if (name == "lo" || name.StartsWith("Loopback", StringComparison.Ordinal) || nic["statistics"] is not JsonObject stats) continue;
+            rx += stats["rx-bytes"]?.GetValue<long>() ?? 0;
+            tx += stats["tx-bytes"]?.GetValue<long>() ?? 0;
+            any = true;
+        }
+
+        return any ? (rx, tx) : null;
+    }
+
     /// <summary>The guest's own description of itself ("pretty-name", "kernel-release"...).</summary>
     public async Task<JsonObject?> OsInfoAsync(TimeSpan timeout, CancellationToken ct = default) =>
         await CallAsync("guest-get-osinfo", null, timeout, ct).ConfigureAwait(false) as JsonObject;

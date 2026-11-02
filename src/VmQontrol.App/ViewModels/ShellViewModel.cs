@@ -20,7 +20,10 @@ public sealed partial class ShellViewModel : ObservableObject
     {
         Paths = paths;
         Settings = settings;
+        Palette = new PaletteViewModel(this);
     }
+
+    public PaletteViewModel Palette { get; }
 
     public QontrolPaths Paths { get; }
 

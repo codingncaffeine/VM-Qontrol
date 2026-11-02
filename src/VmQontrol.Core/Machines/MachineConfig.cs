@@ -3,7 +3,9 @@ using System.Text.Json.Serialization;
 namespace VmQontrol.Core.Machines;
 
 /// <summary>
-/// One virtual machine's settings, saved as <c>vm.json</c> in the machine's folder. A <c>null</c> setting means "the
+/// One virtual machine's settings, saved as <c>vm.json</c>. Properties have setters, not init accessors, on purpose: the
+/// source-generated JSON reader builds init-only properties through one object initializer and leaves every property
+/// missing from the file null, so a file from an older version (or written by hand) would lose its defaults. in the machine's folder. A <c>null</c> setting means "the
 /// recommended value": the guest profile and the host decide it at power on, so a machine moved to a bigger computer
 /// gets the bigger defaults. Relative file names are relative to the machine's folder.
 /// </summary>
@@ -11,59 +13,59 @@ public sealed record MachineConfig
 {
     public const int CurrentSchema = 1;
 
-    public int SchemaVersion { get; init; } = CurrentSchema;
+    public int SchemaVersion { get; set; } = CurrentSchema;
 
-    public string Id { get; init; } = Guid.NewGuid().ToString("N");
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
 
-    public required string Name { get; init; }
+    public required string Name { get; set; }
 
-    public string Notes { get; init; } = "";
+    public string Notes { get; set; } = "";
 
-    public GuestConfig Guest { get; init; } = new();
+    public GuestConfig Guest { get; set; } = new();
 
-    public FirmwareConfig Firmware { get; init; } = new();
+    public FirmwareConfig Firmware { get; set; } = new();
 
-    public CpuConfig Cpu { get; init; } = new();
+    public CpuConfig Cpu { get; set; } = new();
 
     /// <summary>Memory in MiB; <c>null</c> = the recommended amount for this host.</summary>
-    public long? MemoryMiB { get; init; }
+    public long? MemoryMiB { get; set; }
 
-    public List<DiskConfig> Disks { get; init; } = [];
+    public List<DiskConfig> Disks { get; set; } = [];
 
-    public List<MediaConfig> Media { get; init; } = [];
+    public List<MediaConfig> Media { get; set; } = [];
 
-    public List<NicConfig> Nics { get; init; } = [new()];
+    public List<NicConfig> Nics { get; set; } = [new()];
 
-    public DisplayConfig Display { get; init; } = new();
+    public DisplayConfig Display { get; set; } = new();
 
-    public AudioConfig Audio { get; init; } = new();
+    public AudioConfig Audio { get; set; } = new();
 
-    public InputConfig Input { get; init; } = new();
+    public InputConfig Input { get; set; } = new();
 
-    public UsbConfig Usb { get; init; } = new();
+    public UsbConfig Usb { get; set; } = new();
 
-    public bool Tpm { get; init; }
+    public bool Tpm { get; set; }
 
     /// <summary>Serial port as a socket for the console tab; <c>null</c> = the profile's choice (off for Windows and macOS).</summary>
-    public bool? Serial { get; init; }
+    public bool? Serial { get; set; }
 
     /// <summary>Extra QEMU arguments, appended last, one argument per entry.</summary>
-    public List<string> ExtraArgs { get; init; } = [];
+    public List<string> ExtraArgs { get; set; } = [];
 
     /// <summary>Where the machine came from when it was not made here; an imported machine's files stay where they were.</summary>
-    public ImportSource? ImportedFrom { get; init; }
+    public ImportSource? ImportedFrom { get; set; }
 }
 
 /// <summary>The guest operating system. <see cref="Os"/> uses quickemu's names (linux, windows, macos, freebsd...).</summary>
 public sealed record GuestConfig
 {
-    public string Os { get; init; } = "linux";
+    public string Os { get; set; } = "linux";
 
     /// <summary>The release where it changes the hardware (macOS: "sonoma", Windows: "11"); empty otherwise.</summary>
-    public string Release { get; init; } = "";
+    public string Release { get; set; } = "";
 
     /// <summary>The osinfo-db identifier when known (e.g. "http://microsoft.com/win/11"), for recommendations.</summary>
-    public string? OsInfoId { get; init; }
+    public string? OsInfoId { get; set; }
 }
 
 public enum FirmwareKind
@@ -74,24 +76,24 @@ public enum FirmwareKind
 
 public sealed record FirmwareConfig
 {
-    public FirmwareKind Kind { get; init; } = FirmwareKind.Uefi;
+    public FirmwareKind Kind { get; set; } = FirmwareKind.Uefi;
 
-    public bool SecureBoot { get; init; }
+    public bool SecureBoot { get; set; }
 
     /// <summary>A firmware code file of the machine's own (macOS ships one); <c>null</c> = the host's OVMF.</summary>
-    public string? CodeFile { get; init; }
+    public string? CodeFile { get; set; }
 
     /// <summary>The machine's own UEFI variable store, copied from the host's template on first power on.</summary>
-    public string VarsFile { get; init; } = "OVMF_VARS.fd";
+    public string VarsFile { get; set; } = "OVMF_VARS.fd";
 }
 
 public sealed record CpuConfig
 {
     /// <summary>Logical processors for the guest; <c>null</c> = recommended for this host.</summary>
-    public int? Cores { get; init; }
+    public int? Cores { get; set; }
 
     /// <summary>A QEMU CPU model; <c>null</c> = the profile's choice (host passthrough for most guests).</summary>
-    public string? Model { get; init; }
+    public string? Model { get; set; }
 }
 
 public enum DiskBus
@@ -104,17 +106,17 @@ public enum DiskBus
 
 public sealed record DiskConfig
 {
-    public required string File { get; init; }
+    public required string File { get; set; }
 
-    public string Format { get; init; } = "qcow2";
+    public string Format { get; set; } = "qcow2";
 
-    public DiskBus Bus { get; init; } = DiskBus.Auto;
+    public DiskBus Bus { get; set; } = DiskBus.Auto;
 
     /// <summary>Size for a disk not made yet, in GiB.</summary>
-    public long SizeGiB { get; init; } = 64;
+    public long SizeGiB { get; set; } = 64;
 
     /// <summary>qemu-img preallocation: off, metadata, falloc or full.</summary>
-    public string Preallocation { get; init; } = "off";
+    public string Preallocation { get; set; } = "off";
 }
 
 public enum MediaRole
@@ -148,11 +150,11 @@ public enum Connect
 
 public sealed record MediaConfig
 {
-    public required MediaRole Role { get; init; }
+    public required MediaRole Role { get; set; }
 
-    public required string File { get; init; }
+    public required string File { get; set; }
 
-    public Connect Connect { get; init; } = Connect.Always;
+    public Connect Connect { get; set; } = Connect.Always;
 }
 
 public enum NetMode
@@ -173,21 +175,21 @@ public sealed record PortForward(string Protocol, int HostPort, int GuestPort);
 
 public sealed record NicConfig
 {
-    public NetMode Mode { get; init; } = NetMode.User;
+    public NetMode Mode { get; set; } = NetMode.User;
 
     /// <summary>The adapter model; <c>null</c> = the profile's choice.</summary>
-    public string? Model { get; init; }
+    public string? Model { get; set; }
 
-    public string? Mac { get; init; }
+    public string? Mac { get; set; }
 
-    public string? Bridge { get; init; }
+    public string? Bridge { get; set; }
 
     /// <summary>Forward a host port to the guest's SSH port; the first free one from 22220 when <see cref="SshHostPort"/> is unset.</summary>
-    public bool SshForward { get; init; } = true;
+    public bool SshForward { get; set; } = true;
 
-    public int? SshHostPort { get; init; }
+    public int? SshHostPort { get; set; }
 
-    public List<PortForward> Forwards { get; init; } = [];
+    public List<PortForward> Forwards { get; set; } = [];
 }
 
 public enum DisplayBackend
@@ -204,37 +206,37 @@ public enum DisplayBackend
 
 public sealed record DisplayConfig
 {
-    public DisplayBackend Backend { get; init; } = DisplayBackend.Spice;
+    public DisplayBackend Backend { get; set; } = DisplayBackend.Spice;
 
     /// <summary>The graphics adapter; <c>null</c> = the profile's choice.</summary>
-    public string? Device { get; init; }
+    public string? Device { get; set; }
 
     /// <summary>3D acceleration (VirGL); <c>null</c> = on when the host has a GPU render node.</summary>
-    public bool? Gl { get; init; }
+    public bool? Gl { get; set; }
 
-    public int? Width { get; init; }
+    public int? Width { get; set; }
 
-    public int? Height { get; init; }
+    public int? Height { get; set; }
 
     /// <summary>The viewer program: spicy, remote-viewer, or none.</summary>
-    public string Viewer { get; init; } = "auto";
+    public string Viewer { get; set; } = "auto";
 }
 
 public sealed record AudioConfig
 {
     /// <summary>The sound card; <c>null</c> = the profile's choice; "none" = no sound card.</summary>
-    public string? Device { get; init; }
+    public string? Device { get; set; }
 }
 
 public sealed record InputConfig
 {
     /// <summary>usb, ps2 or virtio; <c>null</c> = the profile's choice.</summary>
-    public string? Keyboard { get; init; }
+    public string? Keyboard { get; set; }
 
     /// <summary>tablet, usb, ps2 or virtio; <c>null</c> = the profile's choice.</summary>
-    public string? Mouse { get; init; }
+    public string? Mouse { get; set; }
 
-    public string Layout { get; init; } = "en-us";
+    public string Layout { get; set; } = "en-us";
 }
 
 public sealed record UsbDevice(string VendorId, string ProductId, string? Name = null);
@@ -242,10 +244,10 @@ public sealed record UsbDevice(string VendorId, string ProductId, string? Name =
 public sealed record UsbConfig
 {
     /// <summary>ehci (USB 2), xhci (USB 3) or none; <c>null</c> = the profile's choice.</summary>
-    public string? Controller { get; init; }
+    public string? Controller { get; set; }
 
     /// <summary>Host devices handed to the guest at power on.</summary>
-    public List<UsbDevice> Passthrough { get; init; } = [];
+    public List<UsbDevice> Passthrough { get; set; } = [];
 }
 
 public sealed record ImportSource(string Kind, string Path);

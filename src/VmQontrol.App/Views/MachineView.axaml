@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:VmQontrol.App.ViewModels"
+             xmlns:ctl="using:VmQontrol.App.Controls"
              x:Class="VmQontrol.App.Views.MachineView"
              x:DataType="vm:MachineViewModel">
   <ScrollViewer>
@@ -112,51 +113,154 @@
         </StackPanel>
       </Border>
 
-      <Grid ColumnDefinitions="3*,2*" ColumnSpacing="20">
-        <!-- The screen, refreshed every two seconds while the machine runs. -->
-        <StackPanel Spacing="12">
-          <Border Background="{DynamicResource QScreen}" CornerRadius="{DynamicResource QRadiusLarge}" ClipToBounds="True"
-                  BorderBrush="{DynamicResource QBorder}" BorderThickness="1">
-            <Grid>
-              <Viewbox Stretch="Uniform" MinHeight="240">
-                <Panel Width="1280" Height="800">
-                  <Image x:Name="Screen" Source="{Binding Screen}" Stretch="Uniform" IsVisible="{Binding HasScreen}" />
-                </Panel>
-              </Viewbox>
-              <TextBlock Text="{Binding ScreenPlaceholder}" IsVisible="{Binding !HasScreen}" Classes="muted"
-                         HorizontalAlignment="Center" VerticalAlignment="Center" />
-            </Grid>
-          </Border>
-          <Border Classes="card" IsVisible="{Binding IsActive}">
-            <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto" RowSpacing="6">
-              <TextBlock Text="Address" Classes="muted" />
-              <SelectableTextBlock Grid.Column="1" Text="{Binding GuestAddress, FallbackValue='Waiting for the guest tools…', TargetNullValue='Waiting for the guest tools…'}" />
-              <TextBlock Grid.Row="1" Text="SSH" Classes="muted" IsVisible="{Binding SshCommand, Converter={x:Static ObjectConverters.IsNotNull}}" />
-              <SelectableTextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SshCommand}" FontFamily="monospace" />
-            </Grid>
-          </Border>
-        </StackPanel>
+      <TabControl x:Name="Tabs" SelectedIndex="{Binding Tab}" Padding="0,14,0,0">
+        <TabItem Header="Summary">
+          <Grid ColumnDefinitions="3*,2*" ColumnSpacing="20">
+            <!-- The screen, refreshed every two seconds while the machine runs. -->
+            <StackPanel Spacing="12">
+              <Border Background="{DynamicResource QScreen}" CornerRadius="{DynamicResource QRadiusLarge}" ClipToBounds="True"
+                      BorderBrush="{DynamicResource QBorder}" BorderThickness="1">
+                <Grid>
+                  <Viewbox Stretch="Uniform" MinHeight="240">
+                    <Panel Width="1280" Height="800">
+                      <Image x:Name="Screen" Source="{Binding Screen}" Stretch="Uniform" IsVisible="{Binding HasScreen}" />
+                    </Panel>
+                  </Viewbox>
+                  <TextBlock Text="{Binding ScreenPlaceholder}" IsVisible="{Binding !HasScreen}" Classes="muted"
+                             HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Grid>
+              </Border>
+              <Border Classes="card" IsVisible="{Binding IsActive}">
+                <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto" RowSpacing="6">
+                  <TextBlock Text="Address" Classes="muted" />
+                  <SelectableTextBlock Grid.Column="1" Text="{Binding GuestAddress, FallbackValue='Waiting for the guest tools…', TargetNullValue='Waiting for the guest tools…'}" />
+                  <TextBlock Grid.Row="1" Text="SSH" Classes="muted" IsVisible="{Binding SshCommand, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                  <SelectableTextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SshCommand}" FontFamily="monospace" />
+                </Grid>
+              </Border>
+            </StackPanel>
 
-        <!-- The hardware, in words. -->
-        <Border Grid.Column="1" Classes="card" VerticalAlignment="Top">
-          <StackPanel Spacing="10">
-            <TextBlock Text="HARDWARE" Classes="section" />
-            <ItemsControl x:Name="Details" ItemsSource="{Binding Details}">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="vm:DetailRow">
-                  <Grid ColumnDefinitions="110,*" Margin="0,4">
-                    <TextBlock Text="{Binding Label}" Classes="muted" />
-                    <TextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap" />
-                  </Grid>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-            <Border Classes="code" Margin="0,6,0,0">
-              <TextBlock Text="{Binding Folder}" TextWrapping="Wrap" FontSize="12" />
+            <!-- The hardware, in words. -->
+            <Border Grid.Column="1" Classes="card" VerticalAlignment="Top">
+              <StackPanel Spacing="10">
+                <TextBlock Text="HARDWARE" Classes="section" />
+                <ItemsControl x:Name="Details" ItemsSource="{Binding Details}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:DetailRow">
+                      <Grid ColumnDefinitions="110,*" Margin="0,4">
+                        <TextBlock Text="{Binding Label}" Classes="muted" />
+                        <TextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap" />
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Border Classes="code" Margin="0,6,0,0">
+                  <TextBlock Text="{Binding Folder}" TextWrapping="Wrap" FontSize="12" />
+                </Border>
+              </StackPanel>
             </Border>
-          </StackPanel>
-        </Border>
-      </Grid>
+          </Grid>
+        </TabItem>
+
+        <!-- The last minute, sampled once a second while this tab is open. -->
+        <TabItem x:Name="PerformanceTab" Header="Performance">
+          <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="16" RowSpacing="16" DataContext="{Binding Performance}" x:DataType="vm:PerformanceViewModel">
+            <TextBlock Grid.ColumnSpan="2" Classes="muted" Margin="0,0,0,-4" TextWrapping="Wrap"
+                       IsVisible="{Binding $parent[UserControl].((vm:MachineViewModel)DataContext).IsOff}"
+                       Text="Performance is measured while the machine runs." />
+            <Border Classes="card" Grid.Row="1">
+              <StackPanel Spacing="4">
+                <TextBlock Text="PROCESSOR" Classes="section" />
+                <TextBlock x:Name="CpuValue" Text="{Binding CpuText}" Classes="hero" />
+                <TextBlock Text="Share of the processors given to the machine" Classes="muted" FontSize="{DynamicResource QFontSmall}" />
+                <ctl:LiveChart Height="120" Margin="0,8,0,0" Series1="{Binding CpuSeries}" Maximum="100" Format="{Binding PercentFormat}"
+                               Series1Brush="{DynamicResource QSeries1}" GridBrush="{DynamicResource QGrid}" TextBrush="{DynamicResource QTextMuted}" SurfaceBrush="{DynamicResource QSurface}" />
+              </StackPanel>
+            </Border>
+            <Border Classes="card" Grid.Row="1" Grid.Column="1">
+              <StackPanel Spacing="4">
+                <TextBlock Text="MEMORY" Classes="section" />
+                <TextBlock Text="{Binding MemoryText}" Classes="hero" />
+                <TextBlock Text="Host memory the machine is using now" Classes="muted" FontSize="{DynamicResource QFontSmall}" />
+                <ctl:LiveChart Height="120" Margin="0,8,0,0" Series1="{Binding MemorySeries}" Maximum="{Binding MemoryMaximum}" Format="{Binding BytesFormat}"
+                               Series1Brush="{DynamicResource QSeries1}" GridBrush="{DynamicResource QGrid}" TextBrush="{DynamicResource QTextMuted}" SurfaceBrush="{DynamicResource QSurface}" />
+              </StackPanel>
+            </Border>
+            <Border Classes="card" Grid.Row="2">
+              <StackPanel Spacing="4">
+                <TextBlock Text="DISK" Classes="section" />
+                <TextBlock Text="{Binding DiskText}" FontSize="{DynamicResource QFontTitle}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                <StackPanel Orientation="Horizontal" Spacing="14">
+                  <StackPanel Orientation="Horizontal" Spacing="6"><Border Width="12" Height="3" CornerRadius="2" Background="{DynamicResource QSeries1}" VerticalAlignment="Center" /><TextBlock Text="Read" Classes="muted" FontSize="{DynamicResource QFontSmall}" /></StackPanel>
+                  <StackPanel Orientation="Horizontal" Spacing="6"><Border Width="12" Height="3" CornerRadius="2" Background="{DynamicResource QSeries2}" VerticalAlignment="Center" /><TextBlock Text="Written" Classes="muted" FontSize="{DynamicResource QFontSmall}" /></StackPanel>
+                </StackPanel>
+                <ctl:LiveChart Height="120" Margin="0,8,0,0" Series1="{Binding ReadSeries}" Series2="{Binding WriteSeries}" Series1Name="Read" Series2Name="Written" Format="{Binding RateFormat}"
+                               Series1Brush="{DynamicResource QSeries1}" Series2Brush="{DynamicResource QSeries2}" GridBrush="{DynamicResource QGrid}" TextBrush="{DynamicResource QTextMuted}" SurfaceBrush="{DynamicResource QSurface}" />
+              </StackPanel>
+            </Border>
+            <Border Classes="card" Grid.Row="2" Grid.Column="1">
+              <StackPanel Spacing="4">
+                <TextBlock Text="NETWORK" Classes="section" />
+                <TextBlock Text="{Binding NetText}" FontSize="{DynamicResource QFontTitle}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                <StackPanel Orientation="Horizontal" Spacing="14" IsVisible="{Binding NetAvailable}">
+                  <StackPanel Orientation="Horizontal" Spacing="6"><Border Width="12" Height="3" CornerRadius="2" Background="{DynamicResource QSeries1}" VerticalAlignment="Center" /><TextBlock Text="In" Classes="muted" FontSize="{DynamicResource QFontSmall}" /></StackPanel>
+                  <StackPanel Orientation="Horizontal" Spacing="6"><Border Width="12" Height="3" CornerRadius="2" Background="{DynamicResource QSeries2}" VerticalAlignment="Center" /><TextBlock Text="Out" Classes="muted" FontSize="{DynamicResource QFontSmall}" /></StackPanel>
+                </StackPanel>
+                <TextBlock IsVisible="{Binding !NetAvailable}" Classes="muted" TextWrapping="Wrap" FontSize="{DynamicResource QFontSmall}"
+                           Text="Network traffic is reported by the guest tools (qemu-guest-agent on Linux, the virtio-win guest tools on Windows)." />
+                <ctl:LiveChart Height="120" Margin="0,8,0,0" Series1="{Binding InSeries}" Series2="{Binding OutSeries}" Series1Name="In" Series2Name="Out" Format="{Binding RateFormat}" IsVisible="{Binding NetAvailable}"
+                               Series1Brush="{DynamicResource QSeries1}" Series2Brush="{DynamicResource QSeries2}" GridBrush="{DynamicResource QGrid}" TextBrush="{DynamicResource QTextMuted}" SurfaceBrush="{DynamicResource QSurface}" />
+              </StackPanel>
+            </Border>
+          </Grid>
+        </TabItem>
+
+        <!-- The serial port, as text. -->
+        <TabItem x:Name="ConsoleTab" Header="Console">
+          <DockPanel DataContext="{Binding Console}" x:DataType="vm:ConsoleViewModel">
+            <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+              <TextBlock Text="{Binding Note}" Classes="muted" TextWrapping="Wrap" VerticalAlignment="Center" />
+              <Button Grid.Column="1" Classes="tool" Command="{Binding CopyAllCommand}" ToolTip.Tip="Copy everything the console shows">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Path Classes="icon" Data="{StaticResource IconCopy}" />
+                  <TextBlock Text="Copy all" />
+                </StackPanel>
+              </Button>
+            </Grid>
+            <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Margin="0,10,0,0" IsEnabled="{Binding Connected}">
+              <TextBox x:Name="ConsoleInput" Text="{Binding Input}" FontFamily="monospace" PlaceholderText="Type a line and press Enter">
+                <TextBox.KeyBindings>
+                  <KeyBinding Gesture="Enter" Command="{Binding SendCommand}" />
+                </TextBox.KeyBindings>
+              </TextBox>
+              <Button Grid.Column="1" Classes="secondary" Content="Send" Margin="8,0,0,0" Command="{Binding SendCommand}" />
+            </Grid>
+            <Border Background="{DynamicResource QScreen}" CornerRadius="{DynamicResource QRadius}" Padding="12,8" Height="440">
+              <ListBox x:Name="ConsoleLines" ItemsSource="{Binding Lines}" Classes="console" Background="Transparent">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="x:String">
+                    <TextBlock Text="{Binding}" FontFamily="monospace" FontSize="13" Foreground="#D6DEEA" TextWrapping="NoWrap" />
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+            </Border>
+          </DockPanel>
+        </TabItem>
+
+        <TabItem x:Name="LogTab" Header="Log">
+          <DockPanel DataContext="{Binding Logs}" x:DataType="vm:LogViewModel">
+            <Button DockPanel.Dock="Top" Classes="tool" HorizontalAlignment="Left" Command="{Binding LoadCommand}" Margin="0,0,0,10">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Path Classes="icon" Data="{StaticResource IconRefresh}" />
+                <TextBlock Text="Reload" />
+              </StackPanel>
+            </Button>
+            <Border Classes="code" Padding="12" MinHeight="360">
+              <SelectableTextBlock Text="{Binding Text}" FontFamily="monospace" FontSize="12" TextWrapping="Wrap" />
+            </Border>
+          </DockPanel>
+        </TabItem>
+      </TabControl>
     </StackPanel>
   </ScrollViewer>
 </UserControl>

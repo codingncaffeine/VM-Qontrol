@@ -20,6 +20,10 @@
       <Color x:Key="QDangerColor">#FF5D5D</Color>
       <Color x:Key="QScrimColor">#B3000000</Color>
       <Color x:Key="QScreenColor">#05070B</Color>
+      <!-- Chart series: the reference palette's first two categorical slots, validated on this surface (CVD ΔE 26.8). -->
+      <Color x:Key="QSeries1Color">#3987E5</Color>
+      <Color x:Key="QSeries2Color">#D95926</Color>
+      <Color x:Key="QGridColor">#222B3B</Color>
     </ResourceDictionary>
     <ResourceDictionary x:Key="Light">
       <Color x:Key="QBackgroundColor">#F4F6FA</Color>
@@ -38,6 +42,10 @@
       <Color x:Key="QDangerColor">#D93636</Color>
       <Color x:Key="QScrimColor">#80141A24</Color>
       <Color x:Key="QScreenColor">#10141C</Color>
+      <!-- Chart series, validated on white (CVD ΔE 24.7). -->
+      <Color x:Key="QSeries1Color">#2A78D6</Color>
+      <Color x:Key="QSeries2Color">#EB6834</Color>
+      <Color x:Key="QGridColor">#E6EAF0</Color>
     </ResourceDictionary>
   </ResourceDictionary.ThemeDictionaries>
 
@@ -56,6 +64,9 @@
   <SolidColorBrush x:Key="QWarning" Color="{DynamicResource QWarningColor}" />
   <SolidColorBrush x:Key="QDanger" Color="{DynamicResource QDangerColor}" />
 
+  <SolidColorBrush x:Key="QSeries1" Color="{DynamicResource QSeries1Color}" />
+  <SolidColorBrush x:Key="QSeries2" Color="{DynamicResource QSeries2Color}" />
+  <SolidColorBrush x:Key="QGrid" Color="{DynamicResource QGridColor}" />
   <SolidColorBrush x:Key="QScrim" Color="{DynamicResource QScrimColor}" />
   <SolidColorBrush x:Key="QScreen" Color="{DynamicResource QScreenColor}" />
   <!-- Guest family badges: the same in both themes, white letters on each. -->

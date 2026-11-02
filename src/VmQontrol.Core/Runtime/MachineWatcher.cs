@@ -51,6 +51,17 @@ public sealed class MachineWatcher : IAsyncDisposable
         return watcher;
     }
 
+    /// <summary>
+    /// A command on the watcher's own connection. The app's periodic work (screens, performance) goes through here, so
+    /// the control socket stays free for vmq.
+    /// </summary>
+    public Task<System.Text.Json.Nodes.JsonNode?> ExecuteAsync(string command, System.Text.Json.Nodes.JsonObject? arguments = null, CancellationToken ct = default) =>
+        _qmp.ExecuteAsync(command, arguments, ct);
+
+    /// <summary>Saves the screen as a PNG through the watcher's connection.</summary>
+    public Task ScreenshotAsync(string pngFile, CancellationToken ct = default) =>
+        _qmp.ExecuteAsync("screendump", new System.Text.Json.Nodes.JsonObject { ["filename"] = Path.GetFullPath(pngFile), ["format"] = "png" }, ct);
+
     public static PowerState FromStatus(string? status) => status switch
     {
         "running" => PowerState.Running,

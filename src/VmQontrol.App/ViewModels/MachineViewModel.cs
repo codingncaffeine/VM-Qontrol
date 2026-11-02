@@ -26,6 +26,31 @@ public sealed partial class MachineViewModel : ObservableObject
         Entry = entry;
         Machine = entry.Machine!;
         Problems = LibraryScanner.MissingFiles(entry);
+        Logs = new LogViewModel(shell.Paths, Machine);
+        Console.CopyRequested = text => shell.CopyToClipboard(text, "The console output is on the clipboard.");
+    }
+
+    public PerformanceViewModel Performance { get; } = new();
+
+    public ConsoleViewModel Console { get; } = new();
+
+    public LogViewModel Logs { get; }
+
+    private int _cores = 1;
+    private long _memoryMiB = 1024;
+
+    /// <summary>0 Summary, 1 Performance, 2 Console, 3 Log: work for a tab runs only while it is open.</summary>
+    [ObservableProperty]
+    private int _tab;
+
+    partial void OnTabChanged(int value) => UpdateTabWork();
+
+    private void UpdateTabWork()
+    {
+        if (Tab == 1 && IsSelected && _watcher is { } w) Performance.Start(w, _cores, _memoryMiB);
+        else Performance.Stop();
+        if (Tab == 2 && IsSelected && _watcher?.Machine is { } r) _ = Console.ConnectAsync(r);
+        if (Tab == 3) _ = Logs.LoadAsync();
     }
 
     public LibraryEntry Entry { get; private set; }
@@ -128,6 +153,8 @@ public sealed partial class MachineViewModel : ObservableObject
         if (host is not null)
         {
             var launch = QemuCommandBuilder.Build(Machine, new LaunchContext { Host = host, MachineDirectory = Entry.Directory, Runtime = new RuntimePaths("/run") });
+            _cores = launch.Cores;
+            _memoryMiB = launch.MemoryMiB;
             rows.Add(new("Memory", $"{FormatMiB(launch.MemoryMiB)}{(Machine.MemoryMiB is null ? " (recommended for this computer)" : "")}"));
             rows.Add(new("Processors", $"{launch.Cores} core{(launch.Cores == 1 ? "" : "s")}{(Machine.Cpu.Cores is null ? " (recommended)" : "")}"));
         }
@@ -181,6 +208,7 @@ public sealed partial class MachineViewModel : ObservableObject
     {
         State = state;
         if (state is PowerState.Running or PowerState.Paused or PowerState.ShuttingDown) StartThumbnails();
+        UpdateTabWork();
         if (state == PowerState.Crashed) _shell.Show(new NoticeViewModel($"{Name} crashed", ["The guest operating system reported a crash. Its screen shows the details; Reset restarts it."], isError: true));
     }
 
@@ -191,6 +219,8 @@ public sealed partial class MachineViewModel : ObservableObject
         _watcher = null;
         if (watcher is not null) _ = watcher.DisposeAsync().AsTask();
         State = PowerState.Off;
+        Performance.Stop();
+        Console.Disconnect();
         Screen = null;
         GuestAddress = null;
         SshCommand = null;
@@ -213,7 +243,8 @@ public sealed partial class MachineViewModel : ObservableObject
                     try
                     {
                         var file = Path.Combine(running.RuntimeDirectory, "thumbnail.png");
-                        await MachineRunner.ScreenshotAsync(running, file, ct).ConfigureAwait(false);
+                        if (_watcher is not { } watcher) break;
+                        await watcher.ScreenshotAsync(file, ct).ConfigureAwait(false);
                         await using var stream = File.OpenRead(file);
                         var bitmap = Bitmap.DecodeToWidth(stream, 960);
                         Ui.Post(() =>
@@ -374,6 +405,7 @@ public sealed partial class MachineViewModel : ObservableObject
 
     partial void OnIsSelectedChanged(bool value)
     {
+        UpdateTabWork();
         if (!value || _watcher is null) return;
         _thumbnailLoop?.Cancel();
         _thumbnailLoop = null;

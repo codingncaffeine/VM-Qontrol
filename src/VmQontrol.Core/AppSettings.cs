@@ -7,20 +7,20 @@ namespace VmQontrol.Core;
 public sealed record AppSettings
 {
     /// <summary>Folders scanned for machines; the first is where new machines go.</summary>
-    public List<string> LibraryRoots { get; init; } = [];
+    public List<string> LibraryRoots { get; set; } = [];
 
-    public HashSet<string> Favourites { get; init; } = [];
+    public HashSet<string> Favourites { get; set; } = [];
 
     /// <summary>Machine id → the sidebar folder it is filed under.</summary>
-    public Dictionary<string, string> Folders { get; init; } = [];
+    public Dictionary<string, string> Folders { get; set; } = [];
 
     /// <summary>"auto", "remote-viewer" or "spicy".</summary>
-    public string Viewer { get; init; } = "auto";
+    public string Viewer { get; set; } = "auto";
 
     /// <summary>"system", "dark" or "light".</summary>
-    public string Theme { get; init; } = "system";
+    public string Theme { get; set; } = "system";
 
-    public bool WelcomeDismissed { get; init; }
+    public bool WelcomeDismissed { get; set; }
 
     public static AppSettings Load(QontrolPaths paths)
     {

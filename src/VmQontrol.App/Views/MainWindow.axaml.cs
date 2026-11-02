@@ -21,6 +21,33 @@ public partial class MainWindow : Window
             if (DataContext is ShellViewModel shell)
                 shell.Clipboard = text => Clipboard is { } clipboard ? Avalonia.Input.Platform.ClipboardExtensions.SetTextAsync(clipboard, text) : Task.CompletedTask;
         };
+        // Tunnel: the palette's keys win over whatever control has focus (a text box would take Enter and the arrows).
+        AddHandler(KeyDownEvent, (_, e) =>
+        {
+            if (DataContext is not ShellViewModel shell) return;
+            var palette = shell.Palette;
+            if (e.Key == Key.K && e.KeyModifiers == KeyModifiers.Control)
+            {
+                if (palette.IsOpen) palette.Close();
+                else
+                {
+                    palette.Open();
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() => this.FindControl<TextBox>("PaletteQuery")?.Focus());
+                }
+
+                e.Handled = true;
+                return;
+            }
+
+            if (!palette.IsOpen) return;
+            switch (e.Key)
+            {
+                case Key.Escape: palette.Close(); e.Handled = true; break;
+                case Key.Enter: palette.RunHighlighted(); e.Handled = true; break;
+                case Key.Down: palette.Move(1); e.Handled = true; break;
+                case Key.Up: palette.Move(-1); e.Handled = true; break;
+            }
+        }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         KeyDown += (_, e) =>
         {
             // Escape closes a notice the way its Cancel/OK button does.

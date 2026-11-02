@@ -53,6 +53,14 @@
     <Setter Property="Background" Value="{DynamicResource QSurface}" />
     <Setter Property="BorderBrush" Value="{DynamicResource QBorder}" />
   </Style>
+  <!-- Tabs: the page's sections, sized to the type scale (Fluent's default headers are display-sized). -->
+  <Style Selector="TabItem">
+    <Setter Property="FontSize" Value="15" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="MinHeight" Value="38" />
+    <Setter Property="Padding" Value="2,0,18,0" />
+  </Style>
+
   <!-- Icons -->
   <Style Selector="Path.icon">
     <Setter Property="Stroke" Value="{Binding $parent[ContentPresenter].Foreground, FallbackValue={StaticResource QText}}" />
@@ -153,6 +161,18 @@
   <Style Selector="Border.code TextBlock">
     <Setter Property="FontFamily" Value="monospace" />
     <Setter Property="FontSize" Value="13" />
+  </Style>
+
+  <!-- Console lines: plain rows, no selection highlight, tight spacing. -->
+  <Style Selector="ListBox.console ListBoxItem">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="MinHeight" Value="18" />
+  </Style>
+  <Style Selector="ListBox.console ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="ListBox.console ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
   </Style>
 
   <!-- Sidebar list -->
