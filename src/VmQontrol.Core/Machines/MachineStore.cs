@@ -9,9 +9,13 @@ public static class MachineStore
 
     public static MachineConfig Load(string file)
     {
-        using var stream = File.OpenRead(file);
-        var config = JsonSerializer.Deserialize(stream, MachineJsonContext.Default.MachineConfig)
+        var text = File.ReadAllText(file);
+        var config = JsonSerializer.Deserialize(text, MachineJsonContext.Default.MachineConfig)
                      ?? throw new InvalidDataException($"{file} is empty.");
+        // A file written by hand (or by an old build) without an id would get a new random one at every read, and its
+        // running machine could never be found again: it gets one from where it is instead, the same every time.
+        if (System.Text.Json.Nodes.JsonNode.Parse(text) is System.Text.Json.Nodes.JsonObject json && json["id"] is null)
+            config.Id = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(Path.GetFullPath(file))))[..32];
         if (config.SchemaVersion > MachineConfig.CurrentSchema)
             throw new InvalidDataException($"{file} was written by a newer VM Qontrol (format {config.SchemaVersion}); update VM Qontrol to open it.");
         return config;

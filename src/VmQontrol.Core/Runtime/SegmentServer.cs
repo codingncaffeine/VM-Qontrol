@@ -69,7 +69,12 @@ public static class SegmentServer
             return;
         }
 
-        var start = new ProcessStartInfo("setsid") { UseShellExecute = false, RedirectStandardOutput = false, RedirectStandardError = false };
+        // A session of its own, its output to /dev/null: it outlives the program that started it, and that program's
+        // terminal or pipe closing must not end it (its log file is where it writes).
+        var start = new ProcessStartInfo("setsid") { UseShellExecute = false };
+        start.ArgumentList.Add("sh");
+        start.ArgumentList.Add("-c");
+        start.ArgumentList.Add("exec \"$0\" \"$@\" < /dev/null > /dev/null 2>&1");
         start.ArgumentList.Add(program);
         if (Path.GetFileName(program) is "dotnet") start.ArgumentList.Add(entry);
         start.ArgumentList.Add(Argument);
@@ -90,7 +95,15 @@ public static class SegmentServer
     {
         var i = Array.IndexOf(args, Argument);
         if (i < 0 || i + 2 >= args.Length || SegmentSubnet.Parse(args[i + 2]) is not { } subnet) return 2;
-        RunAsync(paths, args[i + 1], subnet, CancellationToken.None).GetAwaiter().GetResult();
+        try
+        {
+            RunAsync(paths, args[i + 1], subnet, CancellationToken.None).GetAwaiter().GetResult();
+        }
+        finally
+        {
+            Log.Flush(TimeSpan.FromSeconds(2));
+        }
+
         return 0;
     }
 
@@ -124,6 +137,7 @@ public static class SegmentServer
             var server = new SegmentDhcp(subnet, LeaseFile(paths, segment));
             var to = new IPEndPoint(Group, port);
             Log.Info($"Segment {segment}: handing out addresses in {subnet} (server {subnet.Server}).");
+            Log.Flush(TimeSpan.FromSeconds(1));
             using var idle = CancellationTokenSource.CreateLinkedTokenSource(ct);
             _ = WatchForMachinesAsync(port, idle);
             var buffer = new byte[65536];

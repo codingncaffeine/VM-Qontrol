@@ -61,6 +61,7 @@ internal static class Commands
                 case Core.Runtime.SegmentServer.Argument:
                     // A private segment's address server, started by the first machine on it (never typed by hand).
                     paths.EnsureCreated();
+                    Log.Minimum = LogLevel.Info; // a server of its own: its log is all there is to read
                     Log.Initialize("vmq-segment", paths.Logs);
                     return Core.Runtime.SegmentServer.Main(paths, args);
                 case "version" or "--version" or "-V":

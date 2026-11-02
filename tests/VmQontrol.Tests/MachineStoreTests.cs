@@ -76,3 +76,19 @@ public sealed class MachineStoreTests
         Assert.Equal([profile.Paths.DefaultLibrary], settings.LibraryRoots);
     }
 }
+
+public sealed class MachineStoreIdTests
+{
+    [Fact]
+    public void A_settings_file_without_an_id_gets_the_same_one_at_every_read()
+    {
+        using var profile = new TestProfile("noid");
+        var file = Path.Combine(profile.Root, "vm.json");
+        File.WriteAllText(file, """{ "name": "hand-made" }""");
+        var first = VmQontrol.Core.Machines.MachineStore.Load(file).Id;
+        Assert.Equal(first, VmQontrol.Core.Machines.MachineStore.Load(file).Id);
+        Assert.Matches("^[0-9a-f]{32}$", first);
+        File.WriteAllText(file, """{ "name": "hand-made", "id": "0123456789abcdef0123456789abcdef" }""");
+        Assert.Equal("0123456789abcdef0123456789abcdef", VmQontrol.Core.Machines.MachineStore.Load(file).Id);
+    }
+}
