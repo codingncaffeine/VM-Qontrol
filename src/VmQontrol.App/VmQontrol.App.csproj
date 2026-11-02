@@ -29,6 +29,12 @@
     <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
 
+  <!-- The packaged desktop entry and icons, so a build run from its folder can register itself (DesktopIntegration). -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\packaging\io.github.codingncaffeine.VMQontrol.desktop" LogicalName="desktop-entry" />
+    <EmbeddedResource Include="..\..\packaging\icons\hicolor\*\apps\io.github.codingncaffeine.VMQontrol.png" LogicalName="icon/%(RecursiveDir)" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\VmQontrol.Core\VmQontrol.Core.csproj" />
   </ItemGroup>

@@ -42,6 +42,9 @@ internal static class Program
         App.Settings = AppSettings.Load(paths);
         App.OpenOnStart = args.FirstOrDefault(a => !a.StartsWith('-'));
         App.WatchUiThread = true;
+        // A build run from its folder has no desktop entry, so the taskbar would show a generic icon (an isolated
+        // profile is a trial or a test: it never touches the desktop).
+        if (!paths.Isolated) _ = Task.Run(() => DesktopIntegration.Ensure());
 
         try
         {
