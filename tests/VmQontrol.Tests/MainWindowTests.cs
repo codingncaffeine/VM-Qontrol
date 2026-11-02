@@ -436,6 +436,74 @@ public sealed class MainWindowTests
     }
 
     /// <summary>
+    /// More → Power on in the background: the machine runs with its screen ready but no viewer opens. The viewer is a
+    /// stand-in script that leaves a mark when started; the control is Open screen afterwards, which does start it.
+    /// </summary>
+    [Trait("Tier", "Integration")]
+    [Fact]
+    public async Task Power_on_in_the_background_opens_no_viewer_until_Open_screen()
+    {
+        using var profile = new TestProfile("background-start");
+        var dir = Path.Combine(profile.Paths.DefaultLibrary, "Quiet");
+        Directory.CreateDirectory(dir);
+        await VmQontrol.Core.Runtime.QemuImg.CreateAsync(Path.Combine(dir, "disk0.qcow2"), "qcow2", 1, ct: TestContext.Current.CancellationToken);
+        MachineStore.Save(new MachineConfig
+        {
+            Name = "Quiet", MemoryMiB = 256, Cpu = new CpuConfig { Cores = 1 }, Firmware = new FirmwareConfig { Kind = FirmwareKind.Bios },
+            Disks = [new DiskConfig { File = "disk0.qcow2", SizeGiB = 1 }],
+            Display = new DisplayConfig { Backend = DisplayBackend.Spice, Gl = false },
+        }, Path.Combine(dir, "vm.json"));
+        var marks = Path.Combine(profile.Root, "viewer-starts");
+        var viewer = Path.Combine(profile.Root, "stand-in-viewer");
+        File.WriteAllText(viewer, $"#!/bin/sh\necho \"$@\" >> '{marks}'\n");
+        File.SetUnixFileMode(viewer, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+
+        var seen = await Ui.Run(() =>
+        {
+            var shell = new ShellViewModel(profile.Paths, AppSettings.Load(profile.Paths) with { Viewer = viewer });
+            var window = new MainWindow { DataContext = shell, Width = 1320, Height = 900 };
+            Avalonia.Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
+            window.Show();
+            _ = shell.StartAsync();
+            Ui.PumpUntil(() => shell.Machines.Count == 1, "the library");
+            Ui.Click(window, Named<ListBox>(window, "Library").GetVisualDescendants().OfType<ListBoxItem>().First());
+            Ui.PumpUntil(() => shell.Selected?.Name == "Quiet", "the machine page");
+            Ui.Pump(0.3);
+            var page = window.GetVisualDescendants().OfType<MachineView>().Single();
+            var more = Named<Button>(page, "More");
+            Ui.Click(window, more);
+            Ui.Pump(0.3);
+            Ui.Click(window, ((MenuFlyout)more.Flyout!).Items.OfType<MenuItem>().First(m => m.Name == "PowerOnBackground"));
+            Ui.PumpUntil(() => shell.Selected is { IsRunning: true } || shell.Notice is not null, "the machine running", 30);
+            var notice = shell.Notice is { } n ? n.Title + ": " + string.Join(" ", n.Lines) : null;
+            Ui.Pump(2);
+            var openedInBackground = File.Exists(marks);
+            var status = shell.Status;
+            Ui.Click(window, Named<Button>(page, "OpenScreen"));
+            Ui.PumpUntil(() => File.Exists(marks), "the viewer after Open screen", 10);
+            window.Close();
+            return (notice, openedInBackground, status);
+        });
+
+        try
+        {
+            Assert.Null(seen.notice);
+            Assert.False(seen.openedInBackground);
+            Assert.Contains("in the background", seen.status, StringComparison.Ordinal);
+            Assert.Contains("spice+unix://", File.ReadAllText(marks), StringComparison.Ordinal);
+        }
+        finally
+        {
+            var entry = VmQontrol.Core.Library.LibraryScanner.Scan(profile.Paths.DefaultLibrary, profile.Paths.State).Single();
+            if (VmQontrol.Core.Runtime.MachineRunner.Find(entry.Machine!, profile.Paths) is { } running)
+            {
+                await VmQontrol.Core.Runtime.MachineRunner.PowerOffAsync(running, CancellationToken.None);
+                await VmQontrol.Core.Runtime.MachineRunner.WaitForExitAsync(running, TimeSpan.FromSeconds(10), CancellationToken.None);
+            }
+        }
+    }
+
+    /// <summary>
     /// Suspend on a running machine's page: it turns off as "Suspended", Power on reads "Resume", and Resume brings it back
     /// running with the saved state used up.
     /// </summary>

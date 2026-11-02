@@ -90,6 +90,7 @@ public sealed partial class PaletteViewModel(ShellViewModel shell) : ObservableO
 
             Add(s.PowerOnText, s.PowerOnCommand, s.CanPowerOn);
             Add("New machine from this template", s.CloneCommand, s.IsTemplate);
+            Add("Power on in the background", s.PowerOnInBackgroundCommand, s.CanPowerOn);
             Add("Power on to firmware setup", s.PowerOnToFirmwareCommand, s.CanOpenFirmware);
             Add("Discard suspended state", s.DiscardSuspendedCommand, s.CanDiscardSuspended);
             Add("Open screen", s.OpenScreenCommand, s.IsActive);

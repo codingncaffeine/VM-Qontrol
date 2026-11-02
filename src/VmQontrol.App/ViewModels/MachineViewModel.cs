@@ -551,11 +551,15 @@ public sealed partial class MachineViewModel : ObservableObject
     [RelayCommand]
     private Task PowerOnAsync() => StartAsync(new StartOptions());
 
+    /// <summary>Workstation's "Start in background": the machine runs with its screen ready, but no viewer opens until asked.</summary>
+    [RelayCommand]
+    private Task PowerOnInBackgroundAsync() => StartAsync(new StartOptions(), openScreen: false);
+
     /// <summary>Power on into the firmware's setup screen (UEFI) or boot menu (BIOS), as a computer's F2 or Esc does.</summary>
     [RelayCommand]
     private Task PowerOnToFirmwareAsync() => StartAsync(new StartOptions { FirmwareSetup = true });
 
-    private async Task StartAsync(StartOptions options)
+    private async Task StartAsync(StartOptions options, bool openScreen = true)
     {
         if (Busy || State != PowerState.Off) return;
         Busy = true;
@@ -567,10 +571,10 @@ public sealed partial class MachineViewModel : ObservableObject
             await AttachAsync(running).ConfigureAwait(false);
             Ui.Post(() =>
             {
-                _shell.Note(IsSuspended ? $"{Name} carried on where it was." : $"{Name} is running.");
+                _shell.Note(IsSuspended ? $"{Name} carried on where it was." : openScreen ? $"{Name} is running." : $"{Name} is running in the background. Open screen shows it.");
                 IsSuspended = false;
             });
-            if (Machine.Display.Backend == DisplayBackend.Spice) OpenScreen();
+            if (openScreen && Machine.Display.Backend == DisplayBackend.Spice) OpenScreen();
         }
         catch (StartRefusedException ex)
         {

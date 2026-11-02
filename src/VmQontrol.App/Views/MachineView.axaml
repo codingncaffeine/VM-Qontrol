@@ -33,6 +33,8 @@
       </Grid>
 
       <!-- Power and actions: only what makes sense in the current state is shown. -->
+      <!-- Power on the left, the machine's tools on the right; Reset lives in More, as Workstation keeps it under Power. -->
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
       <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
         <Button x:Name="NewFromTemplate" Classes="primary" Command="{Binding CloneCommand}" IsVisible="{Binding IsTemplate}"
                 ToolTip.Tip="Make a new machine that starts exactly as this template is">
@@ -82,13 +84,6 @@
             <TextBlock Text="Suspend" />
           </StackPanel>
         </Button>
-        <Button Classes="tool" Command="{Binding ResetCommand}" IsVisible="{Binding IsActive}"
-                ToolTip.Tip="Restart at once, like a computer's reset button (unsaved work is lost)">
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <Path Classes="icon" Data="{StaticResource IconReset}" />
-            <TextBlock Text="Reset" />
-          </StackPanel>
-        </Button>
         <Button x:Name="PowerOff" Classes="tool danger" Command="{Binding PowerOffCommand}" IsVisible="{Binding IsActive}"
                 ToolTip.Tip="Turn off at once, like pulling the plug (unsaved work is lost)">
           <StackPanel Orientation="Horizontal" Spacing="8">
@@ -96,6 +91,8 @@
             <TextBlock Text="Power off" />
           </StackPanel>
         </Button>
+      </WrapPanel>
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Stretch">
         <Button x:Name="OpenUsb" Classes="tool" Command="{Binding OpenUsbCommand}" ToolTip.Tip="Hand USB devices plugged into this computer to the machine">
           <StackPanel Orientation="Horizontal" Spacing="8">
             <Path Classes="icon" Data="{StaticResource IconUsb}" />
@@ -108,10 +105,12 @@
             <TextBlock Text="Settings" />
           </StackPanel>
         </Button>
-        <Button x:Name="More" Classes="tool" ToolTip.Tip="More: power on to firmware, open the folder, copy the command line">
-          <TextBlock Text="⋯  More" />
+        <Button x:Name="More" Classes="tool" ToolTip.Tip="More: reset, clone, template, firmware setup, the machine's folder…" MinWidth="40">
+          <TextBlock Text="⋯" FontWeight="Bold" HorizontalAlignment="Center" />
           <Button.Flyout>
             <MenuFlyout Placement="BottomEdgeAlignedLeft">
+              <MenuItem Header="Reset" Command="{Binding ResetCommand}" IsVisible="{Binding IsActive}" ToolTip.Tip="Restart at once, like a computer's reset button (unsaved work is lost)" />
+              <MenuItem x:Name="PowerOnBackground" Header="Power on in the background" Command="{Binding PowerOnInBackgroundCommand}" IsVisible="{Binding CanPowerOn}" ToolTip.Tip="Start without opening the screen; Open screen shows it whenever you want" />
               <MenuItem Header="Power on to firmware setup" Command="{Binding PowerOnToFirmwareCommand}" IsVisible="{Binding CanOpenFirmware}" />
               <MenuItem Header="Discard suspended state…" Command="{Binding DiscardSuspendedCommand}" IsVisible="{Binding CanDiscardSuspended}" />
               <MenuItem Header="Send Ctrl+Alt+Del" Command="{Binding SendCtrlAltDelCommand}" IsVisible="{Binding IsActive}" />
@@ -127,7 +126,8 @@
             </MenuFlyout>
           </Button.Flyout>
         </Button>
-      </WrapPanel>
+      </StackPanel>
+      </Grid>
 
       <!-- The machine's notes (written in Settings). -->
       <Border Classes="card" IsVisible="{Binding HasNotes}">
