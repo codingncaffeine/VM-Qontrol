@@ -1,0 +1,30 @@
+# Local-only notes, plans and work files (house rule: plans stay local)
+/local-notes/
+/scratch/
+/snapshots/
+
+# Never commit disk images, ISOs, firmware variable stores or TPM state
+*.qcow2
+*.img
+*.iso
+*.vmdk
+*.vdi
+*.vhdx
+*.fd
+/vms/
+
+# .NET build output
+bin/
+obj/
+publish/
+*.user
+*.suo
+.vs/
+.idea/
+*.swp
+
+# Release artifacts
+/packaging/out/
+
+# Test output
+TestResults/
