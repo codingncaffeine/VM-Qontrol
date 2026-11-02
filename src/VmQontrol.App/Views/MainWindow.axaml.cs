@@ -27,6 +27,7 @@ public partial class MainWindow : Window
             DesktopIdentity.Apply(this);
             WindowingBackend.WindowOpened(this);
         };
+        Closed += (_, _) => (DataContext as ShellViewModel)?.Stop();
         DataContextChanged += (_, _) =>
         {
             if (DataContext is ShellViewModel shell)

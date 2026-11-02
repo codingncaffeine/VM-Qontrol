@@ -59,4 +59,84 @@ public sealed class UsbTests
             await MachineRunner.WaitForExitAsync(running, TimeSpan.FromSeconds(10), CancellationToken.None);
         }
     }
+
+    [Fact]
+    public void A_device_plugged_in_while_watching_is_news_and_ones_already_there_are_not()
+    {
+        using var profile = new TestProfile("usbhotplug");
+        var sys = Path.Combine(profile.Root, "sys");
+        Device(sys, "3-1", new() { ["idVendor"] = "046d", ["idProduct"] = "c52b", ["busnum"] = "3", ["devnum"] = "2", ["bDeviceClass"] = "00" });
+        using var hotplug = new UsbHotplug(sys, root => UsbHost.List(root, _ => true));
+        hotplug.Start(TimeSpan.FromHours(1)); // checked by hand below
+        Assert.Empty(hotplug.Check());
+
+        Device(sys, "3-2", new() { ["idVendor"] = "0781", ["idProduct"] = "5583", ["product"] = "Ultra Fit", ["busnum"] = "3", ["devnum"] = "5", ["bDeviceClass"] = "00" });
+        Device(sys, "3-3", new() { ["idVendor"] = "05e3", ["idProduct"] = "0610", ["busnum"] = "3", ["devnum"] = "6", ["bDeviceClass"] = "09" });
+        Device(sys, "3-2:1.0", new() { ["bInterfaceClass"] = "08" });
+        var plugged = Assert.Single(hotplug.Check()); // the hub and the interface are not devices to hand over
+        Assert.Equal("0781:5583", plugged.Id);
+        Assert.Empty(hotplug.Check());
+
+        // Unplugged and plugged back: news again.
+        Directory.Delete(Path.Combine(sys, "3-2"), true);
+        Assert.Empty(hotplug.Check());
+        Device(sys, "3-2", new() { ["idVendor"] = "0781", ["idProduct"] = "5583", ["busnum"] = "3", ["devnum"] = "7", ["bDeviceClass"] = "00" });
+        Assert.Equal("007", Assert.Single(hotplug.Check()).Device);
+    }
+
+    /// <summary>
+    /// A rule (a usb-host matched by vendor and product) is accepted by a running QEMU with no such device plugged in:
+    /// it waits for one. The power-on rule carries the same id, so the panel sees both and can take them out.
+    /// </summary>
+    [Trait("Tier", "Integration")]
+    [Fact]
+    public async Task Rules_wait_for_their_device_and_can_be_added_and_removed_live()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var profile = new TestProfile("usbrule");
+        var dir = Path.Combine(profile.Paths.DefaultLibrary, "rule");
+        Directory.CreateDirectory(dir);
+        var m = new MachineConfig
+        {
+            Name = "rule", MemoryMiB = 256, Cpu = new CpuConfig { Cores = 1 }, Firmware = new FirmwareConfig { Kind = FirmwareKind.Bios },
+            Disks = [new DiskConfig { File = "disk0.qcow2", SizeGiB = 1 }],
+            Usb = new UsbConfig { Passthrough = [new UsbDevice("ffff", "fffd", "Never plugged")] },
+        };
+        await QemuImg.CreateAsync(Path.Combine(dir, "disk0.qcow2"), "qcow2", 1, ct: ct);
+        var running = await MachineRunner.StartAsync(m, dir, profile.Paths, HostProbe.Probe(), new StartOptions { Headless = true }, ct);
+        try
+        {
+            await using var watcher = await MachineWatcher.AttachAsync(running, ct);
+            var before = await UsbHost.AttachedAsync(watcher, ct);
+            Assert.Contains("usbauto-ffff-fffd", before);
+            Assert.DoesNotContain("usbauto-ffff-fffe", before); // the control for the live add below
+            await UsbHost.AddRuleAsync(watcher, "ffff", "fffe", ct);
+            Assert.Contains("usbauto-ffff-fffe", await UsbHost.AttachedAsync(watcher, ct));
+            await UsbHost.RemoveRuleAsync(watcher, "ffff", "fffe", ct);
+            await UsbHost.RemoveRuleAsync(watcher, "ffff", "fffd", ct);
+            // device_del finishes when the guest lets go; a USB device on an idle guest goes at once, but give it a moment.
+            IReadOnlySet<string> after = before;
+            for (var i = 0; i < 20 && after.Any(UsbHost.IsRuleId); i++)
+            {
+                await Task.Delay(100, ct);
+                after = await UsbHost.AttachedAsync(watcher, ct);
+            }
+
+            Assert.DoesNotContain(after, UsbHost.IsRuleId);
+        }
+        finally
+        {
+            await MachineRunner.PowerOffAsync(running, CancellationToken.None);
+            await MachineRunner.WaitForExitAsync(running, TimeSpan.FromSeconds(10), CancellationToken.None);
+        }
+    }
+
+    [Theory]
+    [InlineData("Corsair", "CORSAIR K100 RGB", "CORSAIR K100 RGB")]
+    [InlineData("Elgato", "Elgato 4K X", "Elgato 4K X")]
+    [InlineData("ELAN", "ELAN:Fingerprint", "ELAN:Fingerprint")]
+    [InlineData("Logitech", "USB Receiver", "Logitech USB Receiver")]
+    [InlineData("", "Ultra Fit", "Ultra Fit")]
+    public void A_name_says_its_maker_once(string manufacturer, string product, string expected) =>
+        Assert.Equal(expected, UsbHost.DeviceName(manufacturer, product));
 }

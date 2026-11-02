@@ -151,7 +151,7 @@
 
     <!-- USB devices for one machine. -->
     <Panel x:Name="UsbLayer" IsVisible="{Binding UsbPanel, Converter={x:Static ObjectConverters.IsNotNull}}" Background="{DynamicResource QScrim}">
-      <Border Classes="card" Width="720" MaxHeight="720" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="22,18"
+      <Border Classes="card" Width="780" MaxHeight="720" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="24,20"
               DataContext="{Binding UsbPanel}" x:DataType="vm:UsbPanelViewModel" BoxShadow="0 12 40 0 #60000000">
         <DockPanel>
           <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,12">
@@ -167,34 +167,42 @@
             <TextBlock x:Name="UsbNote" Text="{Binding Note}" TextWrapping="Wrap" />
             <Button Classes="secondary" Content="Done" Command="{Binding CloseCommand}" HorizontalAlignment="Right" />
           </StackPanel>
-          <ScrollViewer>
-            <ItemsControl x:Name="UsbDevices" ItemsSource="{Binding Devices}">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="vm:UsbRow">
-                  <Border BorderBrush="{DynamicResource QBorder}" BorderThickness="0,0,0,1" Padding="0,10">
-                    <Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="12">
-                      <StackPanel>
-                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" />
-                        <TextBlock Text="{Binding Detail}" Classes="muted" FontSize="{DynamicResource QFontSmall}" />
-                        <TextBlock Text="{Binding Where}" FontSize="{DynamicResource QFontSmall}" Classes.warn="{Binding InMachine}" />
-                      </StackPanel>
-                      <CheckBox Grid.Column="1" Content="At every power on" IsChecked="{Binding Automatic}" VerticalAlignment="Center"
-                                ToolTip.Tip="Connect this device to the machine each time it starts" />
-                      <Button Grid.Column="2" Classes="tool" Content="{Binding ActionText}" Command="{Binding ToggleCommand}" VerticalAlignment="Center" />
-                      <Grid Grid.Row="1" Grid.ColumnSpan="3" ColumnDefinitions="*,Auto" Margin="0,8,0,0" IsVisible="{Binding NeedsPermission}">
-                        <StackPanel Spacing="4">
-                          <TextBlock Text="Your account may not hand this device over yet. Run once:" Classes="warn" FontSize="{DynamicResource QFontSmall}" TextWrapping="Wrap" />
-                          <Border Classes="code"><SelectableTextBlock Text="{Binding PermissionFix}" FontFamily="monospace" FontSize="11" TextWrapping="Wrap" /></Border>
+          <ScrollViewer Padding="0,0,14,0">
+            <StackPanel Spacing="10">
+              <Border Background="{DynamicResource QSurfaceRaised}" BorderBrush="{DynamicResource QBorder}" BorderThickness="1" CornerRadius="8" Padding="14,10" IsVisible="{Binding HasLocked}">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                  <Path Classes="icon" Data="{StaticResource IconWarning}" Stroke="{DynamicResource QWarning}" Width="18" Height="18" VerticalAlignment="Center" />
+                  <TextBlock x:Name="UsbLockedNote" Grid.Column="1" Text="{Binding LockedText}" TextWrapping="Wrap" VerticalAlignment="Center" Classes="muted" />
+                </Grid>
+              </Border>
+              <ItemsControl x:Name="UsbDevices" ItemsSource="{Binding Devices}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:UsbRow">
+                    <Border BorderBrush="{DynamicResource QBorder}" BorderThickness="0,0,0,1" Padding="0,12">
+                      <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="14">
+                        <Border Width="36" Height="36" CornerRadius="9" Background="{DynamicResource QAccentSoft}" VerticalAlignment="Center">
+                          <Path Classes="icon" Data="{StaticResource IconUsb}" Stroke="{DynamicResource QAccent}" Width="18" Height="18" Stretch="Uniform" />
+                        </Border>
+                        <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                          <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}" />
+                          <TextBlock Text="{Binding Detail}" Classes="muted" FontFamily="monospace" FontSize="{DynamicResource QFontSmall}" />
                         </StackPanel>
-                        <Button Grid.Column="1" Classes="icononly" Margin="6,0,0,0" VerticalAlignment="Bottom" Command="{Binding CopyFixCommand}" ToolTip.Tip="Copy the command">
-                          <Path Classes="icon" Data="{StaticResource IconCopy}" />
-                        </Button>
+                        <Border Grid.Column="2" Classes="pill" Classes.ok="{Binding InMachine}" Classes.warn="{Binding IsLocked}" Classes.muted="{Binding IsHere}" VerticalAlignment="Center">
+                          <TextBlock Text="{Binding StateText}" />
+                        </Border>
+                        <CheckBox Grid.Column="3" Content="Always connect" IsChecked="{Binding Automatic}" VerticalAlignment="Center"
+                                  ToolTip.Tip="Connect this device to the machine at every power on, and whenever it is plugged in while the machine runs" />
+                        <Panel Grid.Column="4" Width="96" VerticalAlignment="Center">
+                          <Button Classes="tool" Content="{Binding ActionText}" Command="{Binding ToggleCommand}" IsVisible="{Binding CanMove}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+                          <Button Classes="tool" Content="Allow…" Command="{Binding AllowCommand}" IsVisible="{Binding ShowAllow}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                  ToolTip.Tip="Show the one-time command that lets your account hand this device to machines" />
+                        </Panel>
                       </Grid>
-                    </Grid>
-                  </Border>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
           </ScrollViewer>
         </DockPanel>
       </Border>
@@ -256,9 +264,12 @@
       <Border Classes="card" MaxWidth="560" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="24,20" DataContext="{Binding Notice}"
               x:DataType="vm:NoticeViewModel" BoxShadow="0 12 40 0 #60000000">
         <StackPanel Spacing="14">
-          <StackPanel Orientation="Horizontal" Spacing="10">
+          <StackPanel Orientation="Horizontal" Spacing="12">
+            <Border Width="40" Height="40" CornerRadius="10" Background="{DynamicResource QAccentSoft}" IsVisible="{Binding HasIcon}" VerticalAlignment="Center">
+              <Path Classes="icon" Data="{Binding Icon}" Stroke="{DynamicResource QAccent}" Width="20" Height="20" Stretch="Uniform" />
+            </Border>
             <Path Classes="icon" Data="{StaticResource IconWarning}" Stroke="{DynamicResource QDanger}" IsVisible="{Binding IsError}" Width="20" Height="20" />
-            <TextBlock x:Name="NoticeTitle" Text="{Binding Title}" Classes="h1" TextWrapping="Wrap" />
+            <TextBlock x:Name="NoticeTitle" Text="{Binding Title}" Classes="h1" TextWrapping="Wrap" VerticalAlignment="Center" />
           </StackPanel>
           <ItemsControl ItemsSource="{Binding Lines}">
             <ItemsControl.ItemTemplate>
@@ -267,6 +278,16 @@
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
+          <Border Background="{DynamicResource QBackground}" BorderBrush="{DynamicResource QBorder}" BorderThickness="1" CornerRadius="8" Padding="14,10" IsVisible="{Binding HasItem}">
+            <StackPanel Spacing="3">
+              <TextBlock x:Name="NoticeItem" Text="{Binding ItemTitle}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+              <TextBlock Text="{Binding ItemDetail}" Classes="muted" FontFamily="monospace" FontSize="{DynamicResource QFontSmall}" />
+            </StackPanel>
+          </Border>
+          <Border Classes="code" IsVisible="{Binding HasCode}">
+            <SelectableTextBlock Text="{Binding Code}" FontFamily="monospace" FontSize="12" TextWrapping="Wrap" />
+          </Border>
+          <CheckBox x:Name="NoticeCheck" Content="{Binding CheckText}" IsChecked="{Binding Checked}" IsVisible="{Binding HasCheck}" />
           <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
             <Button x:Name="NoticeDismiss" Classes="secondary" Content="{Binding DismissText}" Command="{Binding DismissCommand}" />
             <Button x:Name="NoticeConfirm" Classes="primary" Classes.danger="{Binding IsDanger}" Content="{Binding ConfirmText}" Command="{Binding ConfirmCommand}" IsVisible="{Binding HasConfirm}" />

@@ -19,6 +19,8 @@ configurations (every guest family and the main options) with a stand-in QEMU th
 | 3D acceleration | On unless `glxinfo` reports an old GPU | On when the host has a GPU render node | Without a render node QEMU cannot start with GL at all. |
 | Headless launch | Not offered | No screen, no SPICE, `-audiodev none` | Background work and every test run, which must never make a sound. |
 | Imported machines | — | Read in place, never written | A quickemu machine keeps working with quickemu. |
+| Windows 11 Secure Boot | Off (`secureboot="off"`) | On for new Windows 11 machines when the host has a Secure Boot firmware build | Setup on current Windows 11 discs (build 26300) stops with "The PC must support Secure Boot"; the LabConfig bypass no longer gets past it. Imported machines keep their setting. |
+| USB devices at power on | `usb-host` with no id | The same device with `id=usbauto-VENDOR-PRODUCT` | The id lets the USB panel see the rule in the running machine and take it out live. |
 
 ## Known quickemu behaviour kept for parity
 

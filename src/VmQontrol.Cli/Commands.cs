@@ -22,7 +22,7 @@ internal static class Commands
           inspect MACHINE     Show a machine's settings, anything missing, and the QEMU command it would start.
                               MACHINE is a quickemu .conf, a vm.json, a machine folder, or a name in the library.
           detect FILE.iso     Name the operating system on an installer disc.
-          create NAME [--iso FILE] [--os OS] [--disk-gib N] [--memory-mib N] [--cores N] [--bios] [--tpm]
+          create NAME [--iso FILE] [--os OS] [--disk-gib N] [--memory-mib N] [--cores N] [--bios] [--tpm] [--[no-]secure-boot]
                  [--easy-install --user NAME [--password P] [--edition N] [--key KEY] [--drivers virtio-win.iso] [--first-logon CMD]]
                               Make a new machine in the library (the system is detected from --iso when --os is left out).
                               --easy-install installs Windows, Ubuntu, Fedora/RHEL or Debian with no questions
@@ -72,7 +72,7 @@ internal static class Commands
                 case "detect" when args.Length > 1:
                     return Detect(args[1], output, error);
                 case "create" when args.Length > 1:
-                    return Create(args[1..], paths, output, error);
+                    return Create(args[1..], paths, host, output, error);
                 case "template" when args.Length > 1:
                     return Template(args[1], !args.Contains("--undo"), paths, output, error);
                 case "clone" when args.Length > 2:
@@ -243,7 +243,7 @@ internal static class Commands
         return 0;
     }
 
-    private static int Create(string[] args, QontrolPaths paths, TextWriter output, TextWriter error)
+    private static int Create(string[] args, QontrolPaths paths, Func<HostCapabilities> host, TextWriter output, TextWriter error)
     {
         var name = args[0];
         string? Option(string flag) => Array.IndexOf(args, flag) is var i and >= 0 && i + 1 < args.Length ? args[i + 1] : null;
@@ -341,6 +341,7 @@ internal static class Commands
             Cores = (int?)Number("--cores"),
             Firmware = args.Contains("--bios") ? FirmwareKind.Bios : FirmwareKind.Uefi,
             Tpm = args.Contains("--tpm") || (isWindows && guest.Release == "11"),
+            SecureBoot = !args.Contains("--bios") && !args.Contains("--no-secure-boot") && (args.Contains("--secure-boot") || Recommendations.SecureBoot(guest, host())),
             DiskGiB = Number("--disk-gib") ?? (isWindows ? 64 : guest.Os == "macos" ? 128 : 32),
             WindowsEasyInstall = easy,
             LinuxEasyInstall = linuxEasy,

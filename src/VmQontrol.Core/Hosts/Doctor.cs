@@ -119,8 +119,8 @@ public static class Doctor
         checks.Add(secure is not null
             ? new("Secure Boot firmware", CheckStatus.Ok, secure.Code)
             : distro == DistroFamily.Alpine
-                ? new("Secure Boot firmware", CheckStatus.Optional, "Alpine's firmware package has no Secure Boot build. Machines run without Secure Boot; Windows 11 still installs.")
-                : new("Secure Boot firmware", CheckStatus.Optional, "Only machines that turn Secure Boot on need it.", InstallCommand(distro, "ovmf")));
+                ? new("Secure Boot firmware", CheckStatus.Optional, "Alpine's firmware package has no Secure Boot build. Machines run without Secure Boot; current Windows 11 discs refuse to install without it.")
+                : new("Secure Boot firmware", CheckStatus.Optional, "Windows 11 machines need it (current discs refuse to install without Secure Boot), and any machine that turns Secure Boot on.", InstallCommand(distro, "ovmf")));
 
         checks.Add(onPath("swtpm")
             ? new("TPM emulator (swtpm)", CheckStatus.Ok, "Windows 11 machines get the TPM they require.")

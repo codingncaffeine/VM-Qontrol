@@ -19,7 +19,7 @@
           <TextBlock Text="{Binding ProgressText}" Classes="muted" />
           <ProgressBar Value="{Binding ProgressValue}" IsIndeterminate="{Binding !ProgressKnown}" Maximum="100" Height="4" />
         </StackPanel>
-        <Button Grid.Column="2" Classes="secondary" Content="Back" Command="{Binding BackCommand}" IsVisible="{Binding !IsFirst}" />
+        <Button x:Name="Back" Grid.Column="2" Classes="secondary" Content="Back" Command="{Binding BackCommand}" IsVisible="{Binding !IsFirst}" />
         <Button x:Name="Next" Grid.Column="3" Classes="primary" Content="{Binding NextText}" Command="{Binding NextCommand}" />
       </Grid>
     </Border>
@@ -42,7 +42,7 @@
         <!-- 0 Installer -->
         <StackPanel Spacing="14" IsVisible="{Binding Step, Converter={x:Static vm:Text.Is}, ConverterParameter=0}">
           <TextBlock Text="How will you install the operating system?" Classes="h1" />
-          <UniformGrid Columns="3" ColumnSpacing="12">
+          <UniformGrid Columns="4" ColumnSpacing="12">
             <RadioButton x:Name="SourceDisc" Classes="choice" IsChecked="{Binding IsDisc, Mode=OneWay}" Command="{Binding ChooseSourceCommand}" CommandParameter="{x:Static vm:SourceKind.Disc}" GroupName="source">
               <StackPanel Spacing="4">
                 <TextBlock Text="Installer disc image" FontWeight="SemiBold" />
@@ -59,6 +59,12 @@
               <StackPanel Spacing="4">
                 <TextBlock Text="Install later" FontWeight="SemiBold" />
                 <TextBlock Text="Make the machine now with an empty disk." Classes="muted" TextWrapping="Wrap" />
+              </StackPanel>
+            </RadioButton>
+            <RadioButton x:Name="SourceTemplate" Classes="choice" IsChecked="{Binding IsFromTemplate, Mode=OneWay}" IsEnabled="{Binding HasTemplates}" Command="{Binding ChooseSourceCommand}" CommandParameter="{x:Static vm:SourceKind.Template}" GroupName="source">
+              <StackPanel Spacing="4">
+                <TextBlock Text="From a template" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding TemplateCardText}" Classes="muted" TextWrapping="Wrap" />
               </StackPanel>
             </RadioButton>
           </UniformGrid>
@@ -109,6 +115,36 @@
                   </ListBox.ItemTemplate>
                 </ListBox>
               </Grid>
+            </StackPanel>
+          </Border>
+
+          <Border Classes="card" IsVisible="{Binding IsFromTemplate}">
+            <StackPanel Spacing="12">
+              <TextBlock Text="Template" FontWeight="SemiBold" />
+              <ListBox x:Name="TemplateList" Classes="library" ItemsSource="{Binding Templates}" SelectedItem="{Binding Template}" MaxHeight="240">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:MachineViewModel">
+                    <StackPanel Spacing="2">
+                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                      <TextBlock Text="{Binding GuestLabel}" Classes="muted" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+              <TextBlock Text="Kind of copy" FontWeight="SemiBold" />
+              <RadioButton x:Name="LinkedCopy" GroupName="copy" IsChecked="{Binding LinkedClone}">
+                <StackPanel Spacing="2">
+                  <TextBlock Text="Linked (recommended)" />
+                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="Ready in seconds and needs almost no space: the new machine shares the template's disks, kept read-only, and keeps its own changes. The shared disks stay until neither the template nor any machine made from it is left." />
+                </StackPanel>
+              </RadioButton>
+              <RadioButton x:Name="FullCopy" GroupName="copy" IsChecked="{Binding FullClone}">
+                <StackPanel Spacing="2">
+                  <TextBlock Text="Full" />
+                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="Its own copy of the template's disks, firmware settings and TPM. Choose it when the machine will live long or move to another computer; it needs as much free space as the template's disks use." />
+                </StackPanel>
+              </RadioButton>
+              <TextBlock Classes="muted" TextWrapping="Wrap" Text="The new machine has the template's system and hardware; change the hardware later in Settings. The template itself never changes." />
             </StackPanel>
           </Border>
 

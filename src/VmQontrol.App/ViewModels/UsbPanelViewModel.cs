@@ -2,12 +2,11 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VmQontrol.Core.Devices;
-using VmQontrol.Core.Machines;
 using VmQontrol.Core.Runtime;
 
 namespace VmQontrol.App.ViewModels;
 
-/// <summary>One USB device in the panel: where it is now, and whether the machine takes it at every power on.</summary>
+/// <summary>One USB device in the panel: where it is now, and whether the machine always takes it (a rule).</summary>
 public sealed partial class UsbRow(HostUsbDevice device, UsbPanelViewModel panel) : ObservableObject
 {
     public HostUsbDevice Device { get; } = device;
@@ -18,16 +17,29 @@ public sealed partial class UsbRow(HostUsbDevice device, UsbPanelViewModel panel
 
     public bool NeedsPermission => !Device.Writable;
 
-    public string PermissionFix => UsbHost.PermissionFix(Device);
+    /// <summary>Connect / Give back are offered once the account may open the device; until then, Allow….</summary>
+    public bool CanMove => !NeedsPermission || InMachine;
+
+    public bool ShowAllow => !CanMove;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Where), nameof(ActionText))]
+    [NotifyPropertyChangedFor(nameof(Where), nameof(ActionText), nameof(CanMove), nameof(ShowAllow), nameof(StateText), nameof(IsHere), nameof(IsLocked))]
     private bool _inMachine;
+
+    /// <summary>The state pill: where the device is, or that it needs the one-time permission.</summary>
+    public string StateText => InMachine ? $"In {panel.MachineName}" : NeedsPermission ? "Needs permission" : "On this computer";
+
+    public bool IsHere => !InMachine && !NeedsPermission;
+
+    public bool IsLocked => !InMachine && NeedsPermission;
 
     [ObservableProperty]
     private bool _automatic;
 
-    public string Where => InMachine ? "In the machine" : "On this computer";
+    /// <summary>In the machine through its rule (connected by kind, not by port), so giving it back takes the rule out.</summary>
+    public bool ByRule { get; set; }
+
+    public string Where => InMachine ? ByRule ? "In the machine (connects automatically)" : "In the machine" : "On this computer";
 
     public string ActionText => InMachine ? "Give back" : "Connect";
 
@@ -37,7 +49,7 @@ public sealed partial class UsbRow(HostUsbDevice device, UsbPanelViewModel panel
     private Task ToggleAsync() => panel.ToggleAsync(this);
 
     [RelayCommand]
-    private void CopyFix() => panel.CopyFix(this);
+    private void Allow() => panel.Allow([this]);
 }
 
 /// <summary>
@@ -61,11 +73,22 @@ public sealed partial class UsbPanelViewModel : ObservableObject
 
     public string Title => $"USB devices for {_machine.Name}";
 
+    public string MachineName => _machine.Name;
+
+    /// <summary>Devices this account may not open yet (the banner offers one command for all of them).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasLocked), nameof(LockedText))]
+    private int _lockedCount;
+
+    public bool HasLocked => LockedCount > 0;
+
+    public string LockedText => "Linux lets only the system open a USB device until a one-time rule allows your account. Choose Allow… on a device to see its command; VM Qontrol never asks for your password itself.";
+
     public bool Running => _machine.Watcher is not null;
 
     public string Explain => Running
         ? "Connect hands a device to the machine at once; it leaves this computer until you give it back or the machine stops."
-        : "The machine is off. Choose the devices it takes at every power on; Connect works while it runs.";
+        : "The machine is off. Choose the devices it always connects (at every power on, and when plugged in while it runs); Connect works while it runs.";
 
     [ObservableProperty] private string _note = "";
 
@@ -87,14 +110,17 @@ public sealed partial class UsbPanelViewModel : ObservableObject
             Devices.Clear();
             foreach (var d in devices)
             {
+                var byRule = attached.Contains(d.RuleId) && d.Writable;
                 Devices.Add(new UsbRow(d, this)
                 {
-                    InMachine = attached.Contains(d.QemuId),
+                    ByRule = byRule,
+                    InMachine = attached.Contains(d.QemuId) || byRule,
                     Automatic = _machine.Machine.Usb.Passthrough.Any(u => u.VendorId == d.VendorId && u.ProductId == d.ProductId),
                 });
             }
 
             _loading = false;
+            LockedCount = Devices.Count(r => r.IsLocked);
             Note = devices.Count == 0 ? "No USB devices were found on this computer." : "";
         });
     }
@@ -103,7 +129,7 @@ public sealed partial class UsbPanelViewModel : ObservableObject
     {
         if (_machine.Watcher is not { } watcher)
         {
-            Ui.Post(() => Note = "Power the machine on first, or tick \"At every power on\".");
+            Ui.Post(() => Note = "Power the machine on first, or tick \"Always connect\".");
             return;
         }
 
@@ -115,12 +141,17 @@ public sealed partial class UsbPanelViewModel : ObservableObject
 
         try
         {
-            if (row.InMachine) await UsbHost.DetachAsync(watcher, row.Device).ConfigureAwait(false);
+            var byRule = row.InMachine && row.ByRule;
+            if (byRule) await UsbHost.RemoveRuleAsync(watcher, row.Device.VendorId, row.Device.ProductId).ConfigureAwait(false);
+            else if (row.InMachine) await UsbHost.DetachAsync(watcher, row.Device).ConfigureAwait(false);
             else await UsbHost.AttachAsync(watcher, row.Device).ConfigureAwait(false);
             Ui.Post(() =>
             {
+                row.ByRule = false;
                 row.InMachine = !row.InMachine;
-                Note = row.InMachine ? $"{row.Name} is in {_machine.Name} now." : $"{row.Name} is back on this computer.";
+                Note = row.InMachine ? $"{row.Name} is in {_machine.Name} now."
+                    : byRule ? $"{row.Name} is back on this computer until {_machine.Name} next powers on (it is set to always connect)."
+                    : $"{row.Name} is back on this computer.";
             });
         }
         catch (Exception ex) when (ex is QmpException or IOException)
@@ -132,20 +163,36 @@ public sealed partial class UsbPanelViewModel : ObservableObject
     public void SetAutomatic(UsbRow row, bool automatic)
     {
         if (_loading) return;
-        var before = _machine.Machine;
-        var list = before.Usb.Passthrough.Where(u => !(u.VendorId == row.Device.VendorId && u.ProductId == row.Device.ProductId)).ToList();
-        if (automatic) list.Add(new UsbDevice(row.Device.VendorId, row.Device.ProductId, row.Name));
-        var after = before with { Usb = before.Usb with { Passthrough = list } };
-        var target = _machine.IsQuickemu ? Path.Combine(_machine.HistoryDirectory, MachineStore.FileName) : Path.Combine(_machine.Folder, MachineStore.FileName);
-        var history = _machine.HistoryDirectory;
-        _ = Task.Run(() => SettingsHistory.Save(before, after, target, history)).ContinueWith(_ => Ui.Post(() =>
+        var running = _machine.Watcher is not null;
+        _ = Task.Run(async () =>
         {
-            _machine.Reload(after);
-            Note = automatic ? $"{row.Name} will be connected at every power on." : $"{row.Name} stays on this computer at power on.";
-        }), TaskScheduler.Default);
+            var live = await _machine.SetUsbRuleAsync(row.Device, automatic).ConfigureAwait(false);
+            Ui.Post(() => Note = live is not null ? $"Saved for the next power on; the running machine refused it now: {live}"
+                : automatic ? running ? $"{row.Name} connects to {_machine.Name} now, whenever it is plugged in, and at every power on." : $"{row.Name} will be connected at every power on."
+                : $"{row.Name} stays on this computer.");
+            if (running) await RefreshAsync().ConfigureAwait(false);
+        });
     }
 
-    public void CopyFix(UsbRow row) => _shell.CopyToClipboard(row.PermissionFix, "The command is on the clipboard. Paste it into a terminal, then unplug the device and plug it in again.");
+    /// <summary>The one-time permission for these devices: the command, shown and copied, never run by VM Qontrol.</summary>
+    public void Allow(IReadOnlyList<UsbRow> rows)
+    {
+        if (rows.Count == 0) return;
+        var command = string.Join(" && ", rows.Select(r => UsbHost.PermissionFix(r.Device)));
+        var one = rows.Count == 1 ? rows[0] : null;
+        var notice = new NoticeViewModel(one is null ? $"Allow {rows.Count} USB devices" : "Allow this USB device",
+            ["Linux lets only the system open USB devices unless a rule allows your account. This command adds that rule for "
+             + (one is null ? "these kinds of device" : "this kind of device") + " (it needs your password once). Run it in a terminal, then unplug the device and plug it in again."],
+            confirm: "Copy the command", dismiss: "Not now", icon: "IconUsb",
+            itemTitle: one?.Name ?? string.Join(", ", rows.Select(r => r.Name).Take(3)) + (rows.Count > 3 ? $" and {rows.Count - 3} more" : ""),
+            itemDetail: one?.Detail ?? $"{rows.Count} devices", code: command);
+        _shell.Show(notice);
+        _ = notice.Answer.ContinueWith(t =>
+        {
+            if (t.Result) Ui.Post(() => _shell.CopyToClipboard(command, "The command is on the clipboard. Paste it into a terminal, then unplug the devices and plug them in again."));
+        }, TaskScheduler.Default);
+    }
+
 
     [RelayCommand]
     private void Close() => Closed?.Invoke();

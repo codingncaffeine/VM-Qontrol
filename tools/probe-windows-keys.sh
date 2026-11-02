@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Proves which setup keys a Windows disc accepts: one throwaway machine per edition (headless, silent, 2 GB), started
-# with Easy Install and the candidate key; after three minutes a screenshot shows whether Setup went past its key page.
+# with Easy Install and the candidate key (PROBE_MEMORY_MIB overrides the 2 GB); after three minutes a screenshot shows whether Setup went past its key page.
 #   tools/probe-windows-keys.sh WINDOWS.iso "INDEX:KEY" ...      (runs four at a time)
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -14,7 +14,7 @@ vmq="$root/src/VmQontrol.Cli/bin/Release/net10.0/vmq"
 probe() {
     local index="${1%%:*}" key="${1#*:}" name="edition-${1%%:*}"
     "$vmq" create "$name" --iso "$iso" --easy-install --user tester --password x --edition "$index" --key "$key" \
-        --memory-mib 2048 --cores 2 --disk-gib 32 > /dev/null || { echo "$name: create failed"; return; }
+        --memory-mib "${PROBE_MEMORY_MIB:-2048}" --cores 2 --disk-gib 32 > /dev/null || { echo "$name: create failed"; return; }
     "$vmq" start "$name" --headless > /dev/null || { echo "$name: start failed"; return; }
     sleep 170
     "$vmq" screenshot "$name" "$shots/$name.png" > /dev/null

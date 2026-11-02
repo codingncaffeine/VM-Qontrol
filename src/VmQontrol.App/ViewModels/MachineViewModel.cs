@@ -3,6 +3,7 @@ using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VmQontrol.Core;
+using VmQontrol.Core.Devices;
 using VmQontrol.Core.Hosts;
 using VmQontrol.Core.Library;
 using VmQontrol.Core.Machines;
@@ -201,6 +202,33 @@ public sealed partial class MachineViewModel : ObservableObject
     public string HistoryDirectory => IsQuickemu ? Path.Combine(_shell.Paths.State, "machines", Machine.Id) : Folder;
 
     /// <summary>Takes new settings (after Save in Settings) and refreshes everything shown from them.</summary>
+    /// <summary>
+    /// Saves (or drops) the rule that always connects this kind of USB device to the machine, and while it runs puts the
+    /// rule in (or takes it out) at once. Returns QEMU's reason when the running machine refused it, else <c>null</c>.
+    /// Call on a worker.
+    /// </summary>
+    public async Task<string?> SetUsbRuleAsync(HostUsbDevice device, bool on)
+    {
+        var before = Machine;
+        var list = before.Usb.Passthrough.Where(u => !(u.VendorId == device.VendorId && u.ProductId == device.ProductId)).ToList();
+        if (on) list.Add(new UsbDevice(device.VendorId, device.ProductId, device.Name));
+        var after = before with { Usb = before.Usb with { Passthrough = list } };
+        var target = IsQuickemu ? Path.Combine(HistoryDirectory, MachineStore.FileName) : Path.Combine(Folder, MachineStore.FileName);
+        SettingsHistory.Save(before, after, target, HistoryDirectory);
+        Ui.Post(() => Reload(after));
+        if (Watcher is not { } watcher) return null;
+        try
+        {
+            if (on) await UsbHost.AddRuleAsync(watcher, device.VendorId, device.ProductId).ConfigureAwait(false);
+            else await UsbHost.RemoveRuleAsync(watcher, device.VendorId, device.ProductId).ConfigureAwait(false);
+            return null;
+        }
+        catch (QmpException ex)
+        {
+            return ex.Message;
+        }
+    }
+
     public void Reload(MachineConfig machine)
     {
         Machine = machine;

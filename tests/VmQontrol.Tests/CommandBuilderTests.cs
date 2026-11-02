@@ -57,7 +57,7 @@ public sealed class CommandBuilderTests
         var m = Linux with { Usb = new UsbConfig { Passthrough = [new UsbDevice("046d", "c52b")] } };
         var args = Build(m).Args;
         Assert.Contains("qemu-xhci,id=hostpass", args);
-        Assert.Contains("usb-host,bus=hostpass.0,vendorid=0x046d,productid=0xc52b", args);
+        Assert.Contains("usb-host,bus=hostpass.0,vendorid=0x046d,productid=0xc52b,id=usbauto-046d-c52b", args);
     }
 
     [Fact]

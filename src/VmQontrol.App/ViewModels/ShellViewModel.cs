@@ -2,8 +2,10 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VmQontrol.Core;
+using VmQontrol.Core.Devices;
 using VmQontrol.Core.Hosts;
 using VmQontrol.Core.Library;
+using VmQontrol.Core.Runtime;
 
 namespace VmQontrol.App.ViewModels;
 
@@ -168,6 +170,95 @@ public sealed partial class ShellViewModel : ObservableObject
         var checks = await Task.Run(() => Doctor.Run(host, Doctor.DetectThisDistro(), Settings.LibraryRoots[0])).ConfigureAwait(false);
         Ui.Post(() => Welcome.Show(checks));
         await RefreshAsync().ConfigureAwait(false);
+        if (WatchUsb && _hotplug is null)
+        {
+            _hotplug = new UsbHotplug();
+            _hotplug.Plugged += d => Ui.Post(() => UsbPlugged(d));
+            _hotplug.Start();
+        }
+    }
+
+    private UsbHotplug? _hotplug;
+
+    /// <summary>Whether USB devices plugged in while the app runs are offered to the running machine (tests turn it off).</summary>
+    public bool WatchUsb { get; init; } = true;
+
+    /// <summary>The window closed: stop watching for USB devices.</summary>
+    public void Stop()
+    {
+        _hotplug?.Dispose();
+        _hotplug = null;
+    }
+
+    /// <summary>
+    /// A USB device was plugged into this computer. A running machine with a rule for it has QEMU take it already, so
+    /// that is only reported. Otherwise, as Workstation does, the machine in view (or the only running one) is offered it,
+    /// with "Always connect it" to make the rule; a device the account may not hand over gets its one-time fix instead.
+    /// </summary>
+    public void UsbPlugged(HostUsbDevice device)
+    {
+        var running = _all.Where(m => m.Watcher is not null).ToList();
+        if (running.Count == 0) return;
+        if (running.FirstOrDefault(m => m.Machine.Usb.Passthrough.Any(u => u.VendorId == device.VendorId && u.ProductId == device.ProductId)) is { } ruled)
+        {
+            Note(device.Writable
+                ? $"{device.Name} was plugged in and went to {ruled.Name} (it always connects there)."
+                : $"{device.Name} was plugged in, but your account may not hand it to {ruled.Name}: open its USB devices for the one-time fix.");
+            return;
+        }
+
+        var target = Selected is { Watcher: not null } s ? s : running.Count == 1 ? running[0] : null;
+        if (target is null || Notice is not null || Prompt is not null || Wizard is not null)
+        {
+            Note($"{device.Name} was plugged in. To hand it to a machine, open that machine's USB devices.");
+            return;
+        }
+
+        if (!device.Writable)
+        {
+            var fix = new NoticeViewModel("New USB device",
+                [$"Your account may not hand it to {target.Name} yet. This command allows it for this kind of device (it needs your password once). Run it in a terminal, then unplug the device and plug it in again."],
+                confirm: "Copy the command", dismiss: "Keep it on this computer",
+                icon: "IconUsb", itemTitle: device.Name, itemDetail: $"{device.Id} · {device.Speed} · port {device.Port}", code: UsbHost.PermissionFix(device));
+            Show(fix);
+            _ = fix.Answer.ContinueWith(t =>
+            {
+                if (t.Result) Ui.Post(() => CopyToClipboard(UsbHost.PermissionFix(device), "The command is on the clipboard. Paste it into a terminal, then unplug the device and plug it in again."));
+            }, TaskScheduler.Default);
+            return;
+        }
+
+        var notice = new NoticeViewModel("New USB device",
+            [$"Connect it to {target.Name}? It leaves this computer until you give it back or {target.Name} stops."],
+            confirm: $"Connect to {target.Name}", dismiss: "Keep it on this computer", checkText: $"Always connect it to {target.Name}",
+            icon: "IconUsb", itemTitle: device.Name, itemDetail: $"{device.Id} · {device.Speed} · port {device.Port}");
+        Show(notice);
+        _ = Task.Run(async () =>
+        {
+            if (!await notice.Answer.ConfigureAwait(false) || target.Watcher is not { } watcher) return;
+            try
+            {
+                // A rule takes the device by kind, so it also follows when it is unplugged and plugged back.
+                if (notice.Checked)
+                {
+                    if (await target.SetUsbRuleAsync(device, true).ConfigureAwait(false) is { } refused)
+                    {
+                        Ui.Post(() => Show(new NoticeViewModel($"{device.Name} could not be connected", [refused, "The rule is saved: it connects at the next power on."], isError: true)));
+                        return;
+                    }
+                }
+                else
+                {
+                    await UsbHost.AttachAsync(watcher, device).ConfigureAwait(false);
+                }
+
+                Ui.Post(() => Note(notice.Checked ? $"{device.Name} is in {target.Name}, and always connects there." : $"{device.Name} is in {target.Name}."));
+            }
+            catch (Exception ex) when (ex is QmpException or IOException)
+            {
+                Ui.Post(() => Show(new NoticeViewModel($"{device.Name} could not be connected", [ex.Message], isError: true)));
+            }
+        });
     }
 
     [RelayCommand]
@@ -285,6 +376,9 @@ public sealed partial class ShellViewModel : ObservableObject
             if (powerOn) created.PowerOnCommand.Execute(null);
         });
     }
+
+    /// <summary>The library's templates, by name (the wizard offers them as a source).</summary>
+    public IReadOnlyList<MachineViewModel> Templates => _all.Where(m => m.IsTemplate).OrderBy(m => m.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
 
     public IReadOnlyList<string> FolderNames => _all.Select(m => m.FolderName).Where(f => f.Length > 0).Distinct().Order(StringComparer.CurrentCultureIgnoreCase).ToList();
 

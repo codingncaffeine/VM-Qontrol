@@ -42,6 +42,9 @@ public static class WindowsSetupKeys
         ("Education", "YNMGQ-8RYV3-4PGQ3-C8XTP-7CFBY"),
         ("Home Single Language", "BT79Q-G7N6G-PGBYW-4YWX6-6F4BT"),
         ("Home N", "4CPRK-NM3K3-X6XXQ-RXX86-WXCHW"),
+        // Proven 2026-11-02 on Windows 11 build 26300 (all eleven editions went on to "Installing Windows 11"). The same
+        // Home key that Windows 10 22H2 refused is accepted there, so it is listed for Windows 11 only.
+        ("11 Home", "YTMG3-N6DKC-DKB77-7M9GH-8HVX7"),
     ];
 
     /// <summary>The setup key for an edition name such as "Windows 11 Pro" on a consumer or a volume-licence disc, or <c>null</c>.</summary>

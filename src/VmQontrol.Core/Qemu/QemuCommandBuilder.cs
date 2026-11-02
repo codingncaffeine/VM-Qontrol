@@ -400,7 +400,7 @@ public static class QemuCommandBuilder
         {
             args.AddRange(["-device", $"{passthroughController},id=hostpass"]);
             foreach (var u in m.Usb.Passthrough)
-                args.AddRange(["-device", $"usb-host,bus=hostpass.0,vendorid=0x{u.VendorId},productid=0x{u.ProductId}"]);
+                args.AddRange(["-device", $"usb-host,bus=hostpass.0,vendorid=0x{u.VendorId},productid=0x{u.ProductId},id={Devices.UsbHost.RuleId(u.VendorId, u.ProductId)}"]);
         }
 
         for (var i = 0; i < m.Shares.Count && ctx.Virtiofsd is { } virtiofsd; i++)

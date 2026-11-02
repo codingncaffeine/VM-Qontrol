@@ -332,6 +332,110 @@ public sealed class MainWindowTests
     }
 
     /// <summary>
+    /// A USB device plugged in while a machine runs (the watcher's event, fed by hand): the machine in view is offered it
+    /// with "Always connect it"; ticked and confirmed, the rule is saved and is in the running QEMU at once. A device of a
+    /// kind that already has a rule is only reported (no question), and one the account may not open gets the fix.
+    /// </summary>
+    [Trait("Tier", "Integration")]
+    [Fact]
+    public async Task A_device_plugged_in_while_running_is_offered_and_Always_makes_a_live_rule()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var profile = new TestProfile("usb-plugged");
+        var dir = Path.Combine(profile.Paths.DefaultLibrary, "Desk");
+        Directory.CreateDirectory(dir);
+        var machine = new MachineConfig
+        {
+            Name = "Desk", MemoryMiB = 256, Cpu = new CpuConfig { Cores = 1 }, Firmware = new FirmwareConfig { Kind = FirmwareKind.Bios },
+            Disks = [new DiskConfig { File = "disk0.qcow2", SizeGiB = 1 }], Display = new DisplayConfig { Backend = DisplayBackend.None },
+        };
+        await VmQontrol.Core.Runtime.QemuImg.CreateAsync(Path.Combine(dir, "disk0.qcow2"), "qcow2", 1, ct: ct);
+        MachineStore.Save(machine, Path.Combine(dir, "vm.json"));
+        var running = await VmQontrol.Core.Runtime.MachineRunner.StartAsync(machine, dir, profile.Paths, VmQontrol.Core.Hosts.HostProbe.Probe(), new VmQontrol.Core.Runtime.StartOptions { Headless = true }, ct);
+        // Devices no computer has, so QEMU's rule waits and nothing real is taken.
+        var stick = new VmQontrol.Core.Devices.HostUsbDevice("ffff", "fffc", "Test Stick", "001", "099", "9-9", 480, true, false);
+        var locked = stick with { ProductId = "fffb", Name = "Locked Pad", Writable = false };
+        try
+        {
+            var seen = await Ui.Run(() =>
+            {
+                var (window, shell) = Open(profile);
+                Ui.PumpUntil(() => shell.Machines.Count == 1, "the library");
+                Ui.Click(window, Named<ListBox>(window, "Library").GetVisualDescendants().OfType<ListBoxItem>().First());
+                Ui.PumpUntil(() => shell.Selected is { IsRunning: true, Watcher: not null }, "the running machine", 20);
+                Ui.Pump(0.3);
+
+                shell.UsbPlugged(locked);
+                Ui.Pump(0.2);
+                var lockedTitle = shell.Notice?.ItemTitle;
+                Ui.Capture(window, "phase7", "usb-plugged-locked");
+                var lockedConfirm = shell.Notice?.ConfirmText;
+                Ui.Click(window, Named<Button>(window, "NoticeDismiss"));
+                Ui.PumpUntil(() => shell.Notice is null, "the notice to close");
+
+                shell.UsbPlugged(stick);
+                Ui.Pump(0.2);
+                var title = shell.Notice?.ItemTitle;
+                var check = Named<CheckBox>(window, "NoticeCheck");
+                var checkText = check.Content as string;
+                Ui.Click(window, check);
+                Ui.Pump(0.1);
+                Ui.Capture(window, "phase7", "usb-plugged");
+                Avalonia.Application.Current!.RequestedThemeVariant = ThemeVariant.Light;
+                Ui.Pump(0.2);
+                Ui.Capture(window, "phase7", "usb-plugged-light");
+                Avalonia.Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
+                Ui.Pump(0.1);
+                Ui.Click(window, Named<Button>(window, "NoticeConfirm"));
+                Ui.PumpUntil(() => shell.Selected!.Machine.Usb.Passthrough.Count == 1, "the rule", 20);
+                // Through the page's own QMP connection: QEMU's monitor serves one client at a time.
+                var desk = shell.Selected!.Watcher!;
+                var attached = Task.Run(() => VmQontrol.Core.Devices.UsbHost.AttachedAsync(desk, ct)).GetAwaiter().GetResult();
+
+                // Plugged in again: a rule exists, so no question, only a line in the status bar.
+                shell.UsbPlugged(stick);
+                Ui.Pump(0.2);
+                var askedAgain = shell.Notice is not null;
+                var status = shell.Status;
+                // The panel, for a look at its rows (this computer's real devices) with the new label.
+                var page = window.GetVisualDescendants().OfType<MachineView>().Single();
+                Ui.Click(window, Named<Button>(page, "OpenUsb"));
+                Ui.PumpUntil(() => shell.UsbPanel is { } p && (p.Devices.Count > 0 || p.Note.Length > 0), "the USB panel", 10);
+                Ui.Pump(0.3);
+                Ui.Capture(window, "phase7", "usb-panel");
+                Avalonia.Application.Current!.RequestedThemeVariant = ThemeVariant.Light;
+                Ui.Pump(0.2);
+                Ui.Capture(window, "phase7", "usb-panel-light");
+                Avalonia.Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
+                if (shell.UsbPanel!.Devices.FirstOrDefault(r => r.ShowAllow) is { } lockedRow)
+                {
+                    lockedRow.AllowCommand.Execute(null);
+                    Ui.Pump(0.3);
+                    Ui.Capture(window, "phase7", "usb-allow");
+                    Ui.Click(window, Named<Button>(window, "NoticeDismiss"));
+                }
+                window.Close();
+                return (lockedTitle, lockedConfirm, title, checkText, attached, askedAgain, status);
+            });
+
+            Assert.Equal("Locked Pad", seen.lockedTitle);
+            Assert.Equal("Copy the command", seen.lockedConfirm);
+            Assert.Equal("Test Stick", seen.title);
+            Assert.Equal("Always connect it to Desk", seen.checkText);
+            Assert.Contains("usbauto-ffff-fffc", seen.attached);
+            Assert.False(seen.askedAgain);
+            Assert.Contains("always connects there", seen.status, StringComparison.Ordinal);
+            var saved = MachineStore.Load(Path.Combine(dir, "vm.json"));
+            Assert.Equal(new UsbDevice("ffff", "fffc", "Test Stick"), Assert.Single(saved.Usb.Passthrough));
+        }
+        finally
+        {
+            await VmQontrol.Core.Runtime.MachineRunner.PowerOffAsync(running, CancellationToken.None);
+            await VmQontrol.Core.Runtime.MachineRunner.WaitForExitAsync(running, TimeSpan.FromSeconds(10), CancellationToken.None);
+        }
+    }
+
+    /// <summary>
     /// Suspend on a running machine's page: it turns off as "Suspended", Power on reads "Resume", and Resume brings it back
     /// running with the saved state used up.
     /// </summary>

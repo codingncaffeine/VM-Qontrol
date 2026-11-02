@@ -16,6 +16,7 @@ public enum SourceKind
     Disc,
     Download,
     Later,
+    Template,
 }
 
 /// <summary>A guest system the person can pick by hand when nothing was detected (or to correct a detection).</summary>
@@ -45,6 +46,7 @@ public sealed partial class NewMachineViewModel : ObservableObject
         Locale = CultureInfo.CurrentCulture.Name is { Length: >= 2 } c && c.Contains('-') ? c : "en-US";
         TimeZone = TimeZoneInfo.TryConvertIanaIdToWindowsId(TimeZoneInfo.Local.Id, out var tz) ? tz : "UTC";
         UserName = Environment.UserName is { Length: > 0 } u ? char.ToUpperInvariant(u[0]) + u[1..] : "User";
+        Templates = shell.Templates;
         _ = Task.Run(async () =>
         {
             var host = await shell.HostAsync().ConfigureAwait(false);
@@ -97,6 +99,14 @@ public sealed partial class NewMachineViewModel : ObservableObject
 
     public string NextText => IsLast ? (Source == SourceKind.Download ? "Download and create" : "Create machine") : "Continue";
 
+    /// <summary>A machine made from a template takes its system and hardware from it: only the name and the kind of copy are asked.</summary>
+    private bool Skipped(int step) => step switch
+    {
+        1 or 4 => IsFromTemplate,
+        2 => !EasyInstallPossible,
+        _ => false,
+    };
+
     /// <summary>The step rail: each step's title and whether it is the current one.</summary>
     public IReadOnlyList<StepItem> Steps => StepTitles.Select((t, i) => new StepItem(t, i == Step, i < Step)).ToList();
 
@@ -104,7 +114,7 @@ public sealed partial class NewMachineViewModel : ObservableObject
 
     // ── Installer
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsDisc), nameof(IsDownload), nameof(IsLater), nameof(NextText))]
+    [NotifyPropertyChangedFor(nameof(IsDisc), nameof(IsDownload), nameof(IsLater), nameof(IsFromTemplate), nameof(NextText))]
     [NotifyCanExecuteChangedFor(nameof(NextCommand))]
     private SourceKind _source = SourceKind.Disc;
 
@@ -113,6 +123,44 @@ public sealed partial class NewMachineViewModel : ObservableObject
     public bool IsDownload => Source == SourceKind.Download;
 
     public bool IsLater => Source == SourceKind.Later;
+
+    public bool IsFromTemplate => Source == SourceKind.Template;
+
+    // From a template
+    /// <summary>The library's templates, newest list from the shell when the wizard opened.</summary>
+    public IReadOnlyList<MachineViewModel> Templates { get; }
+
+    public bool HasTemplates => Templates.Count > 0;
+
+    public string TemplateCardText => Templates.Count switch
+    {
+        0 => "No templates yet: turn an installed machine into one from its More menu.",
+        1 => $"A copy of your template {Templates[0].Name}, installed and ready.",
+        var n => $"A copy of one of your {n} templates, installed and ready.",
+    };
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(NextCommand))]
+    private MachineViewModel? _template;
+
+    /// <summary>Linked is the recommended copy from a template: the template never changes, so sharing its disks is safe.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FullClone))]
+    private bool _linkedClone = true;
+
+    public bool FullClone
+    {
+        get => !LinkedClone;
+        set => LinkedClone = !value;
+    }
+
+    partial void OnTemplateChanged(MachineViewModel? value)
+    {
+        if (value is null) return;
+        Guest = value.Machine.Guest;
+        DetectedText = $"From the template {value.Name}.";
+        if (Name == "New machine" || Name.Length == 0 || Templates.Any(t => Name == $"{t.Name} 1")) Name = $"{value.Name} 1";
+    }
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(NextCommand))]
@@ -325,7 +373,7 @@ public sealed partial class NewMachineViewModel : ObservableObject
     // ── Navigation
     private bool CanNext() => !Busy && Step switch
     {
-        0 => Source switch { SourceKind.Disc => IsoPath is not null && !IsoProblem, SourceKind.Download => Entry is not null, _ => true },
+        0 => Source switch { SourceKind.Disc => IsoPath is not null && !IsoProblem, SourceKind.Download => Entry is not null, SourceKind.Template => Template is not null, _ => true },
         2 => !EasyInstallShown || (UserName.Trim().Length > 0 && !NeedsOwnKey && (!PasswordRequired || Password.Length > 0)),
         3 => Name.Trim().Length > 0,
         _ => true,
@@ -341,8 +389,8 @@ public sealed partial class NewMachineViewModel : ObservableObject
         }
 
         var next = Step + 1;
-        // Easy Install is a Windows question; other systems skip the page.
-        if (next == 2 && !EasyInstallPossible) next = 3;
+        // Easy Install is only asked when the disc can be installed for you; a template skips system and hardware too.
+        while (Skipped(next)) next++;
         Step = next;
         if (Step == 5) OnPropertyChanged(nameof(Summary));
     }
@@ -350,7 +398,12 @@ public sealed partial class NewMachineViewModel : ObservableObject
     private bool CanBack() => Step > 0 && !Busy;
 
     [RelayCommand(CanExecute = nameof(CanBack))]
-    private void Back() => Step = Step == 3 && !EasyInstallPossible ? 1 : Step - 1;
+    private void Back()
+    {
+        var previous = Step - 1;
+        while (previous > 0 && Skipped(previous)) previous--;
+        Step = previous;
+    }
 
     [RelayCommand]
     private void Cancel()
@@ -365,6 +418,8 @@ public sealed partial class NewMachineViewModel : ObservableObject
         Source = kind;
         if (kind == SourceKind.Download && _allSystems.Count == 0) _ = LoadCatalogueAsync();
         if (kind == SourceKind.Later) Detected(new GuestConfig { Os = "linux" }, "Choose the system you will install on the next page.");
+        if (kind == SourceKind.Template && Template is null && Templates.Count == 1) Template = Templates[0];
+        NextCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(EasyInstallPossible));
         OnPropertyChanged(nameof(EasyInstallShown));
     }
@@ -496,9 +551,11 @@ public sealed partial class NewMachineViewModel : ObservableObject
         var modern = Guest.Os is "windows" or "windows-server" or "linux" or "macos" or "freebsd";
         Uefi = modern || Guest.Os == "macos";
         Tpm = Guest.Os == "windows" && Guest.Release == "11";
-        SecureBoot = false;
+        SecureBoot = Recommendations.SecureBoot(Guest, _host);
         FirmwareReason = Tpm
-            ? "Windows 11 requires UEFI firmware and a TPM; both are set. Secure Boot stays off: Windows 11 installs without it, and some Linux tools cannot boot with it."
+            ? SecureBoot
+                ? "Windows 11 requires UEFI firmware with Secure Boot and a TPM; all three are set. Setup on current Windows 11 discs stops without Secure Boot."
+                : "Windows 11 requires UEFI firmware, Secure Boot and a TPM. This computer has no Secure Boot firmware build, so current Windows 11 discs may refuse to install; the doctor names the package that adds it."
             : Uefi ? "UEFI is the modern firmware every current system expects." : "This system starts with the classic BIOS firmware.";
     }
 
@@ -507,6 +564,12 @@ public sealed partial class NewMachineViewModel : ObservableObject
     {
         Busy = true;
         NextCommand.NotifyCanExecuteChanged();
+        if (Source == SourceKind.Template && Template is { } template)
+        {
+            await CreateFromTemplateAsync(template).ConfigureAwait(false);
+            return;
+        }
+
         var request = new NewMachineRequest
         {
             Name = Name.Trim(),
@@ -613,6 +676,44 @@ public sealed partial class NewMachineViewModel : ObservableObject
         }
     }
 
+    private async Task CreateFromTemplateAsync(MachineViewModel template)
+    {
+        var name = Name.Trim();
+        var linked = LinkedClone;
+        try
+        {
+            var progress = new Progress<string>(p => Ui.Post(() => ProgressText = p));
+            string dir;
+            if (linked)
+            {
+                var result = await Task.Run(() => MachineLifecycle.LinkedCloneAsync(template.Machine, template.Entry.Directory, LibraryRoot, name, progress)).ConfigureAwait(false);
+                dir = result.Directory;
+                // The template now reads from a layer of its own on the shared base.
+                Ui.Post(() => template.Reload(result.Original));
+            }
+            else
+            {
+                dir = (await Task.Run(() => MachineLifecycle.CloneAsync(template.Machine, template.Entry.Directory, LibraryRoot, name, progress)).ConfigureAwait(false)).Directory;
+            }
+
+            Ui.Post(() => _ = _shell.FinishNewMachineAsync(dir, PowerOnAfter));
+            Ui.Post(() => Closed?.Invoke());
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Ui.Post(() => _shell.Show(new NoticeViewModel("The machine could not be made from the template", [ex.Message], isError: true)));
+        }
+        finally
+        {
+            Ui.Post(() =>
+            {
+                Busy = false;
+                ProgressText = "";
+                NextCommand.NotifyCanExecuteChanged();
+            });
+        }
+    }
+
     private static void OpenInBrowser(string url) => _ = Task.Run(() =>
     {
         try
@@ -626,6 +727,22 @@ public sealed partial class NewMachineViewModel : ObservableObject
 
     private IReadOnlyList<DetailRow> BuildSummary()
     {
+        if (IsFromTemplate && Template is { } t)
+        {
+            var m = t.Machine;
+            return
+            [
+                new("Name", Name),
+                new("Folder", FolderPreview),
+                new("Template", t.Name),
+                new("System", GuestLabel),
+                new("Copy", LinkedClone
+                    ? $"Linked: ready in seconds, shares {t.Name}'s disks read-only and keeps its own changes"
+                    : $"Full: its own copy of {t.Name}'s disks, firmware settings and TPM"),
+                new("Hardware", $"As the template: {(m.MemoryMiB is { } mib ? $"{mib / 1024m:0.#} GB memory" : "recommended memory")}, {(m.Cpu.Cores is { } c ? $"{c} processor{(c == 1 ? "" : "s")}" : "recommended processors")} (change it in Settings)"),
+            ];
+        }
+
         var rows = new List<DetailRow>
         {
             new("Name", Name),

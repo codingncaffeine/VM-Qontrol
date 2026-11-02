@@ -15,6 +15,9 @@ public sealed record HostUsbDevice(string VendorId, string ProductId, string Nam
     /// <summary>The QEMU device id used while it is attached to a machine.</summary>
     public string QemuId => $"usb-{VendorId}-{ProductId}-{Bus}-{Device}";
 
+    /// <summary>The QEMU device id of the machine's rule for this kind of device (see <see cref="UsbHost.RuleId"/>).</summary>
+    public string RuleId => UsbHost.RuleId(VendorId, ProductId);
+
     public string Speed => SpeedMbps switch { >= 10000 => "USB 3.2", >= 5000 => "USB 3", >= 480 => "USB 2", _ => "USB 1" };
 }
 
@@ -43,7 +46,7 @@ public static class UsbHost
             if (vendor.Length == 0) continue;
             var bus = int.TryParse(Read("busnum"), NumberStyles.None, CultureInfo.InvariantCulture, out var b) ? b.ToString("000", CultureInfo.InvariantCulture) : "";
             var dev = int.TryParse(Read("devnum"), NumberStyles.None, CultureInfo.InvariantCulture, out var d) ? d.ToString("000", CultureInfo.InvariantCulture) : "";
-            var name = (Read("manufacturer") + " " + Read("product")).Trim();
+            var name = DeviceName(Read("manufacturer"), Read("product"));
             if (name.Length == 0 || name.All(c => c is '-' or '_'))
                 name = Names.Value.GetValueOrDefault($"{vendor}:{product}") ?? Names.Value.GetValueOrDefault(vendor) ?? $"USB device {vendor}:{product}";
             var speed = int.TryParse(Read("speed").Split('.')[0], NumberStyles.None, CultureInfo.InvariantCulture, out var sp) ? sp : 12;
@@ -51,6 +54,42 @@ public static class UsbHost
         }
 
         return devices.Where(d => !d.IsHub).OrderBy(d => d.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+    }
+
+    /// <summary>
+    /// The QEMU device id of a rule: a usb-host device matched by vendor and product rather than by port, which QEMU
+    /// connects whenever such a device is plugged in (and again after it is unplugged and plugged back).
+    /// </summary>
+    public static string RuleId(string vendorId, string productId) => $"usbauto-{vendorId}-{productId}";
+
+    /// <summary>Whether a QEMU device id is a rule's (as opposed to one device handed over by its port).</summary>
+    public static bool IsRuleId(string id) => id.StartsWith("usbauto-", StringComparison.Ordinal);
+
+    /// <summary>Adds a rule to the running machine: every device of this kind connects to it, now and when plugged in later.</summary>
+    public static async Task AddRuleAsync(MachineWatcher watcher, string vendorId, string productId, CancellationToken ct = default) =>
+        await watcher.ExecuteAsync("device_add", new JsonObject
+        {
+            ["driver"] = "usb-host",
+            ["id"] = RuleId(vendorId, productId),
+            ["vendorid"] = int.Parse(vendorId, NumberStyles.HexNumber, CultureInfo.InvariantCulture),
+            ["productid"] = int.Parse(productId, NumberStyles.HexNumber, CultureInfo.InvariantCulture),
+        }, ct).ConfigureAwait(false);
+
+    /// <summary>Takes the rule out of the running machine; a device it holds goes back to this computer.</summary>
+    public static async Task RemoveRuleAsync(MachineWatcher watcher, string vendorId, string productId, CancellationToken ct = default) =>
+        await watcher.ExecuteAsync("device_del", new JsonObject { ["id"] = RuleId(vendorId, productId) }, ct).ConfigureAwait(false);
+
+    /// <summary>
+    /// "Corsair" + "CORSAIR K100 RGB" reads "CORSAIR K100 RGB", not "Corsair CORSAIR K100 RGB": a product that already
+    /// starts with its maker's first word keeps its own name. Public for tests.
+    /// </summary>
+    public static string DeviceName(string manufacturer, string product)
+    {
+        manufacturer = manufacturer.Trim();
+        product = product.Trim();
+        var maker = manufacturer.Split(' ', 2)[0];
+        if (maker.Length > 0 && product.StartsWith(maker, StringComparison.OrdinalIgnoreCase)) return product;
+        return (manufacturer + " " + product).Trim();
     }
 
     /// <summary>The one-time command that lets the person's account hand this device to machines (a udev rule).</summary>
@@ -70,7 +109,7 @@ public static class UsbHost
     public static async Task DetachAsync(MachineWatcher watcher, HostUsbDevice d, CancellationToken ct = default) =>
         await watcher.ExecuteAsync("device_del", new JsonObject { ["id"] = d.QemuId }, ct).ConfigureAwait(false);
 
-    /// <summary>The ids of the host USB devices attached to the machine now (from its device tree).</summary>
+    /// <summary>The ids of the host USB devices and rules attached to the machine now (from its device tree).</summary>
     public static async Task<IReadOnlySet<string>> AttachedAsync(MachineWatcher watcher, CancellationToken ct = default)
     {
         var ids = new HashSet<string>(StringComparer.Ordinal);
@@ -78,7 +117,7 @@ public static class UsbHost
         {
             if (await watcher.ExecuteAsync("qom-list", new JsonObject { ["path"] = "/machine/peripheral" }, ct).ConfigureAwait(false) is JsonArray items)
                 foreach (var i in items.OfType<JsonObject>())
-                    if (i["name"]?.GetValue<string>() is { } n && n.StartsWith("usb-", StringComparison.Ordinal)) ids.Add(n);
+                    if (i["name"]?.GetValue<string>() is { } n && (n.StartsWith("usb-", StringComparison.Ordinal) || IsRuleId(n))) ids.Add(n);
         }
         catch (QmpException)
         {

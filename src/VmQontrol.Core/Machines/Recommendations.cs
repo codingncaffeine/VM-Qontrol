@@ -15,6 +15,14 @@ public sealed record MachineRecommendations(Recommended<long> MemoryMiB, Recomme
 /// </summary>
 public static class Recommendations
 {
+    /// <summary>
+    /// Secure Boot is on for Windows 11 when this computer has a Secure Boot firmware build: Setup on current Windows 11
+    /// discs (found on build 26300, 2026-11-02) refuses a PC without it, and the answer file's LabConfig switches no
+    /// longer get past that check. quickemu still turns it off; virt-manager and Boxes turn it on.
+    /// </summary>
+    public static bool SecureBoot(GuestConfig guest, HostCapabilities host) =>
+        guest.Os == "windows" && guest.Release == "11" && Hosts.FirmwareLocator.Find(host.FirmwareFiles, true) is not null;
+
     /// <param name="displayName">How the system is named to the person ("Windows 10"); osinfo-db's name when <c>null</c>.</param>
     /// <summary>The recommendations for <paramref name="guest"/> on <paramref name="host"/>, each with its reason.</summary>
     /// <param name="guest">The guest profile.</param>
