@@ -194,8 +194,8 @@
                                   ToolTip.Tip="Connect this device to the machine at every power on, and whenever it is plugged in while the machine runs" />
                         <Panel Grid.Column="4" Width="96" VerticalAlignment="Center">
                           <Button Classes="tool" Content="{Binding ActionText}" Command="{Binding ToggleCommand}" IsVisible="{Binding CanMove}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
-                          <Button Classes="tool" Content="Allow…" Command="{Binding AllowCommand}" IsVisible="{Binding ShowAllow}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                                  ToolTip.Tip="Show the one-time command that lets your account hand this device to machines" />
+                          <Button Classes="tool" Content="Set up…" Command="{Binding AllowCommand}" IsVisible="{Binding ShowAllow}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                  ToolTip.Tip="This computer needs spice-gtk's USB helper to hand devices to machines" />
                         </Panel>
                       </Grid>
                     </Border>

@@ -183,6 +183,23 @@ public sealed partial class ShellViewModel : ObservableObject
     /// <summary>Whether USB devices plugged in while the app runs are offered to the running machine (tests turn it off).</summary>
     public bool WatchUsb { get; init; } = true;
 
+    /// <summary>
+    /// The one case VM Qontrol cannot hand a device over by itself: this computer lacks spice-gtk's USB helper, which
+    /// opens USB devices to the person at the computer (the same one virt-viewer and GNOME Boxes use).
+    /// </summary>
+    public void ShowUsbSetup(string deviceName)
+    {
+        var install = Doctor.InstallCommand(Doctor.DetectThisDistro(), "usb-helper");
+        var notice = new NoticeViewModel("One package is needed for USB devices",
+            [$"Handing {deviceName} to a machine needs spice-gtk's USB helper, the part virt-viewer and GNOME Boxes use to open USB devices to you. It is not installed on this computer. Install it once; after that, Connect simply works:"],
+            confirm: "Copy the install command", dismiss: "Not now", icon: "IconUsb", code: install);
+        Show(notice);
+        _ = notice.Answer.ContinueWith(t =>
+        {
+            if (t.Result) Ui.Post(() => CopyToClipboard(install, "The install command is on the clipboard."));
+        }, TaskScheduler.Default);
+    }
+
     /// <summary>The window closed: stop watching for USB devices.</summary>
     public void Stop()
     {
@@ -191,19 +208,45 @@ public sealed partial class ShellViewModel : ObservableObject
     }
 
     /// <summary>
-    /// A USB device was plugged into this computer. A running machine with a rule for it has QEMU take it already, so
-    /// that is only reported. Otherwise, as Workstation does, the machine in view (or the only running one) is offered it,
-    /// with "Always connect it" to make the rule; a device the account may not hand over gets its one-time fix instead.
+    /// A USB device was plugged into this computer. A running machine with a rule for it takes it (opened to the person
+    /// through spice-gtk's helper first, as virt-viewer does), and that is only reported. Otherwise, as Workstation does,
+    /// the machine in view (or the only running one) is offered it, with "Always connect it" to make the rule.
     /// </summary>
     public void UsbPlugged(HostUsbDevice device)
     {
         var running = _all.Where(m => m.Watcher is not null).ToList();
         if (running.Count == 0) return;
+        _ = Task.Run(async () =>
+        {
+            // A device a machine holds by its port that re-enumerated (receivers do when taken over): QEMU finds it again
+            // by itself; its new node only needs opening to QEMU. Nothing to ask.
+            foreach (var m in running)
+            {
+                if (m.Watcher is { } w && (await UsbHost.AttachedAsync(w).ConfigureAwait(false)).Contains(device.QemuId))
+                {
+                    await UsbAccess.GrantAsync(device, TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+                    return;
+                }
+            }
+
+            Ui.Post(() => OfferPlugged(device, running));
+        });
+    }
+
+    private void OfferPlugged(HostUsbDevice device, List<MachineViewModel> running)
+    {
         if (running.FirstOrDefault(m => m.Machine.Usb.Passthrough.Any(u => u.VendorId == device.VendorId && u.ProductId == device.ProductId)) is { } ruled)
         {
-            Note(device.Writable
-                ? $"{device.Name} was plugged in and went to {ruled.Name} (it always connects there)."
-                : $"{device.Name} was plugged in, but your account may not hand it to {ruled.Name}: open its USB devices for the one-time fix.");
+            _ = Task.Run(async () =>
+            {
+                var refused = await UsbAccess.GrantAsync(device, TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+                Ui.Post(() =>
+                {
+                    if (refused is null) Note($"{device.Name} was plugged in and went to {ruled.Name} (it always connects there).");
+                    else if (!UsbAccess.Available) ShowUsbSetup(device.Name);
+                    else Note($"{device.Name} was plugged in but could not be opened for {ruled.Name}: {refused}.");
+                });
+            });
             return;
         }
 
@@ -214,17 +257,9 @@ public sealed partial class ShellViewModel : ObservableObject
             return;
         }
 
-        if (!device.Writable)
+        if (!device.Writable && !UsbAccess.Available)
         {
-            var fix = new NoticeViewModel("New USB device",
-                [$"Your account may not hand it to {target.Name} yet. This command allows it for this kind of device (it needs your password once). Run it in a terminal, then unplug the device and plug it in again."],
-                confirm: "Copy the command", dismiss: "Keep it on this computer",
-                icon: "IconUsb", itemTitle: device.Name, itemDetail: $"{device.Id} · {device.Speed} · port {device.Port}", code: UsbHost.PermissionFix(device));
-            Show(fix);
-            _ = fix.Answer.ContinueWith(t =>
-            {
-                if (t.Result) Ui.Post(() => CopyToClipboard(UsbHost.PermissionFix(device), "The command is on the clipboard. Paste it into a terminal, then unplug the device and plug it in again."));
-            }, TaskScheduler.Default);
+            ShowUsbSetup(device.Name);
             return;
         }
 

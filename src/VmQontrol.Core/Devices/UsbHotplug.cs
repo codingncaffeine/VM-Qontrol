@@ -21,13 +21,17 @@ public sealed class UsbHotplug : IDisposable
     /// <summary>A device was plugged in (raised on a worker).</summary>
     public event Action<HostUsbDevice>? Plugged;
 
-    /// <summary>The device folders now ("1-4", "3-2.1"): ports, so a device re-plugged in another port is news too.</summary>
+    /// <summary>
+    /// The devices now, as "port@number" ("3-2@7"): a device re-plugged in another port is news, and so is one that
+    /// re-enumerated in the same port (it gets a new device number, and a new node QEMU must be allowed to open).
+    /// </summary>
     private HashSet<string> Ports()
     {
         try
         {
             return Directory.EnumerateDirectories(_sysRoot).Select(Path.GetFileName).OfType<string>()
-                .Where(p => !p.Contains(':') && !p.StartsWith("usb", StringComparison.Ordinal)).ToHashSet(StringComparer.Ordinal);
+                .Where(p => !p.Contains(':') && !p.StartsWith("usb", StringComparison.Ordinal))
+                .Select(p => p + "@" + Number(p)).ToHashSet(StringComparer.Ordinal);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -39,10 +43,22 @@ public sealed class UsbHotplug : IDisposable
     public IReadOnlyList<HostUsbDevice> Check()
     {
         var now = Ports();
-        var added = now.Except(_known).ToHashSet(StringComparer.Ordinal);
+        var added = now.Except(_known).Select(k => k.Split('@')[0]).ToHashSet(StringComparer.Ordinal);
         _known = now;
         if (added.Count == 0) return [];
         return _list(_sysRoot).Where(d => added.Contains(d.Port)).ToList();
+    }
+
+    private string Number(string port)
+    {
+        try
+        {
+            return File.ReadAllText(Path.Combine(_sysRoot, port, "devnum")).Trim();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return "";
+        }
     }
 
     /// <summary>Takes the devices plugged in now as known, then watches until disposed.</summary>

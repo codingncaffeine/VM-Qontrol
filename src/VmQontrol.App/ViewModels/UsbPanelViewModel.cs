@@ -15,7 +15,8 @@ public sealed partial class UsbRow(HostUsbDevice device, UsbPanelViewModel panel
 
     public string Detail => $"{Device.Id} · {Device.Speed} · port {Device.Port}";
 
-    public bool NeedsPermission => !Device.Writable;
+    /// <summary>Only when this computer lacks spice-gtk's USB helper: otherwise Connect opens the device itself.</summary>
+    public bool NeedsPermission => !Device.Writable && !UsbAccess.Available;
 
     /// <summary>Connect / Give back are offered once the account may open the device; until then, Allow….</summary>
     public bool CanMove => !NeedsPermission || InMachine;
@@ -26,8 +27,8 @@ public sealed partial class UsbRow(HostUsbDevice device, UsbPanelViewModel panel
     [NotifyPropertyChangedFor(nameof(Where), nameof(ActionText), nameof(CanMove), nameof(ShowAllow), nameof(StateText), nameof(IsHere), nameof(IsLocked))]
     private bool _inMachine;
 
-    /// <summary>The state pill: where the device is, or that it needs the one-time permission.</summary>
-    public string StateText => InMachine ? $"In {panel.MachineName}" : NeedsPermission ? "Needs permission" : "On this computer";
+    /// <summary>The state pill: where the device is, or that this computer needs the USB helper first.</summary>
+    public string StateText => InMachine ? $"In {panel.MachineName}" : NeedsPermission ? "Needs setup" : "On this computer";
 
     public bool IsHere => !InMachine && !NeedsPermission;
 
@@ -82,7 +83,7 @@ public sealed partial class UsbPanelViewModel : ObservableObject
 
     public bool HasLocked => LockedCount > 0;
 
-    public string LockedText => "Linux lets only the system open a USB device until a one-time rule allows your account. Choose Allow… on a device to see its command; VM Qontrol never asks for your password itself.";
+    public string LockedText => "This computer lacks spice-gtk's USB helper, which opens USB devices to you (virt-viewer and GNOME Boxes use the same one). Choose Set up… to install it once.";
 
     public bool Running => _machine.Watcher is not null;
 
@@ -135,7 +136,7 @@ public sealed partial class UsbPanelViewModel : ObservableObject
 
         if (!row.InMachine && row.NeedsPermission)
         {
-            Ui.Post(() => Note = $"Your account may not hand {row.Name} to a machine yet. Run the command shown under it once, then try again.");
+            Ui.Post(() => _shell.ShowUsbSetup(row.Name));
             return;
         }
 
@@ -174,25 +175,11 @@ public sealed partial class UsbPanelViewModel : ObservableObject
         });
     }
 
-    /// <summary>The one-time permission for these devices: the command, shown and copied, never run by VM Qontrol.</summary>
+    /// <summary>The helper is missing: say which package brings it.</summary>
     public void Allow(IReadOnlyList<UsbRow> rows)
     {
-        if (rows.Count == 0) return;
-        var command = string.Join(" && ", rows.Select(r => UsbHost.PermissionFix(r.Device)));
-        var one = rows.Count == 1 ? rows[0] : null;
-        var notice = new NoticeViewModel(one is null ? $"Allow {rows.Count} USB devices" : "Allow this USB device",
-            ["Linux lets only the system open USB devices unless a rule allows your account. This command adds that rule for "
-             + (one is null ? "these kinds of device" : "this kind of device") + " (it needs your password once). Run it in a terminal, then unplug the device and plug it in again."],
-            confirm: "Copy the command", dismiss: "Not now", icon: "IconUsb",
-            itemTitle: one?.Name ?? string.Join(", ", rows.Select(r => r.Name).Take(3)) + (rows.Count > 3 ? $" and {rows.Count - 3} more" : ""),
-            itemDetail: one?.Detail ?? $"{rows.Count} devices", code: command);
-        _shell.Show(notice);
-        _ = notice.Answer.ContinueWith(t =>
-        {
-            if (t.Result) Ui.Post(() => _shell.CopyToClipboard(command, "The command is on the clipboard. Paste it into a terminal, then unplug the devices and plug them in again."));
-        }, TaskScheduler.Default);
+        if (rows.Count > 0) _shell.ShowUsbSetup(rows[0].Name);
     }
-
 
     [RelayCommand]
     private void Close() => Closed?.Invoke();

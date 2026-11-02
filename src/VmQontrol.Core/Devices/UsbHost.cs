@@ -12,8 +12,11 @@ public sealed record HostUsbDevice(string VendorId, string ProductId, string Nam
 
     public string DevicePath => $"/dev/bus/usb/{Bus}/{Device}";
 
-    /// <summary>The QEMU device id used while it is attached to a machine.</summary>
-    public string QemuId => $"usb-{VendorId}-{ProductId}-{Bus}-{Device}";
+    /// <summary>The QEMU device id used while it is attached to a machine: by its port, which a device keeps when it re-enumerates.</summary>
+    public string QemuId => $"usb-{VendorId}-{ProductId}-{Port}";
+
+    /// <summary>The port within the bus as QEMU's usb-host hostport takes it ("3.3" for sysfs "10-3.3").</summary>
+    public string HostPort => Port.Contains('-') ? Port[(Port.IndexOf('-') + 1)..] : Port;
 
     /// <summary>The QEMU device id of the machine's rule for this kind of device (see <see cref="UsbHost.RuleId"/>).</summary>
     public string RuleId => UsbHost.RuleId(VendorId, ProductId);
@@ -24,7 +27,7 @@ public sealed record HostUsbDevice(string VendorId, string ProductId, string Nam
 /// <summary>
 /// The USB devices plugged into this computer (from sysfs, named from usb.ids when the device does not name itself),
 /// and handing one to a running machine through QMP or taking it back. A device node the person's account may not open
-/// gets the exact one-time udev rule that allows it; VM Qontrol never asks for root itself.
+/// is opened to the person through spice-gtk's polkit helper (<see cref="UsbAccess"/>), as virt-viewer does.
 /// </summary>
 public static class UsbHost
 {
@@ -66,14 +69,22 @@ public static class UsbHost
     public static bool IsRuleId(string id) => id.StartsWith("usbauto-", StringComparison.Ordinal);
 
     /// <summary>Adds a rule to the running machine: every device of this kind connects to it, now and when plugged in later.</summary>
-    public static async Task AddRuleAsync(MachineWatcher watcher, string vendorId, string productId, CancellationToken ct = default) =>
-        await watcher.ExecuteAsync("device_add", new JsonObject
+    public static async Task AddRuleAsync(MachineWatcher watcher, string vendorId, string productId, CancellationToken ct = default)
+    {
+        // A device of this kind plugged in now is opened to this account first, so QEMU can take it at once.
+        var present = List().Where(d => d.VendorId == vendorId && d.ProductId == productId).ToList();
+        await UsbAccess.GrantAllAsync(present, TimeSpan.FromSeconds(10), ct).ConfigureAwait(false);
+        var bus = present.Count > 0 ? await PassBusAsync(watcher, present[0], ct).ConfigureAwait(false) : null;
+        var rule = new JsonObject
         {
             ["driver"] = "usb-host",
             ["id"] = RuleId(vendorId, productId),
             ["vendorid"] = int.Parse(vendorId, NumberStyles.HexNumber, CultureInfo.InvariantCulture),
             ["productid"] = int.Parse(productId, NumberStyles.HexNumber, CultureInfo.InvariantCulture),
-        }, ct).ConfigureAwait(false);
+        };
+        if (bus is not null) rule["bus"] = bus;
+        await watcher.ExecuteAsync("device_add", rule, ct).ConfigureAwait(false);
+    }
 
     /// <summary>Takes the rule out of the running machine; a device it holds goes back to this computer.</summary>
     public static async Task RemoveRuleAsync(MachineWatcher watcher, string vendorId, string productId, CancellationToken ct = default) =>
@@ -92,19 +103,49 @@ public static class UsbHost
         return (manufacturer + " " + product).Trim();
     }
 
-    /// <summary>The one-time command that lets the person's account hand this device to machines (a udev rule).</summary>
-    public static string PermissionFix(HostUsbDevice d) =>
-        $"echo 'SUBSYSTEM==\"usb\", ATTR{{idVendor}}==\"{d.VendorId}\", ATTR{{idProduct}}==\"{d.ProductId}\", TAG+=\"uaccess\"' | sudo tee /etc/udev/rules.d/70-vmqontrol-{d.VendorId}-{d.ProductId}.rules && sudo udevadm control --reload && sudo udevadm trigger --attr-match=idVendor={d.VendorId}";
-
     /// <summary>Hands the device to the running machine; it leaves this computer until it is taken back or the machine stops.</summary>
-    public static async Task AttachAsync(MachineWatcher watcher, HostUsbDevice d, CancellationToken ct = default) =>
-        await watcher.ExecuteAsync("device_add", new JsonObject
+    public static async Task AttachAsync(MachineWatcher watcher, HostUsbDevice d, CancellationToken ct = default, string sysRoot = SysUsb)
+    {
+        // Attached by port, QEMU would wait quietly for a device that is gone: say so instead.
+        if (!File.Exists(Path.Combine(sysRoot, d.Port, "devnum")))
+            throw new IOException($"{d.Name} is no longer plugged in.");
+        var bus = await PassBusAsync(watcher, d, ct).ConfigureAwait(false);
+        if (await UsbAccess.GrantAsync(d, TimeSpan.FromSeconds(10), ct).ConfigureAwait(false) is { } refused)
+            throw new IOException($"{d.Name} could not be opened for the machine: {refused}.");
+        // By port, not by device number: a device that re-enumerates (many receivers do when they are taken over) is
+        // found again where it was, and the hot-plug watcher opens its new node to QEMU.
+        var args = new JsonObject
         {
             ["driver"] = "usb-host",
             ["id"] = d.QemuId,
             ["hostbus"] = int.Parse(d.Bus, CultureInfo.InvariantCulture),
-            ["hostaddr"] = int.Parse(d.Device, CultureInfo.InvariantCulture),
-        }, ct).ConfigureAwait(false);
+            ["hostport"] = d.HostPort,
+        };
+        if (bus is not null) args["bus"] = bus;
+        await watcher.ExecuteAsync("device_add", args, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>The id of the controller VM Qontrol adds for handed-over devices (see the command builder).</summary>
+    public const string HostPassBus = "hostpass.0";
+
+    /// <summary>
+    /// The bus a device goes on: VM Qontrol's xHCI controller when the machine has it. Without it (a machine imported
+    /// from quickemu) a device slower than USB 2 cannot attach to a USB 2 bus, and the reason is said before QEMU tries.
+    /// </summary>
+    private static async Task<string?> PassBusAsync(MachineWatcher watcher, HostUsbDevice d, CancellationToken ct)
+    {
+        try
+        {
+            if (await watcher.ExecuteAsync("qom-list", new JsonObject { ["path"] = "/machine/peripheral" }, ct).ConfigureAwait(false) is JsonArray items
+                && items.OfType<JsonObject>().Any(i => i["name"]?.GetValue<string>() == "hostpass"))
+                return HostPassBus;
+        }
+        catch (QmpException)
+        {
+        }
+
+        return null;
+    }
 
     public static async Task DetachAsync(MachineWatcher watcher, HostUsbDevice d, CancellationToken ct = default) =>
         await watcher.ExecuteAsync("device_del", new JsonObject { ["id"] = d.QemuId }, ct).ConfigureAwait(false);

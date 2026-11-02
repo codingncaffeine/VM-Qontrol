@@ -334,7 +334,7 @@ public sealed class MainWindowTests
     /// <summary>
     /// A USB device plugged in while a machine runs (the watcher's event, fed by hand): the machine in view is offered it
     /// with "Always connect it"; ticked and confirmed, the rule is saved and is in the running QEMU at once. A device of a
-    /// kind that already has a rule is only reported (no question), and one the account may not open gets the fix.
+    /// kind that already has a rule is only reported (no question).
     /// </summary>
     [Trait("Tier", "Integration")]
     [Fact]
@@ -366,7 +366,7 @@ public sealed class MainWindowTests
                 Ui.Pump(0.3);
 
                 shell.UsbPlugged(locked);
-                Ui.Pump(0.2);
+                Ui.PumpUntil(() => shell.Notice is not null, "the plugged-in question", 10);
                 var lockedTitle = shell.Notice?.ItemTitle;
                 Ui.Capture(window, "phase7", "usb-plugged-locked");
                 var lockedConfirm = shell.Notice?.ConfirmText;
@@ -374,7 +374,7 @@ public sealed class MainWindowTests
                 Ui.PumpUntil(() => shell.Notice is null, "the notice to close");
 
                 shell.UsbPlugged(stick);
-                Ui.Pump(0.2);
+                Ui.PumpUntil(() => shell.Notice is not null, "the plugged-in question", 10);
                 var title = shell.Notice?.ItemTitle;
                 var check = Named<CheckBox>(window, "NoticeCheck");
                 var checkText = check.Content as string;
@@ -394,7 +394,7 @@ public sealed class MainWindowTests
 
                 // Plugged in again: a rule exists, so no question, only a line in the status bar.
                 shell.UsbPlugged(stick);
-                Ui.Pump(0.2);
+                Ui.Pump(1);
                 var askedAgain = shell.Notice is not null;
                 var status = shell.Status;
                 // The panel, for a look at its rows (this computer's real devices) with the new label.
@@ -419,7 +419,9 @@ public sealed class MainWindowTests
             });
 
             Assert.Equal("Locked Pad", seen.lockedTitle);
-            Assert.Equal("Copy the command", seen.lockedConfirm);
+            // With spice-gtk's helper the device is offered like any other (Connect opens it to this account); without
+            // it, the one notice names the package to install.
+            Assert.Equal(VmQontrol.Core.Devices.UsbAccess.Available ? "Connect to Desk" : "Copy the install command", seen.lockedConfirm);
             Assert.Equal("Test Stick", seen.title);
             Assert.Equal("Always connect it to Desk", seen.checkText);
             Assert.Contains("usbauto-ffff-fffc", seen.attached);

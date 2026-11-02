@@ -39,6 +39,7 @@ public static class Doctor
         ["qemu"] = new() { [DistroFamily.Arch] = "qemu-desktop", [DistroFamily.Debian] = "qemu-system-x86 qemu-utils", [DistroFamily.Fedora] = "qemu-system-x86 qemu-img", [DistroFamily.Alpine] = "qemu-system-x86_64 qemu-img", [DistroFamily.OpenSuse] = "qemu-x86 qemu-tools" },
         ["ovmf"] = new() { [DistroFamily.Arch] = "edk2-ovmf", [DistroFamily.Debian] = "ovmf", [DistroFamily.Fedora] = "edk2-ovmf", [DistroFamily.Alpine] = "ovmf", [DistroFamily.OpenSuse] = "qemu-ovmf-x86_64" },
         ["swtpm"] = new() { [DistroFamily.Arch] = "swtpm", [DistroFamily.Debian] = "swtpm swtpm-tools", [DistroFamily.Fedora] = "swtpm swtpm-tools", [DistroFamily.Alpine] = "swtpm", [DistroFamily.OpenSuse] = "swtpm" },
+        ["usb-helper"] = new() { [DistroFamily.Arch] = "spice-gtk", [DistroFamily.Debian] = "spice-client-glib-usb-acl-helper", [DistroFamily.Fedora] = "spice-glib", [DistroFamily.Alpine] = "spice-gtk", [DistroFamily.OpenSuse] = "spice-gtk" },
         ["viewer"] = new() { [DistroFamily.Arch] = "virt-viewer", [DistroFamily.Debian] = "virt-viewer", [DistroFamily.Fedora] = "virt-viewer", [DistroFamily.Alpine] = "virt-viewer", [DistroFamily.OpenSuse] = "virt-viewer" },
         ["osinfo"] = new() { [DistroFamily.Arch] = "osinfo-db", [DistroFamily.Debian] = "osinfo-db", [DistroFamily.Fedora] = "osinfo-db", [DistroFamily.Alpine] = "osinfo-db", [DistroFamily.OpenSuse] = "osinfo-db" },
         ["virtiofsd"] = new() { [DistroFamily.Arch] = "virtiofsd", [DistroFamily.Debian] = "virtiofsd", [DistroFamily.Fedora] = "virtiofsd", [DistroFamily.Alpine] = "virtiofsd", [DistroFamily.OpenSuse] = "virtiofsd" },
@@ -130,6 +131,9 @@ public static class Doctor
         checks.Add(viewer is not null
             ? new("Screen viewer", CheckStatus.Ok, $"{viewer} shows each machine's screen.")
             : new("Screen viewer", CheckStatus.Missing, "Machines run, but their screen cannot be shown without a SPICE viewer.", InstallCommand(distro, "viewer")));
+        checks.Add(Devices.UsbAccess.Available
+            ? new("USB devices", CheckStatus.Ok, "USB devices can be handed to machines without a password (spice-gtk's helper).")
+            : new("USB devices", CheckStatus.Optional, "Handing USB devices to machines needs spice-gtk's USB helper, the same one virt-viewer uses.", InstallCommand(distro, "usb-helper")));
 
         checks.Add(exists("/usr/share/osinfo") || exists("/usr/local/share/osinfo")
             ? new("Operating-system database", CheckStatus.Ok, "Installer discs are recognised and machines get the right defaults.")

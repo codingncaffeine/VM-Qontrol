@@ -71,6 +71,15 @@ public static class MachineRunner
                 await QemuImg.CreateAsync(Full(m.Disks[i].File), m.Disks[i].Format, m.Disks[i].SizeGiB, m.Disks[i].Preallocation, ct).ConfigureAwait(false);
         }
 
+        // Devices the machine always connects that this account may not open yet: spice-gtk's helper opens them to it
+        // long enough for QEMU to take them (what virt-viewer does); a refusal is logged and the machine still starts.
+        if (m.Usb.Passthrough.Count > 0)
+        {
+            var present = Devices.UsbHost.List().Where(d => m.Usb.Passthrough.Any(u => u.VendorId == d.VendorId && u.ProductId == d.ProductId));
+            foreach (var refusal in await Devices.UsbAccess.GrantAllAsync(present, TimeSpan.FromSeconds(20), ct).ConfigureAwait(false))
+                Log.Warn($"{m.Name}: USB {refusal}");
+        }
+
         var nic = m.Nics.FirstOrDefault();
         var ssh = nic is { SshForward: true, Mode: NetMode.User or NetMode.Restricted } ? nic.SshHostPort ?? PortAllocator.FirstFree(22220) : null;
         if (nic is { SshForward: true, Mode: NetMode.User or NetMode.Restricted } && ssh is null)

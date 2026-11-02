@@ -396,7 +396,10 @@ public static class QemuCommandBuilder
             }
         }
 
-        if (m.Usb.Passthrough.Count > 0)
+        // VM Qontrol's own machines always have this controller for devices handed over while running: an xHCI one takes
+        // every speed, where a USB 2 (EHCI) bus refuses the full-speed mice, keyboards and receivers most people pass
+        // (QEMU: "speed mismatch", then it resets the device over and over). Imported quickemu machines keep quickemu's line.
+        if (m.Usb.Passthrough.Count > 0 || (m.ImportedFrom is null && os != "macos"))
         {
             args.AddRange(["-device", $"{passthroughController},id=hostpass"]);
             foreach (var u in m.Usb.Passthrough)

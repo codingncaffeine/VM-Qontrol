@@ -29,7 +29,6 @@ public sealed class UsbTests
         Assert.Equal("Logitech USB Receiver", d.Name);
         Assert.Equal("/dev/bus/usb/003/004", d.DevicePath);
         Assert.False(d.Writable);
-        Assert.Contains("ATTR{idVendor}==\"046d\", ATTR{idProduct}==\"c52b\", TAG+=\"uaccess\"", UsbHost.PermissionFix(d), StringComparison.Ordinal);
     }
 
     [Trait("Tier", "Integration")]
@@ -48,10 +47,10 @@ public sealed class UsbTests
             await using var watcher = await MachineWatcher.AttachAsync(running, ct);
             await watcher.ExecuteAsync("device_add", new JsonObject { ["driver"] = "usb-kbd", ["id"] = "usb-test-keyboard" }, ct);
             Assert.Contains("usb-test-keyboard", await UsbHost.AttachedAsync(watcher, ct));
-            // A host device that does not exist (bus 999): QEMU's reason comes back as an error, never silence.
-            var missing = new HostUsbDevice("ffff", "ffff", "nothing", "999", "999", "x", 12, true, false);
-            var ex = await Assert.ThrowsAsync<QmpException>(() => UsbHost.AttachAsync(watcher, missing, ct));
-            Assert.False(string.IsNullOrWhiteSpace(ex.Description));
+            // A device that is not plugged in (no such port): an error that says so, never a quiet wait.
+            var missing = new HostUsbDevice("ffff", "ffff", "Nothing", "999", "999", "999-9", 12, true, false);
+            var ex = await Assert.ThrowsAsync<IOException>(() => UsbHost.AttachAsync(watcher, missing, ct));
+            Assert.Equal("Nothing is no longer plugged in.", ex.Message);
         }
         finally
         {
@@ -139,4 +138,47 @@ public sealed class UsbTests
     [InlineData("", "Ultra Fit", "Ultra Fit")]
     public void A_name_says_its_maker_once(string manufacturer, string product, string expected) =>
         Assert.Equal(expected, UsbHost.DeviceName(manufacturer, product));
+
+    /// <summary>
+    /// A REAL device, only when VMQONTROL_REAL_USB=vendor:product names one that may be borrowed (never a keyboard in use):
+    /// Connect opens it to this account through spice-gtk's helper with no password, QEMU takes it, and the host's own
+    /// drivers let go of every interface (sysfs: no driver link); Give back returns it to them. The proof is the host's
+    /// record, not ours.
+    /// </summary>
+    [Trait("Tier", "Integration")]
+    [Fact]
+    public async Task A_real_device_leaves_this_computer_and_comes_back()
+    {
+        var wanted = Environment.GetEnvironmentVariable("VMQONTROL_REAL_USB");
+        Assert.SkipWhen(string.IsNullOrEmpty(wanted), "Set VMQONTROL_REAL_USB=vendor:product to borrow a real device.");
+        var device = UsbHost.List().FirstOrDefault(d => d.Id == wanted);
+        Assert.SkipWhen(device is null, $"{wanted} is not plugged in.");
+        var ct = TestContext.Current.CancellationToken;
+        string[] Bound() => Directory.GetDirectories("/sys/bus/usb/devices", device!.Port + ":*").Where(i => Directory.Exists(Path.Combine(i, "driver"))).ToArray();
+        Assert.NotEmpty(Bound()); // the control: the host is using it now
+
+        using var profile = new TestProfile("realusb");
+        var dir = Path.Combine(profile.Paths.DefaultLibrary, "usb");
+        Directory.CreateDirectory(dir);
+        var m = new MachineConfig { Name = "usb", MemoryMiB = 256, Cpu = new CpuConfig { Cores = 1 }, Firmware = new FirmwareConfig { Kind = FirmwareKind.Bios }, Disks = [new DiskConfig { File = "disk0.qcow2", SizeGiB = 1 }] };
+        await QemuImg.CreateAsync(Path.Combine(dir, "disk0.qcow2"), "qcow2", 1, ct: ct);
+        var running = await MachineRunner.StartAsync(m, dir, profile.Paths, HostProbe.Probe(), new StartOptions { Headless = true }, ct);
+        try
+        {
+            await using var watcher = await MachineWatcher.AttachAsync(running, ct);
+            await UsbHost.AttachAsync(watcher, device!, ct);
+            for (var i = 0; i < 50 && Bound().Length > 0; i++) await Task.Delay(100, ct);
+            Assert.Empty(Bound());
+            Assert.Contains(device!.QemuId, await UsbHost.AttachedAsync(watcher, ct));
+
+            await UsbHost.DetachAsync(watcher, device!, ct);
+            for (var i = 0; i < 50 && Bound().Length == 0; i++) await Task.Delay(100, ct);
+            Assert.NotEmpty(Bound());
+        }
+        finally
+        {
+            await MachineRunner.PowerOffAsync(running, CancellationToken.None);
+            await MachineRunner.WaitForExitAsync(running, TimeSpan.FromSeconds(10), CancellationToken.None);
+        }
+    }
 }
