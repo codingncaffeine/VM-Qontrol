@@ -36,6 +36,11 @@ what it does and what the recommended value is. No daemon, no root, and one port
 | Faster user networking (optional) | `passt` | `passt` | `passt` |
 | OS download catalogue (optional) | `quickemu` | `quickemu` | `quickemu` |
 
+**Alpine and other musl distributions** are supported for building from source:
+`apk add dotnet10-sdk qemu-system-x86_64 qemu-img ovmf swtpm virt-viewer osinfo-db` (plus `virtiofsd passt` if
+wanted). Alpine's UEFI firmware has no Secure Boot build, and quickget is not packaged there, so the download
+catalogue is unavailable unless you install quickemu yourself.
+
 Your user needs access to `/dev/kvm`, through the `kvm` group or your distribution's default rule.
 
 ## Building
@@ -45,7 +50,7 @@ dotnet build VmQontrol.slnx -c Release
 src/VmQontrol.App/bin/Release/net10.0/vmqontrol
 ```
 
-.NET 10 SDK required. `VMQONTROL_HOME=DIR` keeps every setting, log and machine under DIR, which is useful for trying
+.NET 10 SDK required (on Alpine, `dotnet10-sdk`). `VMQONTROL_HOME=DIR` keeps every setting, log and machine under DIR, which is useful for trying
 a build without touching your real machines.
 
 ## License

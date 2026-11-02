@@ -40,3 +40,23 @@ jobs:
 
       - name: Tests (push tier)
         run: dotnet test tests/VmQontrol.Tests -c Release --no-build --filter "Tier!=Window&Tier!=Integration"
+
+  # musl: Alpine users build from source with Alpine's own SDK; every push proves that still works.
+  alpine:
+    runs-on: ubuntu-24.04
+    container: alpine:latest
+    timeout-minutes: 15
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+    steps:
+      - name: Alpine packages
+        run: apk add --no-cache dotnet10-sdk bash git icu-libs fontconfig ttf-dejavu
+
+      - uses: actions/checkout@v7
+
+      - name: Build (warnings are errors)
+        run: dotnet build VmQontrol.slnx -c Release -warnaserror
+
+      - name: Tests (push tier)
+        run: dotnet test tests/VmQontrol.Tests -c Release --no-build --filter "Tier!=Window&Tier!=Integration"
