@@ -37,6 +37,17 @@ public sealed class CommandBuilderTests
     }
 
     [Fact]
+    public void Guest_isolation_turns_the_clipboard_and_dropped_files_off_in_the_spice_server()
+    {
+        static string Spice(MachineConfig m) { var a = Build(m).Args.ToList(); return a[a.IndexOf("-spice") + 1]; }
+        Assert.DoesNotContain("disable-copy-paste", Spice(Linux));
+        Assert.DoesNotContain("disable-agent-file-xfer", Spice(Linux));
+        var isolated = Spice(Linux with { Display = Linux.Display with { CopyPaste = false, FileTransfer = false } });
+        Assert.Contains(",disable-copy-paste=on", isolated);
+        Assert.Contains(",disable-agent-file-xfer=on", isolated);
+    }
+
+    [Fact]
     public void The_machine_is_controlled_over_QMP_with_the_human_monitor_off()
     {
         var args = Build(Linux).Args.ToList();

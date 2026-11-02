@@ -297,6 +297,12 @@ public sealed record DisplayConfig
 
     /// <summary>The viewer opens full screen (the guest's resolution follows the screen with the guest tools).</summary>
     public bool FullScreen { get; set; }
+
+    /// <summary>Copy and paste between this computer and the guest (through the guest tools); off isolates the guest.</summary>
+    public bool CopyPaste { get; set; } = true;
+
+    /// <summary>Files dragged onto the viewer window land in the guest (through the guest tools); off isolates the guest.</summary>
+    public bool FileTransfer { get; set; } = true;
 }
 
 public sealed record AudioConfig

@@ -573,6 +573,24 @@
               <Border Classes="row">
                 <Grid ColumnDefinitions="*,Auto">
                   <StackPanel>
+                    <TextBlock Text="Copy and paste" Classes="label" />
+                    <TextBlock Text="Text and pictures copied here paste in the machine, and back. Needs the guest tools. Turn it off to keep the machine apart from your desktop (recommended for untrusted software). Applies from the next power on." Classes="help" />
+                  </StackPanel>
+                  <ToggleSwitch x:Name="CopyPaste" Grid.Column="1" IsChecked="{Binding CopyPaste}" />
+                </Grid>
+              </Border>
+              <Border Classes="row">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Drag files in" Classes="label" />
+                    <TextBlock Text="Files dropped on the viewer window are copied into the machine (its Downloads folder on Linux, a temporary folder on Windows). Needs the guest tools. Applies from the next power on." Classes="help" />
+                  </StackPanel>
+                  <ToggleSwitch x:Name="FileTransfer" Grid.Column="1" IsChecked="{Binding FileTransfer}" />
+                </Grid>
+              </Border>
+              <Border Classes="row">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
                     <TextBlock Text="Graphics adapter" Classes="label" />
                     <TextBlock Text="Automatic picks the one the system works best with." Classes="help" />
                   </StackPanel>

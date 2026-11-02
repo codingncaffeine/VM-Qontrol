@@ -43,6 +43,8 @@ public static class SettingsHistory
             v => v is ValueTuple<int?, int?> { Item1: { } w, Item2: { } h } ? $"{w} × {h}" : "automatic");
         Diff("Viewer program", before.Display.Viewer, after.Display.Viewer);
         Diff("Full screen", before.Display.FullScreen, after.Display.FullScreen, v => (bool?)v == true ? "on" : "off");
+        Diff("Copy and paste", before.Display.CopyPaste, after.Display.CopyPaste, v => (bool?)v == true ? "on" : "off");
+        Diff("Drag files in", before.Display.FileTransfer, after.Display.FileTransfer, v => (bool?)v == true ? "on" : "off");
         Diff("Sound", before.Audio.Device, after.Audio.Device, v => v?.ToString() ?? "automatic");
         Diff("Keyboard", before.Input.Keyboard, after.Input.Keyboard, v => v?.ToString() ?? "automatic");
         Diff("Pointer", before.Input.Mouse, after.Input.Mouse, v => v?.ToString() ?? "automatic");

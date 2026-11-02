@@ -258,6 +258,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         Height = m.Display.Height ?? 0;
         Viewer = ViewerOptions.FirstOrDefault(o => o.Value == m.Display.Viewer) ?? ViewerOptions[0];
         FullScreen = m.Display.FullScreen;
+        CopyPaste = m.Display.CopyPaste;
+        FileTransfer = m.Display.FileTransfer;
         Keyboard = Keyboards.FirstOrDefault(o => o.Value == m.Input.Keyboard) ?? Keyboards[0];
         Pointer = Pointers.FirstOrDefault(o => o.Value == m.Input.Mouse) ?? Pointers[0];
         Layout = m.Input.Layout;
@@ -381,6 +383,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private decimal _height;
     [ObservableProperty] private Option _viewer;
     [ObservableProperty] private bool _fullScreen;
+    [ObservableProperty] private bool _copyPaste = true;
+    [ObservableProperty] private bool _fileTransfer = true;
     [ObservableProperty] private Option _keyboard;
     [ObservableProperty] private Option _pointer;
     [ObservableProperty] private string _layout;
@@ -458,6 +462,8 @@ public sealed partial class SettingsViewModel : ObservableObject
                 Height = Width > 0 && Height > 0 ? (int)Height : null,
                 Viewer = Viewer.Value ?? "auto",
                 FullScreen = FullScreen,
+                CopyPaste = CopyPaste,
+                FileTransfer = FileTransfer,
             },
             Input = new InputConfig { Keyboard = Keyboard.Value, Mouse = Pointer.Value, Layout = Layout.Trim().Length > 0 ? Layout.Trim() : "en-us" },
             Serial = Serial.Value switch { "on" => true, "off" => false, _ => null },

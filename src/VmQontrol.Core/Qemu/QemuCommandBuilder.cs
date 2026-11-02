@@ -225,6 +225,9 @@ public static class QemuCommandBuilder
         if (nic.SshForward) net.Append(CultureInfo.InvariantCulture, $",hostfwd=tcp::{nic.SshHostPort ?? ctx.SshHostPort}-:22");
         foreach (var f in nic.Forwards) net.Append(CultureInfo.InvariantCulture, $",hostfwd={f.Protocol}::{f.HostPort}-:{f.GuestPort}");
         var spice = backend == DisplayBackend.SpiceApp ? $"disable-ticketing=on,gl={OnOff(gl)}" : $"disable-ticketing=on,unix=on,addr={ctx.Runtime.Spice}";
+        // Guest isolation, as Workstation calls it: the SPICE server itself refuses the clipboard or dropped files.
+        if (!m.Display.CopyPaste) spice += ",disable-copy-paste=on";
+        if (!m.Display.FileTransfer) spice += ",disable-agent-file-xfer=on";
 
         // ── vm_boot
         args.AddRange(["-name", $"{EscapeOption(m.Name)},process={Slug(m.Name)},debug-threads=on"]);

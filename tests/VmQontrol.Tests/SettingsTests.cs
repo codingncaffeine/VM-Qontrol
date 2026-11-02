@@ -33,6 +33,8 @@ public sealed class SettingsTests
         Assert.Equal(["Viewer program: auto → spicy"], SettingsHistory.Describe(before, before with { Display = before.Display with { Viewer = "spicy" } }));
         Assert.Equal(["Starting resolution: automatic → 1920 × 1080"], SettingsHistory.Describe(before, before with { Display = before.Display with { Width = 1920, Height = 1080 } }));
         Assert.Equal(["Full screen: off → on"], SettingsHistory.Describe(before, before with { Display = before.Display with { FullScreen = true } }));
+        Assert.Equal(["Copy and paste: on → off"], SettingsHistory.Describe(before, before with { Display = before.Display with { CopyPaste = false } }));
+        Assert.Equal(["Drag files in: on → off"], SettingsHistory.Describe(before, before with { Display = before.Display with { FileTransfer = false } }));
     }
 
     [Fact]
