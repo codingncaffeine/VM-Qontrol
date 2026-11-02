@@ -345,7 +345,29 @@ public sealed partial class MachineViewModel : ObservableObject
     [RelayCommand]
     private void OpenDrives() => _shell.OpenDrives(this);
 
+    /// <summary>A terminal with SSH into the machine through its forwarded port (the guest's own SSH server answers).</summary>
+    [RelayCommand]
+    private void OpenSsh()
+    {
+        if (SshCommand is not { } command) return;
+        var parts = command.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        _ = Task.Run(() =>
+        {
+            var opened = Platform.TerminalLauncher.Run(parts);
+            Ui.Post(() => _shell.Note(opened ? $"A terminal is connecting to {Name} over SSH." : "No terminal was found on this computer; the command is on the clipboard instead."));
+            if (!opened) Ui.Post(() => _shell.CopyToClipboard(command, "The SSH command is on the clipboard."));
+        });
+    }
+
+    [RelayCommand]
+    private void CopySsh()
+    {
+        if (SshCommand is { } command) _shell.CopyToClipboard(command, "The SSH command is on the clipboard.");
+    }
+
     public DrivesPanelViewModel OpenDrivesPanel() => _shell.OpenDrives(this);
+
+    public void OpenNetworks() => _shell.OpenNetworks();
 
     /// <summary>Saves whether the machine connects a host drive at power on, and whether it may write to it. Call on a worker.</summary>
     public void SetHostDrive(HostDrive drive, bool on, bool writable)

@@ -222,6 +222,8 @@ public static class QemuCommandBuilder
         // ── configure_ports
         var nic = m.Nics.FirstOrDefault() ?? new NicConfig { Mode = NetMode.None };
         var net = new StringBuilder($"user,hostname={Slug(m.Name)}");
+        // QEMU puts this computer at .2 and its name server at .3 of whatever network it is given.
+        if (ctx.NatSubnet is { } natSubnet) net.Append(CultureInfo.InvariantCulture, $",net={natSubnet}");
         if (nic.SshForward) net.Append(CultureInfo.InvariantCulture, $",hostfwd=tcp::{nic.SshHostPort ?? ctx.SshHostPort}-:22");
         foreach (var f in nic.Forwards) net.Append(CultureInfo.InvariantCulture, $",hostfwd={f.Protocol}::{f.HostPort}-:{f.GuestPort}");
         var spice = backend == DisplayBackend.SpiceApp ? $"disable-ticketing=on,gl={OnOff(gl)}" : $"disable-ticketing=on,unix=on,addr={ctx.Runtime.Spice}";
@@ -314,7 +316,7 @@ public static class QemuCommandBuilder
             {
                 // Machines on one segment share a multicast group on this computer only; each needs its own MAC.
                 var segment = nic.Segment ?? "default";
-                var port = 20000 + (int)(Fnv(segment) % 20000);
+                var port = SegmentPort(segment);
                 var segmentMac = nic.Mac ?? MacFor(m.Id);
                 args.AddRange(["-device", $"{nicModel},netdev=nic,mac={segmentMac}", "-netdev", $"socket,id=nic,mcast=230.0.0.1:{port},localaddr=127.0.0.1"]);
                 break;
@@ -511,6 +513,9 @@ public static class QemuCommandBuilder
     }
 
     /// <summary>A stable MAC for a machine (from its id), in QEMU's 52:54:00 block, so machines on one segment never clash.</summary>
+    /// <summary>The UDP port of a segment's multicast group on this computer (230.0.0.1, loopback only).</summary>
+    public static int SegmentPort(string segment) => 20000 + (int)(Fnv(segment) % 20000);
+
     public static string MacFor(string machineId)
     {
         var h = Fnv(machineId);

@@ -106,6 +106,11 @@ public static class MachineRunner
             m = m with { HostSerialPorts = usable };
         }
 
+        // Machines on a private segment get their addresses from VM Qontrol's own server for it (D25), started with the first.
+        var appSettings = AppSettings.Load(paths);
+        foreach (var segment in m.Nics.Where(n => n.Mode == NetMode.Segment).Select(n => n.Segment ?? "default").Distinct(StringComparer.Ordinal))
+            SegmentServer.EnsureRunning(paths, segment, appSettings.Segments.FirstOrDefault(s => s.Name == segment));
+
         var nic = m.Nics.FirstOrDefault();
         var ssh = nic is { SshForward: true, Mode: NetMode.User or NetMode.Restricted } ? nic.SshHostPort ?? PortAllocator.FirstFree(22220) : null;
         if (nic is { SshForward: true, Mode: NetMode.User or NetMode.Restricted } && ssh is null)
@@ -123,6 +128,7 @@ public static class MachineRunner
             SshHostPort = ssh ?? 22220,
             SystemDiskUsed = m.Disks.Count > 0 && DiskState.IsUsed(Full(m.Disks[0].File)),
             Headless = options.Headless,
+            NatSubnet = appSettings.NatSubnet is { } nat && Runtime.SegmentSubnet.Parse(nat) is { } natNet ? natNet.ToString() : null,
             FirmwareMenu = options.FirmwareSetup && m.Firmware.Kind == FirmwareKind.Bios && m.Guest.Os != "macos",
         };
         var launch = QemuCommandBuilder.Build(m, context);

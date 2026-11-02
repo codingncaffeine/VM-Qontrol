@@ -38,6 +38,9 @@ public sealed record LaunchContext
 
     public required RuntimePaths Runtime { get; init; }
 
+    /// <summary>The NAT network inside every machine ("10.0.5.0/24"); <c>null</c> = QEMU's own 10.0.2.0/24 (the virtual network editor).</summary>
+    public string? NatSubnet { get; init; }
+
     /// <summary>The host port for the guest's SSH, chosen free at power on.</summary>
     public int SshHostPort { get; init; } = 22220;
 

@@ -253,6 +253,8 @@ public sealed class MainWindowTests
                 var powerOnShown = Named<Button>(page, "PowerOn").IsVisible;
                 var powerOffShown = Named<Button>(page, "PowerOff").IsVisible;
                 Ui.Capture(window, "phase3", "machine-running");
+                // NAT with the SSH forward (the default): the summary offers the terminal, never only a command to copy.
+                Assert.True(Named<Button>(page, "OpenSsh").IsEffectivelyVisible, "Open in terminal is shown for a NAT machine");
 
                 // The Performance tab: real samples from the running process within a few seconds.
                 Ui.Click(window, Named<TabItem>(page, "PerformanceTab"));

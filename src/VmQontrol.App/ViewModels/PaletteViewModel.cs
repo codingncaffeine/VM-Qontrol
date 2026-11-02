@@ -79,6 +79,7 @@ public sealed partial class PaletteViewModel(ShellViewModel shell) : ObservableO
             new("New machine", "Create", shell.NewMachine),
             new("Refresh the library", "Library", () => _ = shell.RefreshAsync()),
             new("Show the host check", "Welcome", () => shell.Selected = null),
+            new("Virtual networks", "Networking", shell.OpenNetwork),
         };
         foreach (var m in shell.Machines) items.Add(new($"Go to {m.Name}", m.LibraryLabel, () => shell.Selected = m));
         if (shell.Selected is { } s)

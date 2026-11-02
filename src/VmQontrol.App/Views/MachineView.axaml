@@ -182,7 +182,23 @@
                   <TextBlock Text="Address" Classes="muted" />
                   <SelectableTextBlock Grid.Column="1" Text="{Binding GuestAddress, FallbackValue='Waiting for the guest tools…', TargetNullValue='Waiting for the guest tools…'}" />
                   <TextBlock Grid.Row="1" Text="SSH" Classes="muted" IsVisible="{Binding SshCommand, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                  <SelectableTextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SshCommand}" FontFamily="monospace" />
+                  <StackPanel Grid.Row="1" Grid.Column="1" Spacing="8" IsVisible="{Binding SshCommand, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <SelectableTextBlock Text="{Binding SshCommand}" FontFamily="monospace" TextWrapping="Wrap" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <Button x:Name="OpenSsh" Classes="tool" Command="{Binding OpenSshCommand}" ToolTip.Tip="Open a terminal signed in to the machine over SSH (through its forwarded port)">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                          <Path Classes="icon" Data="{StaticResource IconTerminal}" />
+                          <TextBlock Text="Open in terminal" />
+                        </StackPanel>
+                      </Button>
+                      <Button Classes="tool" Command="{Binding CopySshCommand}" ToolTip.Tip="Copy the command">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                          <Path Classes="icon" Data="{StaticResource IconCopy}" />
+                          <TextBlock Text="Copy" />
+                        </StackPanel>
+                      </Button>
+                    </StackPanel>
+                  </StackPanel>
                 </Grid>
               </Border>
 

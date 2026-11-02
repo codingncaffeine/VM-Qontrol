@@ -389,6 +389,10 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public ObservableCollection<HostDriveRow> HostDrives { get; } = [];
 
+    /// <summary>The virtual network editor, over these settings.</summary>
+    [RelayCommand]
+    private void OpenNetworks() => _machine.OpenNetworks();
+
     /// <summary>This computer's serial ports, each ticked when the machine takes it; listed on a worker when the dialog opens.</summary>
     public ObservableCollection<SerialPortRow> SerialPorts { get; } = [];
 

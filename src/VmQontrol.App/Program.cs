@@ -9,6 +9,15 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        if (args.Length > 0 && args[0] == Core.Runtime.SegmentServer.Argument)
+        {
+            // A private segment's address server, started by the first machine on it; no window.
+            var segmentPaths = QontrolPaths.ForCurrentUser();
+            segmentPaths.EnsureCreated();
+            Log.Initialize("vmq-segment", segmentPaths.Logs);
+            return Core.Runtime.SegmentServer.Main(segmentPaths, args);
+        }
+
         if (args.Any(a => a is "--version" or "-V"))
         {
             Console.WriteLine($"VM Qontrol {BuildInfo.Stamp}");

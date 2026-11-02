@@ -33,6 +33,23 @@
         </Grid>
       </Border>
 
+      <!-- Networks shared by machines. -->
+      <Border Classes="card">
+        <Grid ColumnDefinitions="*,Auto">
+          <StackPanel Spacing="4">
+            <TextBlock Text="Virtual networks" FontWeight="SemiBold" />
+            <TextBlock Classes="muted" TextWrapping="Wrap"
+                       Text="Private segments between machines and the addresses they were given, the NAT network inside machines, and this computer's bridges." />
+          </StackPanel>
+          <Button x:Name="OpenNetworks" Grid.Column="1" Classes="tool" VerticalAlignment="Top" Command="{Binding OpenNetworksCommand}" ToolTip.Tip="Open the virtual network editor">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Path Classes="icon" Data="{StaticResource IconNetwork}" />
+              <TextBlock Text="Open" />
+            </StackPanel>
+          </Button>
+        </Grid>
+      </Border>
+
       <!-- The host check. -->
       <StackPanel Spacing="10">
         <TextBlock Text="THIS COMPUTER" Classes="section" />

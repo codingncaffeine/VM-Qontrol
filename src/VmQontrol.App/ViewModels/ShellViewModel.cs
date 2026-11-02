@@ -382,6 +382,31 @@ public sealed partial class ShellViewModel : ObservableObject
         if (keep is not null && shown.Contains(keep)) Selected = keep;
     }
 
+    /// <summary>Changes the app's settings and saves them on a worker. Any thread.</summary>
+    public void UpdateSettings(Func<AppSettings, AppSettings> change) => Ui.Post(() =>
+    {
+        Settings = change(Settings);
+        var settings = Settings;
+        _ = Task.Run(() => settings.Save(Paths));
+    });
+
+    /// <summary>The virtual network editor while it is open.</summary>
+    [ObservableProperty]
+    private NetworksViewModel? _networks;
+
+    public void OpenNetwork() => OpenNetworks();
+
+    [RelayCommand]
+    public void OpenNetworks()
+    {
+        var editor = new NetworksViewModel(this);
+        editor.Closed += () => Ui.Post(() =>
+        {
+            if (Networks == editor) Networks = null;
+        });
+        Networks = editor;
+    }
+
     /// <summary>Keeps the VirtIO driver disc's path for next time. Any thread.</summary>
     public void RememberDriversIso(string path)
     {

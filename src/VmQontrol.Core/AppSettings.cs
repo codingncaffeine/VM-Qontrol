@@ -25,6 +25,12 @@ public sealed record AppSettings
     /// <summary>The VirtIO driver disc (virtio-win.iso) last chosen, offered again for the next Windows machine.</summary>
     public string? DriversIso { get; set; }
 
+    /// <summary>Private segments' subnets and address servers (the virtual network editor); a segment not listed gets the defaults.</summary>
+    public List<Runtime.SegmentConfig> Segments { get; set; } = [];
+
+    /// <summary>The NAT network inside machines, when QEMU's 10.0.2.0/24 clashes with a network a guest must reach; <c>null</c> = QEMU's.</summary>
+    public string? NatSubnet { get; set; }
+
     public static AppSettings Load(QontrolPaths paths)
     {
         try

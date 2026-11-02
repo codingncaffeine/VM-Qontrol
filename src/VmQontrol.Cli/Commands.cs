@@ -58,6 +58,11 @@ internal static class Commands
         {
             switch (command)
             {
+                case Core.Runtime.SegmentServer.Argument:
+                    // A private segment's address server, started by the first machine on it (never typed by hand).
+                    paths.EnsureCreated();
+                    Log.Initialize("vmq-segment", paths.Logs);
+                    return Core.Runtime.SegmentServer.Main(paths, args);
                 case "version" or "--version" or "-V":
                     output.WriteLine($"vmq {BuildInfo.Stamp}");
                     output.WriteLine(BuildInfo.Licence);

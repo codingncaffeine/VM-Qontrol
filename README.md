@@ -19,7 +19,7 @@ what it does and what the recommended value is. No daemon, no root, and one port
 - Snapshots taken while a machine runs, full and linked clones, templates, suspend and resume.
 - USB passthrough, host drives (a whole disk, a partition or a CD/DVD drive, read-only unless you allow writing),
   host serial ports, shared folders, clipboard sharing, NAT with port forwarding, bridged networking and private
-  networks between machines.
+  networks between machines with their own addresses, in a virtual network editor.
 - PCI passthrough with CPU pinning and hugepages for gaming and GPU workloads.
 - Import from quickemu, VMware, VirtualBox, OVA and libvirt.
 - A host check that names anything missing and the command that installs it on your distribution.
