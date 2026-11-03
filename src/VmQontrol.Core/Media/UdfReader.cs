@@ -63,7 +63,8 @@ public sealed class UdfReader : IDisposable
                 }
             }
 
-            if (partitionStart is not { } start || blockSize == 0 || fsd is not { } f) return null;
+            // A real disc's logical block is a power of two from 512 bytes to 64 KiB; anything else is not read.
+            if (partitionStart is not { } start || blockSize is < 512 or > 65536 || (blockSize & (blockSize - 1)) != 0 || fsd is not { } f) return null;
             var fileSet = Read(stream, (start + f.Lbn) * blockSize, blockSize);
             if (Tag(fileSet) != TagFileSetDescriptor) return null;
             var root = (BinaryPrimitives.ReadUInt32LittleEndian(fileSet.AsSpan(404)), BinaryPrimitives.ReadUInt32LittleEndian(fileSet.AsSpan(400)));
@@ -150,7 +151,7 @@ public sealed class UdfReader : IDisposable
             return entry.AsSpan(adOffset, (int)Math.Min(Math.Min(adLength, size), limit)).ToArray();
         }
 
-        var total = (int)Math.Min(size, limit);
+        var total = (int)Math.Clamp(size, 0, Math.Max(0, limit));
         var result = new byte[total];
         var filled = 0;
         foreach (var (lbn, length) in extents)

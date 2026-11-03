@@ -30,8 +30,9 @@ public static class GuestTools
                 [
                     "The VirtIO driver disc goes in the machine's drive.",
                     "In the machine, open File Explorer → This PC → the CD drive \"virtio-win\".",
-                    "Run virtio-win-guest-tools.exe and accept its steps (it installs the drivers, the guest agent and the SPICE agent).",
-                    "Restart the machine when it asks.",
+                    "Right-click virtio-win-guest-tools.exe, choose Run as administrator, and accept its steps until it says it has finished (it installs the drivers, the guest agent and the SPICE agent).",
+                    "Restart Windows, even if it does not ask.",
+                    "To check: Device Manager → Display adapters shows \"Red Hat QXL controller\" (resolutions and copy and paste then work). If it still says Microsoft Basic Display Adapter, run the installer again and choose Repair.",
                 ], null, NeedsDriversDisc: true);
             case "macos":
                 return new GuestToolsAdvice("macOS has no SPICE guest tools: copy and paste and the guest agent are not available. Shared folders and the network work without them.", [], null, false);

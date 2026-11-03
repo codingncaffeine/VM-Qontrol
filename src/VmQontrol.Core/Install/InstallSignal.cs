@@ -66,7 +66,7 @@ public static class InstallSignal
         string text;
         try
         {
-            text = File.ReadAllText(file);
+            text = ReadCapped(file);
         }
         catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
         {
@@ -97,7 +97,7 @@ public static class InstallSignal
     public static void NoteFinished(string machineDirectory, DateTimeOffset at)
     {
         var file = Path.Combine(machineDirectory, FileName);
-        if (!File.ReadAllText(file).Contains("\nfinished ", StringComparison.Ordinal))
+        if (!ReadCapped(file).Contains("\nfinished ", StringComparison.Ordinal))
             File.AppendAllText(file, "finished " + at.ToString("O", System.Globalization.CultureInfo.InvariantCulture) + "\n");
     }
 
@@ -120,5 +120,24 @@ public static class InstallSignal
         if (stage == InstallStage.NotStarted)
             File.WriteAllText(file, StartedPrefix + DateTimeOffset.Now.ToString("O", System.Globalization.CultureInfo.InvariantCulture) + "\n");
         return file;
+    }
+
+    /// <summary>The guest can write to this file without end: only its first and last 64 KiB are read (the markers are short lines).</summary>
+    private static string ReadCapped(string file)
+    {
+        const int Part = 64 << 10;
+        using var stream = File.OpenRead(file);
+        if (stream.Length <= 2 * Part)
+        {
+            using var all = new StreamReader(stream);
+            return all.ReadToEnd();
+        }
+
+        var head = new byte[Part];
+        stream.ReadExactly(head);
+        var tail = new byte[Part];
+        stream.Seek(-Part, SeekOrigin.End);
+        stream.ReadExactly(tail);
+        return System.Text.Encoding.UTF8.GetString(head) + "\n" + System.Text.Encoding.UTF8.GetString(tail);
     }
 }

@@ -122,10 +122,17 @@ public sealed record GuestConfig
     public string? Account { get; set; }
 
     /// <summary>The command that opens a shell in the guest through the forwarded SSH port.</summary>
-    public string SshCommand(int port) => $"ssh -p {port} {Account ?? "user"}@localhost";
+    public string SshCommand(int port) => $"ssh -p {port} {SshAccount}@localhost";
+
+    /// <summary>
+    /// The account for the SSH command, when it is a plain account name: anything else (a leading '-', spaces, shell
+    /// characters from a hand-edited or imported file) would become an option or a second argument when the command is
+    /// split and run, so "user" stands in.
+    /// </summary>
+    private string SshAccount => Account is { Length: > 0 and <= 64 } a && !a.StartsWith('-') && a.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or '-') ? a : "user";
 
     /// <summary>SSH over vsock (systemd's ssh proxy on this computer; a guest with systemd 256 or newer listens there).</summary>
-    public string SshVsockCommand(uint cid) => $"ssh {Account ?? "user"}@vsock/{cid}";
+    public string SshVsockCommand(uint cid) => $"ssh {SshAccount}@vsock/{cid}";
 }
 
 public enum FirmwareKind

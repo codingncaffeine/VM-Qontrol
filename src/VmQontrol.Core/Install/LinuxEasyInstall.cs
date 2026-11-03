@@ -96,6 +96,8 @@ public static class LinuxEasyInstall
                 var initrd = files.Read("install.amd/initrd.gz")!;
                 var addition = Cpio.Gzipped(new Dictionary<string, byte[]> { ["preseed.cfg"] = Encoding.UTF8.GetBytes(Preseed(c, hash)) });
                 File.WriteAllBytes(Path.Combine(machineDirectory, "installer-initrd"), [.. initrd, .. addition]);
+                // The preseed inside holds the account's password hash: this account only.
+                File.SetUnixFileMode(Path.Combine(machineDirectory, "installer-initrd"), UnixFileMode.UserRead | UnixFileMode.UserWrite);
                 return ([], new KernelBootConfig { Kernel = "installer-vmlinuz", Initrd = "installer-initrd", Append = "auto=true priority=critical quiet" });
             }
 

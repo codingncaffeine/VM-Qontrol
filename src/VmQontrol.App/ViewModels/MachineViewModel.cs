@@ -843,7 +843,14 @@ public sealed partial class MachineViewModel : ObservableObject
 
         var conf = IsQuickemu ? Entry.Path : null;
         var roots = _shell.LibraryRoots;
-        var (files, freed) = await Task.Run(() => (MachineLifecycle.FilesToDelete(Machine, Entry.Directory, conf), MachineLifecycle.BasesFreedBy(Entry.Directory, roots))).ConfigureAwait(false);
+        var (files, freed, refusal) = await Task.Run(() => (MachineLifecycle.FilesToDelete(Machine, Entry.Directory, conf), MachineLifecycle.BasesFreedBy(Entry.Directory, roots),
+            MachineLifecycle.DeleteRefusal(Entry.Directory, conf, roots))).ConfigureAwait(false);
+        if (refusal is not null)
+        {
+            Ui.Post(() => _shell.Show(new NoticeViewModel($"{Name} cannot be deleted from here", [refusal], isError: true)));
+            return;
+        }
+
         var prompt = new PromptViewModel($"Delete {Name}?",
             ["This deletes the machine and everything in it, for good:", .. files.Select(f => "    " + f),
              .. freed.Count > 0 ? ["and the shared disks no other machine uses any more:", .. freed.Select(f => "    " + f)] : Array.Empty<string>(),
@@ -855,7 +862,7 @@ public sealed partial class MachineViewModel : ObservableObject
         {
             await Task.Run(() =>
             {
-                MachineLifecycle.Delete(Entry.Directory, conf);
+                MachineLifecycle.Delete(Machine, Entry.Directory, conf, roots);
                 MachineLifecycle.PruneBases(roots);
             }).ConfigureAwait(false);
             Ui.Post(() =>

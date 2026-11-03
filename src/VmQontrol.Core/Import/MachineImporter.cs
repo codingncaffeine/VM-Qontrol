@@ -78,6 +78,9 @@ public static class MachineImporter
     public static async Task<(MachineConfig Machine, string Directory)> ImportAsync(ForeignMachine f, string libraryRoot, IProgress<ImportProgress> progress, CancellationToken ct)
     {
         if (f.Problems.Count > 0) throw new InvalidOperationException(string.Join(" ", f.Problems));
+        // The descriptor is someone else's file: what it names must be a disk or disc image, nowhere in the system's folders.
+        var refused = f.Disks.Select(d => ForeignPaths.Problem(d.Path)).Concat(f.Discs.Select(d => ForeignPaths.Problem(d, disc: true))).OfType<string>().ToList();
+        if (refused.Count > 0) throw new InvalidOperationException(string.Join(" ", refused));
         var dir = MachineFactory.FolderFor(libraryRoot, f.Name);
         Directory.CreateDirectory(dir);
         try
@@ -89,7 +92,8 @@ public static class MachineImporter
                 var target = Path.Combine(dir, $"disk{i}.qcow2");
                 var index = i;
                 await ConvertAsync(source.Path, target, new Progress<double>(p =>
-                    progress.Report(new ImportProgress(index + 1, f.Disks.Count, p, $"Copying disk {index + 1} of {f.Disks.Count}…"))), ct).ConfigureAwait(false);
+                    progress.Report(new ImportProgress(index + 1, f.Disks.Count, p, $"Copying disk {index + 1} of {f.Disks.Count}…"))), ct,
+                    mayElevate: ForeignPaths.MayElevate(f, source.Path)).ConfigureAwait(false);
                 var info = await QemuImg.InfoAsync(target, ct).ConfigureAwait(false);
                 var bytes = info["virtual-size"]?.GetValue<long>() ?? 0;
                 disks.Add(new DiskConfig { File = Path.GetFileName(target), Bus = source.Bus, SizeGiB = Math.Max(1, (bytes + (1L << 30) - 1) >> 30) });
@@ -100,8 +104,9 @@ public static class MachineImporter
             {
                 Name = f.Name,
                 Guest = f.Guest,
-                MemoryMiB = f.MemoryMiB,
-                Cpu = new CpuConfig { Cores = f.Cores },
+                // Someone else's numbers: kept only when a machine could run with them (else the recommended value).
+                MemoryMiB = f.MemoryMiB is >= 64 and <= 4L << 20 ? f.MemoryMiB : null,
+                Cpu = new CpuConfig { Cores = f.Cores is >= 1 and <= 1024 ? f.Cores : null },
                 Firmware = new FirmwareConfig { Kind = f.Firmware, SecureBoot = f.SecureBoot },
                 // Windows 11 refuses to start without a TPM it had; a TPM is harmless elsewhere.
                 Tpm = f.Tpm || (windows && f.Guest.Release == "11"),
@@ -131,10 +136,12 @@ public static class MachineImporter
     /// qemu-img convert to qcow2 with its progress (qemu-img follows VMware snapshot chains through the descriptors).
     /// A source this account cannot read is converted through pkexec, and the copy handed back to this account.
     /// </summary>
-    public static async Task ConvertAsync(string source, string target, IProgress<double> progress, CancellationToken ct)
+    public static async Task ConvertAsync(string source, string target, IProgress<double> progress, CancellationToken ct, bool mayElevate = false)
     {
         string[] convert = ["convert", "-p", "-O", "qcow2", "-o", "lazy_refcounts=on,nocow=on", source, target];
         ProcessStartInfo start;
+        if (!CanRead(source) && !mayElevate)
+            throw new IOException($"{source} cannot be read by this account. Copy it somewhere this account can read (or give it read access), then import again.");
         if (CanRead(source))
         {
             start = new ProcessStartInfo(QemuImg.Program);

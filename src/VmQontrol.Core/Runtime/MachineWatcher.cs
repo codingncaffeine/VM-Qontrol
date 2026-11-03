@@ -87,6 +87,9 @@ public sealed class MachineWatcher : IAsyncDisposable
                     _ => State,
                 };
                 if (e.Name is "SHUTDOWN" or "GUEST_PANICKED") Reason = e.Data?["reason"]?.GetValue<string>() ?? e.Data?["action"]?.GetValue<string>();
+                // The power button pressed: a guest that ignores it keeps running, so the state goes back to what QEMU says
+                // after a while instead of "Shutting down" for ever.
+                if (e.Name == "POWERDOWN") _ = RevertIfStillRunningAsync();
                 if (e.Name == "BLOCK_IO_ERROR") Log.Warn($"{Machine.Name}: a disk reported an error ({e.Data?["reason"]?.GetValue<string>() ?? "no detail"}). The host's disk may be full.");
                 Set(next);
             }
@@ -98,6 +101,27 @@ public sealed class MachineWatcher : IAsyncDisposable
         await _qmp.Closed.ConfigureAwait(false);
         Set(PowerState.Off);
         _exited.TrySetResult();
+    }
+
+    /// <summary>How long a guest may take to act on the power button before the state shows it still running.</summary>
+    internal static TimeSpan PowerButtonGrace { get; set; } = TimeSpan.FromSeconds(90);
+
+    private async Task RevertIfStillRunningAsync()
+    {
+        try
+        {
+            await Task.Delay(PowerButtonGrace, _stop.Token).ConfigureAwait(false);
+            if (State != PowerState.ShuttingDown) return;
+            var status = (await _qmp.ExecuteAsync("query-status", ct: _stop.Token).ConfigureAwait(false))?["status"]?.GetValue<string>();
+            if (status == "running")
+            {
+                Log.Info($"{Machine.Name}: the guest did not act on the power button; it is still running.");
+                Set(PowerState.Running);
+            }
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or IOException or QmpException or InvalidOperationException)
+        {
+        }
     }
 
     private void Set(PowerState next)

@@ -258,7 +258,7 @@ public static class QemuCommandBuilder
         if (ctx.NatSubnet is { } natSubnet) net.Append(CultureInfo.InvariantCulture, $",net={natSubnet}");
         if (nic.SshForward) net.Append(CultureInfo.InvariantCulture, $",hostfwd=tcp::{nic.SshHostPort ?? ctx.SshHostPort}-:22");
         foreach (var f in nic.Forwards) net.Append(CultureInfo.InvariantCulture, $",hostfwd={f.Protocol}::{f.HostPort}-:{f.GuestPort}");
-        var spice = backend == DisplayBackend.SpiceApp ? $"disable-ticketing=on,gl={OnOff(gl)}" : $"disable-ticketing=on,unix=on,addr={ctx.Runtime.Spice}";
+        var spice = backend == DisplayBackend.SpiceApp ? $"disable-ticketing=on,gl={OnOff(gl)}" : $"disable-ticketing=on,unix=on,addr={EscapeOption(ctx.Runtime.Spice)}";
         // Guest isolation, as Workstation calls it: the SPICE server itself refuses the clipboard or dropped files.
         if (!m.Display.CopyPaste) spice += ",disable-copy-paste=on";
         if (!m.Display.FileTransfer) spice += ",disable-agent-file-xfer=on";
@@ -297,7 +297,7 @@ public static class QemuCommandBuilder
         {
             args.AddRange(["-spice", spice]);
             args.AddRange(["-device", "virtio-serial-pci",
-                "-chardev", $"socket,id=agent0,path={ctx.Runtime.Agent},server=on,wait=off",
+                "-chardev", $"socket,id=agent0,path={EscapeOption(ctx.Runtime.Agent)},server=on,wait=off",
                 "-device", "virtserialport,chardev=agent0,name=org.qemu.guest_agent.0",
                 "-chardev", "spicevmc,id=vdagent0,name=vdagent",
                 "-device", "virtserialport,chardev=vdagent0,name=com.redhat.spice.0",
@@ -308,7 +308,7 @@ public static class QemuCommandBuilder
         {
             // The guest agent still answers in a headless launch (IP address, clean shutdown).
             args.AddRange(["-device", "virtio-serial-pci",
-                "-chardev", $"socket,id=agent0,path={ctx.Runtime.Agent},server=on,wait=off",
+                "-chardev", $"socket,id=agent0,path={EscapeOption(ctx.Runtime.Agent)},server=on,wait=off",
                 "-device", "virtserialport,chardev=agent0,name=org.qemu.guest_agent.0"]);
         }
 
@@ -384,8 +384,8 @@ public static class QemuCommandBuilder
             // each restart, so a macOS install fell back to Recovery. quickemu sets it always; set only when SMM is on.
             if (smm == "on") args.AddRange(["-global", "driver=cfi.pflash01,property=secure,value=on"]);
             args.AddRange([
-                "-drive", $"if=pflash,format={ctx.FirmwareFormat(efiCode)},unit=0,file={efiCode},readonly=on",
-                "-drive", $"if=pflash,format={(varsToCreate is { } v ? ctx.FirmwareFormat(v.Item1) : ctx.FirmwareFormat(efiVars))},unit=1,file={efiVars}"]);
+                "-drive", $"if=pflash,format={ctx.FirmwareFormat(efiCode)},unit=0,file={EscapeOption(efiCode)},readonly=on",
+                "-drive", $"if=pflash,format={(varsToCreate is { } v ? ctx.FirmwareFormat(v.Item1) : ctx.FirmwareFormat(efiVars))},unit=1,file={EscapeOption(efiVars)}"]);
         }
 
         // Media: an installer marked "until installed" is in the drive only while the system disk is unused.
@@ -398,20 +398,20 @@ public static class QemuCommandBuilder
         var installer = m.Media.FirstOrDefault(x => x.Role == MediaRole.Installer && Attached(x));
         var installerPath = installer is null ? null : File(installer.File);
         if (installerPath is not null && os == "freedos") args.AddRange(["-boot", "order=dc"]);
-        else if (installerPath is not null && os == "kolibrios") { args.AddRange(["-drive", $"media=cdrom,index=2,file={installerPath}"]); installerPath = null; }
-        else if (installerPath is not null && os == "reactos") { args.AddRange(["-boot", "order=d", "-drive", $"if=ide,index=2,media=cdrom,file={installerPath}"]); installerPath = null; }
+        else if (installerPath is not null && os == "kolibrios") { args.AddRange(["-drive", $"media=cdrom,index=2,file={EscapeOption(installerPath)}"]); installerPath = null; }
+        else if (installerPath is not null && os == "reactos") { args.AddRange(["-boot", "order=d", "-drive", $"if=ide,index=2,media=cdrom,file={EscapeOption(installerPath)}"]); installerPath = null; }
         else if (installerPath is not null && os == "windows"
                  && m.Media.FirstOrDefault(x => x.Role == MediaRole.Unattended) is { } answers && ctx.FileExists(File(answers.File)))
-            args.AddRange(["-drive", $"media=cdrom,index=2,file={File(answers.File)}"]);
+            args.AddRange(["-drive", $"media=cdrom,index=2,file={EscapeOption(File(answers.File))}"]);
         else if (os != "windows" && m.Media.FirstOrDefault(x => x.Role == MediaRole.Unattended && Attached(x)) is { } linuxAnswers)
             // A Linux answer-file disc (Ubuntu's cidata seed, a kickstart volume) rides beside the installer while it installs.
-            args.AddRange(["-drive", $"media=cdrom,index=2,file={File(linuxAnswers.File)}"]);
+            args.AddRange(["-drive", $"media=cdrom,index=2,file={EscapeOption(File(linuxAnswers.File))}"]);
 
         foreach (var floppy in m.Media.Where(x => x.Role == MediaRole.Floppy && Attached(x)))
-            args.AddRange(["-drive", $"if=floppy,format=raw,file={File(floppy.File)}"]);
-        if (installerPath is not null) args.AddRange(["-drive", $"media=cdrom,index=0,file={installerPath}"]);
+            args.AddRange(["-drive", $"if=floppy,format=raw,file={EscapeOption(File(floppy.File))}"]);
+        if (installerPath is not null) args.AddRange(["-drive", $"media=cdrom,index=0,file={EscapeOption(installerPath)}"]);
         if (m.Media.FirstOrDefault(x => x.Role == MediaRole.Drivers && Attached(x)) is { } drivers)
-            args.AddRange(["-drive", $"media=cdrom,index=1,file={File(drivers.File)}"]);
+            args.AddRange(["-drive", $"media=cdrom,index=1,file={EscapeOption(File(drivers.File))}"]);
 
         const string optimizations = "discard=unmap,detect-zeroes=unmap,cache=writeback,aio=threads";
         if (m.Disks.Count == 0) errors.Add("This machine has no disk.");
@@ -429,25 +429,25 @@ public static class QemuCommandBuilder
                 var loader = m.Media.FirstOrDefault(x => x.Role == MediaRole.Bootloader);
                 if (loader is null) errors.Add("This macOS machine has no OpenCore boot loader.");
                 args.AddRange(["-device", "ahci,id=ahci", "-device", "ide-hd,bus=ahci.0,drive=BootLoader,bootindex=0",
-                    "-drive", $"id=BootLoader,if=none,format=qcow2,file={(loader is null ? "" : File(loader.File))}"]);
+                    "-drive", $"id=BootLoader,if=none,format=qcow2,file={EscapeOption((loader is null ? "" : File(loader.File)))}"]);
                 if (m.Media.FirstOrDefault(x => x.Role == MediaRole.Recovery && Attached(x)) is { } recovery)
-                    args.AddRange(["-device", "ide-hd,bus=ahci.1,drive=RecoveryImage", "-drive", $"id=RecoveryImage,if=none,format=raw,file={File(recovery.File)}"]);
-                args.AddRange(["-device", $"{device0 ?? macDisk},drive=SystemDisk", "-drive", $"id=SystemDisk,if=none,format=qcow2,file={diskPath},{optimizations}{Throttle(disk)}"]);
+                    args.AddRange(["-device", "ide-hd,bus=ahci.1,drive=RecoveryImage", "-drive", $"id=RecoveryImage,if=none,format=raw,file={EscapeOption(File(recovery.File))}"]);
+                args.AddRange(["-device", $"{device0 ?? macDisk},drive=SystemDisk", "-drive", $"id=SystemDisk,if=none,format=qcow2,file={EscapeOption(diskPath)},{optimizations}{Throttle(disk)}"]);
             }
             else if (os == "kolibrios")
-                args.AddRange(["-device", "ahci,id=ahci", "-device", "ide-hd,bus=ahci.0,drive=SystemDisk", "-drive", $"id=SystemDisk,if=none,format=qcow2,file={diskPath},{optimizations}{Throttle(disk)}"]);
+                args.AddRange(["-device", "ahci,id=ahci", "-device", "ide-hd,bus=ahci.0,drive=SystemDisk", "-drive", $"id=SystemDisk,if=none,format=qcow2,file={EscapeOption(diskPath)},{optimizations}{Throttle(disk)}"]);
             else if (os == "reactos" && device0 is null)
-                args.AddRange(["-drive", $"if=ide,index=0,media=disk,file={diskPath}"]);
+                args.AddRange(["-drive", $"if=ide,index=0,media=disk,file={EscapeOption(diskPath)}"]);
             else if (os == "windows-server" && device0 is null)
-                args.AddRange(["-device", "ide-hd,drive=SystemDisk", "-drive", $"id=SystemDisk,if=none,format=qcow2,file={diskPath},{optimizations}{Throttle(disk)}"]);
+                args.AddRange(["-device", "ide-hd,drive=SystemDisk", "-drive", $"id=SystemDisk,if=none,format=qcow2,file={EscapeOption(diskPath)},{optimizations}{Throttle(disk)}"]);
             else
-                args.AddRange(["-device", $"{device0 ?? "virtio-blk-pci"},drive=SystemDisk", "-drive", $"id=SystemDisk,if=none,format={disk.Format},file={diskPath},{optimizations}{Throttle(disk)}"]);
+                args.AddRange(["-device", $"{device0 ?? "virtio-blk-pci"},drive=SystemDisk", "-drive", $"id=SystemDisk,if=none,format={disk.Format},file={EscapeOption(diskPath)},{optimizations}{Throttle(disk)}"]);
 
             for (var i = 1; i < m.Disks.Count; i++)
             {
                 var extra = m.Disks[i];
                 var dev = extra.Bus switch { DiskBus.Sata or DiskBus.Ide => "ide-hd", DiskBus.Nvme => $"nvme,serial=vmqdisk{i}", DiskBus.Pvscsi => "scsi-hd,bus=pvscsi0.0", DiskBus.Scsi => "scsi-hd,bus=vscsi0.0", _ => "virtio-blk-pci" };
-                args.AddRange(["-device", $"{dev},drive=Disk{i}", "-drive", $"id=Disk{i},if=none,format={extra.Format},file={File(extra.File)},{optimizations}{Throttle(extra)}"]);
+                args.AddRange(["-device", $"{dev},drive=Disk{i}", "-drive", $"id=Disk{i},if=none,format={extra.Format},file={EscapeOption(File(extra.File))},{optimizations}{Throttle(extra)}"]);
             }
         }
 
@@ -469,7 +469,7 @@ public static class QemuCommandBuilder
             var fsArgs = new List<string> { $"--socket-path={socket}", $"--shared-dir={share.Path}", "--cache=auto", "--sandbox=namespace" };
             if (share.ReadOnly) fsArgs.Add("--readonly");
             shares.Add(new VirtiofsdLaunch([virtiofsd, .. fsArgs], socket));
-            args.AddRange(["-chardev", $"socket,id=fs{i},path={socket}", "-device", $"vhost-user-fs-pci,chardev=fs{i},tag={share.Tag}"]);
+            args.AddRange(["-chardev", $"socket,id=fs{i},path={EscapeOption(socket)}", "-device", $"vhost-user-fs-pci,chardev=fs{i},tag={EscapeOption(share.Tag)}"]);
         }
 
         SwtpmLaunch? swtpm = null;
@@ -478,7 +478,7 @@ public static class QemuCommandBuilder
             // An imported quickemu machine keeps its TPM state beside its disk, where quickemu wrote it.
             var state = m.ImportedFrom?.Kind == "quickemu" ? ctx.MachineDirectory : Path.Combine(ctx.MachineDirectory, "tpm");
             swtpm = new SwtpmLaunch(["socket", "--ctrl", $"type=unixio,path={ctx.Runtime.Tpm}", "--terminate", "--tpmstate", $"dir={state}", "--tpm2"], ctx.Runtime.Tpm, state);
-            args.AddRange(["-chardev", $"socket,id=chrtpm,path={ctx.Runtime.Tpm}", "-tpmdev", "emulator,id=tpm0,chardev=chrtpm", "-device", "tpm-tis,tpmdev=tpm0"]);
+            args.AddRange(["-chardev", $"socket,id=chrtpm,path={EscapeOption(ctx.Runtime.Tpm)}", "-tpmdev", "emulator,id=tpm0,chardev=chrtpm", "-device", "tpm-tis,tpmdev=tpm0"]);
         }
 
         var boot = new List<string>();
@@ -506,7 +506,7 @@ public static class QemuCommandBuilder
         args.AddRange(serial ? ["-serial", $"unix:{ctx.Runtime.Serial},server=on,wait=off"] : ["-serial", "none"]);
         // Host serial ports follow as the machine's next COM ports (COM2 when the console has COM1).
         for (var i = 0; i < m.HostSerialPorts.Count; i++)
-            args.AddRange(["-chardev", $"serial,id=hostserial{i},path={m.HostSerialPorts[i].Path}", "-device", $"isa-serial,chardev=hostserial{i},id=hostserial{i}-port"]);
+            args.AddRange(["-chardev", $"serial,id=hostserial{i},path={EscapeOption(m.HostSerialPorts[i].Path)}", "-device", $"isa-serial,chardev=hostserial{i},id=hostserial{i}-port"]);
         // Easy Install's signal port: the fourth COM port (0x2e8, ttyS3, ACPI _UID 4), placed last so the ports above keep
         // their numbers, and only while it fits (ISA has four).
         if (ctx.InstallSignal is { } signal && (serial ? 1 : 0) + m.HostSerialPorts.Count < Install.InstallSignal.PortIndex + 1)
@@ -595,7 +595,7 @@ public static class QemuCommandBuilder
         }
 
         if (p.LookingGlassMiB is > 0 and var mib)
-            args.AddRange(["-object", $"memory-backend-file,id=looking-glass,share=on,mem-path={LookingGlassFile},size={mib}M", "-device", "ivshmem-plain,memdev=looking-glass"]);
+            args.AddRange(["-object", $"memory-backend-file,id=looking-glass,share=on,mem-path={EscapeOption(LookingGlassFile)},size={mib}M", "-device", "ivshmem-plain,memdev=looking-glass"]);
 
         for (var i = 0; i < p.PciDevices.Count; i++)
             args.AddRange(["-device", $"vfio-pci,host={p.PciDevices[i]},id=hostpci{i}"]);

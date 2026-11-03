@@ -59,8 +59,21 @@ public sealed class SnapshotStore(MachineConfig machine, string machineDirectory
         {
             return File.Exists(MetadataFile) ? JsonSerializer.Deserialize<SnapshotList>(File.ReadAllText(MetadataFile), Json) ?? new SnapshotList() : new SnapshotList();
         }
-        catch (JsonException)
+        catch (JsonException ex)
         {
+            // The disks still hold every snapshot; only the names and notes are unreadable. The file is moved aside, never
+            // written over, so they can be put back by hand.
+            var kept = $"{MetadataFile}.bad-{DateTime.Now:yyyyMMdd-HHmmss}";
+            try
+            {
+                File.Move(MetadataFile, kept);
+            }
+            catch (Exception move) when (move is IOException or UnauthorizedAccessException)
+            {
+                throw new IOException($"The snapshot list ({MetadataFile}) is damaged and could not be set aside: {move.Message}", ex);
+            }
+
+            Log.Warn($"{machine.Name}: the snapshot list was damaged ({ex.Message}); kept as {kept}.");
             return new SnapshotList();
         }
     }
@@ -68,8 +81,13 @@ public sealed class SnapshotStore(MachineConfig machine, string machineDirectory
     private void Save(SnapshotList list)
     {
         Directory.CreateDirectory(metadataDirectory);
-        var temp = MetadataFile + ".new";
-        File.WriteAllText(temp, JsonSerializer.Serialize(list, Json));
+        var temp = $"{MetadataFile}.{Environment.ProcessId}.new";
+        using (var stream = File.Create(temp))
+        {
+            JsonSerializer.Serialize(stream, list, Json);
+            stream.Flush(flushToDisk: true);
+        }
+
         File.Move(temp, MetadataFile, overwrite: true);
     }
 
@@ -106,7 +124,27 @@ public sealed class SnapshotStore(MachineConfig machine, string machineDirectory
         }
         else
         {
-            foreach (var disk in Disks) await QemuImg.RunAsync(ct, "snapshot", "-c", tag, disk).ConfigureAwait(false);
+            // All disks or none: a disk that refuses (full, damaged) takes the snapshot back off the disks that had it, so no
+            // disk keeps a snapshot the list does not name.
+            var taken = new List<string>();
+            try
+            {
+                foreach (var disk in Disks)
+                {
+                    await QemuImg.RunAsync(ct, "snapshot", "-c", tag, disk).ConfigureAwait(false);
+                    taken.Add(disk);
+                }
+            }
+            catch
+            {
+                foreach (var disk in taken)
+                {
+                    try { await QemuImg.RunAsync(CancellationToken.None, "snapshot", "-d", tag, disk).ConfigureAwait(false); }
+                    catch (IOException undo) { Log.Warn($"{machine.Name}: snapshot {tag} could not be taken back off {disk}: {undo.Message}"); }
+                }
+
+                throw;
+            }
         }
 
         var snapshot = new Snapshot { Tag = tag, Name = name, Description = description, Taken = DateTimeOffset.Now, WithMemory = watcher is not null, Parent = list.Current, Screenshot = screenshot, Auto = auto };
@@ -178,13 +216,19 @@ public sealed class SnapshotStore(MachineConfig machine, string machineDirectory
     }
 
     /// <summary>Runs a QMP snapshot job to the end and turns its failure into an exception with QEMU's reason.</summary>
+    /// <summary>The longest a snapshot job may run (saving a large memory to a slow disk takes minutes, never this long).</summary>
+    internal static TimeSpan JobTimeout { get; set; } = TimeSpan.FromMinutes(30);
+
     private static async Task RunJobAsync(MachineWatcher watcher, string command, JsonObject arguments, CancellationToken ct)
     {
         var id = $"vmq-{Guid.NewGuid():N}"[..20];
         arguments["job-id"] = id;
         await watcher.ExecuteAsync(command, arguments, ct).ConfigureAwait(false);
+        var deadline = DateTime.UtcNow + JobTimeout;
         while (true)
         {
+            if (DateTime.UtcNow > deadline)
+                throw new IOException($"QEMU's {command} has not finished after {JobTimeout.TotalMinutes:0} minutes; the machine may be stuck. Its job is {id}.");
             await Task.Delay(100, ct).ConfigureAwait(false);
             var jobs = await watcher.ExecuteAsync("query-jobs", ct: ct).ConfigureAwait(false) as JsonArray;
             var job = jobs?.OfType<JsonObject>().FirstOrDefault(j => j["id"]?.GetValue<string>() == id);

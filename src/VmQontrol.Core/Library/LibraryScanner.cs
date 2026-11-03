@@ -24,7 +24,20 @@ public static class LibraryScanner
     {
         var entries = new List<LibraryEntry>();
         if (!System.IO.Directory.Exists(root)) return entries;
-        foreach (var dir in System.IO.Directory.EnumerateDirectories(root).Order(StringComparer.Ordinal))
+        // One unreadable folder or odd file is that entry's error card; it never hides the rest of the library.
+        string[] dirs, confs;
+        try
+        {
+            dirs = [.. System.IO.Directory.EnumerateDirectories(root).Order(StringComparer.Ordinal)];
+            confs = [.. System.IO.Directory.EnumerateFiles(root, "*.conf").Order(StringComparer.Ordinal)];
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Warn($"The library folder {root} could not be read: {ex.Message}");
+            return entries;
+        }
+
+        foreach (var dir in dirs)
         {
             var file = System.IO.Path.Combine(dir, MachineStore.FileName);
             if (!File.Exists(file)) continue;
@@ -32,13 +45,13 @@ public static class LibraryScanner
             {
                 entries.Add(new LibraryEntry(MachineKind.Native, file, dir, MachineStore.Load(file), [], null));
             }
-            catch (Exception ex) when (ex is IOException or InvalidDataException or System.Text.Json.JsonException or UnauthorizedAccessException)
+            catch (Exception ex) when (ex is not OutOfMemoryException)
             {
                 entries.Add(new LibraryEntry(MachineKind.Native, file, dir, null, [], ex.Message));
             }
         }
 
-        foreach (var conf in System.IO.Directory.EnumerateFiles(root, "*.conf").Order(StringComparer.Ordinal))
+        foreach (var conf in confs)
         {
             try
             {
@@ -51,7 +64,7 @@ public static class LibraryScanner
                     machine = MachineStore.Load(saved) with { Id = machine.Id, ImportedFrom = machine.ImportedFrom };
                 entries.Add(new LibraryEntry(MachineKind.Quickemu, conf, import.MachineDirectory, machine, import.Notes, null));
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or System.Text.Json.JsonException)
+            catch (Exception ex) when (ex is not OutOfMemoryException)
             {
                 entries.Add(new LibraryEntry(MachineKind.Quickemu, conf, root, null, [], ex.Message));
             }

@@ -77,7 +77,23 @@ public sealed partial class QmpClient : IAsyncDisposable
 
     private async Task HandshakeAsync(CancellationToken ct)
     {
-        var greeting = await _reader.ReadLineAsync(ct).ConfigureAwait(false) ?? throw new IOException("QEMU closed the QMP socket before greeting.");
+        // QMP serves one client: a socket that connects but never greets is held by another program (another VM Qontrol
+        // window, vmq, a debugging tool). That is said, not waited on for ever.
+        string? greeting;
+        using (var greet = CancellationTokenSource.CreateLinkedTokenSource(ct))
+        {
+            greet.CancelAfter(HandshakeTimeout);
+            try
+            {
+                greeting = await _reader.ReadLineAsync(greet.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                throw new IOException("The machine's control connection is held by another program (another VM Qontrol window or vmq); close it and try again.");
+            }
+        }
+
+        if (greeting is null) throw new IOException("QEMU closed the QMP socket before greeting.");
         var version = JsonNode.Parse(greeting)?["QMP"]?["version"]?["qemu"];
         QemuVersion = version is null ? "" : $"{version["major"]}.{version["minor"]}.{version["micro"]}";
         _ = Task.Run(ReadLoopAsync, CancellationToken.None);
@@ -105,8 +121,22 @@ public sealed partial class QmpClient : IAsyncDisposable
         }
 
         using var _ = ct.Register(() => answer.TrySetCanceled(ct));
+        // A QEMU that stopped answering (frozen, or paused on a full disk) must not hold the caller for ever.
+        if (await Task.WhenAny(answer.Task, Task.Delay(CommandTimeout, CancellationToken.None)).ConfigureAwait(false) != answer.Task)
+        {
+            _pending.TryRemove(id, out var abandoned);
+            abandoned.Answer?.TrySetCanceled();
+            throw new IOException($"QEMU did not answer {command} within {CommandTimeout.TotalSeconds:0} seconds.");
+        }
+
         return await answer.Task.ConfigureAwait(false);
     }
+
+    /// <summary>How long a greeting may take before the socket counts as held by someone else.</summary>
+    internal static TimeSpan HandshakeTimeout { get; set; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>How long any one command may take (commands that run long are QEMU jobs, which answer at once).</summary>
+    internal static TimeSpan CommandTimeout { get; set; } = TimeSpan.FromMinutes(2);
 
     /// <summary>
     /// Runs a command that takes an open file with it (add-fd, getfd): the file goes over the socket as SCM_RIGHTS with

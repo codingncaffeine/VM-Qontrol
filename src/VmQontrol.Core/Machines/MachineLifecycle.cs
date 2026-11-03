@@ -13,6 +13,7 @@ public static class MachineLifecycle
     public static async Task<(MachineConfig Machine, string Directory)> CloneAsync(MachineConfig source, string sourceDirectory, string libraryRoot, string name,
         IProgress<string>? progress = null, CancellationToken ct = default)
     {
+        RefuseIfRunning(source);
         string Full(string f) => Path.IsPathRooted(f) ? f : Path.Combine(sourceDirectory, f);
         var target = MachineFactory.FolderFor(libraryRoot, name);
         Directory.CreateDirectory(target);
@@ -102,6 +103,7 @@ public static class MachineLifecycle
     public static async Task<(MachineConfig Machine, string Directory, MachineConfig Original)> LinkedCloneAsync(MachineConfig source, string sourceDirectory,
         string libraryRoot, string name, IProgress<string>? progress = null, CancellationToken ct = default)
     {
+        RefuseIfRunning(source);
         string Full(string f) => Path.IsPathRooted(f) ? f : Path.Combine(sourceDirectory, f);
         var bases = Path.Combine(libraryRoot, BasesFolder);
         Directory.CreateDirectory(bases);
@@ -235,11 +237,57 @@ public static class MachineLifecycle
         return list;
     }
 
-    /// <summary>Deletes the machine's folder (and its quickemu .conf). Discs kept elsewhere are not touched.</summary>
-    public static void Delete(string directory, string? confFile)
+    /// <summary>
+    /// Deletes the machine's folder (and its quickemu .conf). Discs kept elsewhere are not touched. Refused while the
+    /// machine runs (from anywhere: this app, another window, vmq), and for a folder that is not the machine's alone.
+    /// </summary>
+    public static void Delete(MachineConfig machine, string directory, string? confFile, IReadOnlyList<string> libraryRoots)
     {
+        RefuseIfRunning(machine);
+        if (DeleteRefusal(directory, confFile, libraryRoots) is { } why) throw new MachineBusyException(why);
         if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
         if (confFile is not null && File.Exists(confFile)) File.Delete(confFile);
+    }
+
+    /// <summary>
+    /// Why a folder must not be deleted as a machine's own: it is a library folder or holds one, it is the home folder
+    /// or the file system's root, or other machines live in it (a quickemu .conf can name a disk right beside the library
+    /// folder, which would make the library folder "the machine's"). <c>null</c> = safe to delete.
+    /// </summary>
+    public static string? DeleteRefusal(string directory, string? confFile, IReadOnlyList<string> libraryRoots)
+    {
+        if (!Directory.Exists(directory)) return null;
+        var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory));
+        var home = Path.TrimEndingDirectorySeparator(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
+        string Kept(string what) => $"VM Qontrol will not delete {full}: {what}. Delete the machine's own files by hand if you want them gone.";
+        if (full.Length <= 1 || full == home) return Kept("it is not a machine's own folder");
+        foreach (var root in libraryRoots.Where(r => r.Length > 0))
+        {
+            var r = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+            if (r == full || r.StartsWith(full + "/", StringComparison.Ordinal)) return Kept("it is a library folder, holding other machines");
+        }
+
+        try
+        {
+            var others = Directory.EnumerateFiles(full, MachineStore.FileName, new EnumerationOptions { RecurseSubdirectories = true, MaxRecursionDepth = 4, IgnoreInaccessible = true })
+                .Any(f => Path.GetDirectoryName(f) != full);
+            var confs = Directory.EnumerateFiles(full, "*.conf", SearchOption.TopDirectoryOnly)
+                .Any(f => confFile is null || Path.GetFullPath(f) != Path.GetFullPath(confFile));
+            if (others || confs) return Kept("other machines live in it");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return Kept($"it could not be looked through ({ex.Message})");
+        }
+
+        return null;
+    }
+
+    /// <summary>Refuses work on a machine that runs, wherever it was started (the caller's own view may be out of date).</summary>
+    public static void RefuseIfRunning(MachineConfig machine)
+    {
+        if (Runtime.MachineRunner.Find(machine, QontrolPaths.ForCurrentUser()) is not null)
+            throw new MachineBusyException($"{machine.Name} is running (started from another window or vmq). Shut it down first.");
     }
 
     /// <summary>A locally administered MAC address in QEMU's 52:54:00 block.</summary>
@@ -261,3 +309,6 @@ public static class MachineLifecycle
         }
     }
 }
+
+/// <summary>Work refused because the machine runs, or its folder is not its own; the message is for the person.</summary>
+public sealed class MachineBusyException(string message) : IOException(message);

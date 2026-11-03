@@ -59,5 +59,24 @@ public sealed record QontrolPaths(string Config, string Data, string State, stri
     public void EnsureCreated()
     {
         foreach (var dir in new[] { Config, Data, State, Cache, Logs }) Directory.CreateDirectory(dir);
+        EnsurePrivateRuntime();
     }
+
+    /// <summary>
+    /// Without XDG_RUNTIME_DIR the runtime folder is in the shared temporary folder, where another account could make it
+    /// first and watch or replace the machines' sockets: it must be this account's own, not a link, and closed to others.
+    /// </summary>
+    public void EnsurePrivateRuntime()
+    {
+        if (Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR") is { Length: > 0 }) return;
+        var shared = Path.Combine(Path.GetTempPath(), $"vmqontrol-{Environment.UserName}");
+        var info = new DirectoryInfo(shared);
+        if (!info.Exists) Directory.CreateDirectory(shared, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        info.Refresh();
+        if (info.LinkTarget is not null || OwnerOf(shared) != NativeLibc.Geteuid())
+            throw new IOException($"{shared} belongs to another account or is a link, so VM Qontrol will not keep its machines' sockets there. Remove it, or sign in with a session that sets XDG_RUNTIME_DIR.");
+        File.SetUnixFileMode(shared, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+    }
+
+    private static uint OwnerOf(string path) => NativeLibc.Stat(path, out var owner) == 0 ? owner : uint.MaxValue;
 }

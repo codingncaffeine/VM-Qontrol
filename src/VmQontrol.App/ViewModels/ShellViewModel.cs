@@ -333,8 +333,12 @@ public sealed partial class ShellViewModel : ObservableObject
     /// <summary>The first look: probe the host, run the host check and read the library, all off the UI thread.</summary>
     public async Task StartAsync()
     {
+        if (AppSettings.LoadProblem is { } problem)
+            Ui.Post(() => Show(new NoticeViewModel("Your settings could not be read", [problem], isError: true)));
         Ui.Post(() => Scanning = true);
         _ = FindGuestToolsAsync();
+        var roots = Settings.LibraryRoots.ToList();
+        _ = Task.Run(() => VmQontrol.Core.Library.StagingSweep.Sweep(roots));
         var host = await HostAsync().ConfigureAwait(false);
         var checks = await Task.Run(() => Doctor.Run(host, Doctor.DetectThisDistro(), Settings.LibraryRoots[0])).ConfigureAwait(false);
         Ui.Post(() => Welcome.Show(checks));
@@ -633,7 +637,7 @@ public sealed partial class ShellViewModel : ObservableObject
             Settings = change(Settings);
             OnPropertyChanged(nameof(LibraryText));
             var settings = Settings;
-            _ = Task.Run(() => settings.Save(Paths));
+            settings.SaveInBackground(Paths);
         }
 
         if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) Apply();
@@ -665,7 +669,7 @@ public sealed partial class ShellViewModel : ObservableObject
             if (Settings.DriversIso == path) return;
             Settings = Settings with { DriversIso = path };
             var settings = Settings;
-            _ = Task.Run(() => settings.Save(Paths));
+            settings.SaveInBackground(Paths);
         });
     }
 
@@ -677,7 +681,7 @@ public sealed partial class ShellViewModel : ObservableObject
         else set.Remove(machine.Id);
         Settings = Settings with { Favorites = set };
         var settings = Settings;
-        _ = Task.Run(() => settings.Save(Paths));
+        settings.SaveInBackground(Paths);
         ApplyFilter();
     }
 

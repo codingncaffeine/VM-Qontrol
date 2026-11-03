@@ -42,7 +42,7 @@ public sealed class LifecycleTests
         Assert.Equal("vars", File.ReadAllText(Path.Combine(cloneDir, "OVMF_VARS.fd")));
         Assert.Equal(MachineStore.ToJson(original), MachineStore.ToJson(MachineStore.Load(Path.Combine(dir, "vm.json"))));
 
-        MachineLifecycle.Delete(cloneDir, null);
+        MachineLifecycle.Delete(MachineStore.Load(Path.Combine(cloneDir, "vm.json")), cloneDir, null, [lib]);
         Assert.False(Directory.Exists(cloneDir));
         Assert.True(File.Exists(disk));
     }
@@ -87,15 +87,15 @@ public sealed class LifecycleTests
 
         // Bases go only when nothing is layered on them.
         Assert.Empty(MachineLifecycle.BasesFreedBy(dir, [lib]));
-        MachineLifecycle.Delete(dir, null);
+        MachineLifecycle.Delete(MachineStore.Load(Path.Combine(dir, "vm.json")), dir, null, [lib]);
         Assert.Empty(MachineLifecycle.PruneBases([lib]));
         // "Linked" was frozen for "Second", so the two share both bases: neither one's deletion frees any.
         Assert.Empty(MachineLifecycle.BasesFreedBy(secondDir, [lib]));
-        MachineLifecycle.Delete(secondDir, null);
+        MachineLifecycle.Delete(MachineStore.Load(Path.Combine(secondDir, "vm.json")), secondDir, null, [lib]);
         Assert.Empty(MachineLifecycle.PruneBases([lib]));
         Assert.Contains("read 1048576/1048576 bytes", await Run("qemu-io", "-c", "read -P 0xcd 1M 1M", cloneDisk), StringComparison.Ordinal);
         Assert.Equal(2, MachineLifecycle.BasesFreedBy(cloneDir, [lib]).Count);
-        MachineLifecycle.Delete(cloneDir, null);
+        MachineLifecycle.Delete(MachineStore.Load(Path.Combine(cloneDir, "vm.json")), cloneDir, null, [lib]);
         Assert.Equal(2, MachineLifecycle.PruneBases([lib]).Count);
         Assert.Empty(Directory.GetFiles(Path.Combine(lib, MachineLifecycle.BasesFolder)));
     }
@@ -155,7 +155,7 @@ public sealed class LifecycleTests
         var (_, cloneDir, _) = await MachineLifecycle.LinkedCloneAsync(original, dir, rootA, "Linked", ct: ct);
 
         Assert.Empty(MachineLifecycle.BasesFreedBy(cloneDir, [rootA, rootB]));
-        MachineLifecycle.Delete(cloneDir, null);
+        MachineLifecycle.Delete(MachineStore.Load(Path.Combine(cloneDir, "vm.json")), cloneDir, null, [rootA, rootB]);
         Assert.Empty(MachineLifecycle.PruneBases([rootA, rootB]));
         Assert.Contains("read 2097152/2097152 bytes", await Run("qemu-io", "-c", "read -P 0xab 1M 2M", Path.Combine(dir, "disk0.qcow2")), StringComparison.Ordinal);
     }
@@ -209,5 +209,37 @@ public sealed class LifecycleTests
         await p.WaitForExitAsync();
         Assert.Equal(0, p.ExitCode);
         return output;
+    }
+
+    /// <summary>
+    /// Audit H1 (2026-11-03): a quickemu .conf whose disk sits right beside the library folder makes the library folder
+    /// "the machine's folder"; deleting the machine would have deleted every machine in it. Refused now; control: a
+    /// machine in a folder of its own is still deleted.
+    /// </summary>
+    [Fact]
+    public void A_folder_that_is_not_the_machines_own_is_never_deleted()
+    {
+        using var profile = new TestProfile("delete-guard");
+        var lib = profile.Paths.DefaultLibrary;
+        Directory.CreateDirectory(Path.Combine(lib, "Other"));
+        File.WriteAllText(Path.Combine(lib, "Other", "vm.json"), "{}");
+        var conf = Path.Combine(lib, "flat.conf");
+        File.WriteAllText(conf, "disk_img=\"flat.qcow2\"\n");
+        var m = new MachineConfig { Name = "flat" };
+        Assert.NotNull(MachineLifecycle.DeleteRefusal(lib, conf, [lib]));
+        Assert.Throws<MachineBusyException>(() => MachineLifecycle.Delete(m, lib, conf, [lib]));
+        Assert.True(File.Exists(Path.Combine(lib, "Other", "vm.json")));
+        // A folder holding another machine below it is refused too, even outside the library.
+        var outside = Path.Combine(profile.Root, "elsewhere");
+        Directory.CreateDirectory(Path.Combine(outside, "inner"));
+        File.WriteAllText(Path.Combine(outside, "inner", "vm.json"), "{}");
+        Assert.NotNull(MachineLifecycle.DeleteRefusal(outside, null, [lib]));
+        // Control: a machine's own folder goes.
+        var own = Path.Combine(lib, "Own");
+        Directory.CreateDirectory(own);
+        File.WriteAllText(Path.Combine(own, "vm.json"), "{}");
+        Assert.Null(MachineLifecycle.DeleteRefusal(own, null, [lib]));
+        MachineLifecycle.Delete(m, own, null, [lib]);
+        Assert.False(Directory.Exists(own));
     }
 }

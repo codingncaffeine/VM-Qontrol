@@ -4,7 +4,9 @@
 
 A modern, intuitive manager for QEMU/KVM virtual machines on Linux. Create a machine in a few guided steps, download
 an operating system from a catalog or use your own installer, and change every setting in a dialog that explains
-what it does and what the recommended value is. No daemon, no root, and one portable folder per machine.
+what it does and what the recommended value is. It runs as you, with no background service, and keeps
+one portable folder per machine. A few host changes (PCI handover, nested virtualization, huge pages, host drives, serial
+port access) ask for your password once through the desktop's own prompt; USB passthrough needs none.
 
 > **v0.0.5 is the first release.** Machines show in a viewer window (remote-viewer or spicy); a screen inside the app
 > comes later. Guides live in the [wiki](https://github.com/codingncaffeine/VM-Qontrol/wiki).

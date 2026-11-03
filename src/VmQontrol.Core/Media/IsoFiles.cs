@@ -139,6 +139,8 @@ public sealed class IsoFiles : IDisposable
 
     private IEnumerable<(Entry Entry, bool More)> Records(Entry directory)
     {
+        // A directory on a real disc is a few sectors to a few megabytes; a size past this is a damaged disc, not read.
+        if (directory.Size > 64L << 20) throw new InvalidDataException($"A directory on the disc claims {directory.Size} bytes; the disc looks damaged.");
         var data = new byte[directory.Size];
         _stream.Position = (long)directory.Extent * Sector;
         _stream.ReadExactly(data);

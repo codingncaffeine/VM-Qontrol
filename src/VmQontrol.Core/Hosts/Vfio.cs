@@ -75,6 +75,8 @@ public static partial class Vfio
     public static async Task<string?> PrepareAsync(IReadOnlyList<string> addresses, string qemuPidFile, CancellationToken ct = default)
     {
         if (!Devices.DriveAccess.Interactive) return "polkit would ask for an administrator's password to hand the devices over.";
+        // The root script writes under /sys/bus/pci/devices/<address>: only a real PCI address may reach it.
+        if (addresses.FirstOrDefault(a => !PciAddress().IsMatch(a)) is { } bad) return $"\"{bad}\" is not a PCI address (0000:0b:00.0)";
         if (!File.Exists("/usr/bin/pkexec")) return "polkit's pkexec is not installed, so the password cannot be asked for";
         var start = new ProcessStartInfo("/usr/bin/pkexec") { RedirectStandardError = true, RedirectStandardOutput = true, UseShellExecute = false };
         foreach (var a in (string[])["/bin/sh", "-c", Script, "sh", Environment.UserName, Environment.ProcessId.ToString(CultureInfo.InvariantCulture), qemuPidFile, .. addresses])
@@ -107,4 +109,7 @@ public static partial class Vfio
 
     [LibraryImport("libc", EntryPoint = "access", SetLastError = true, StringMarshalling = StringMarshalling.Utf8)]
     private static partial int Access(string path, int mode);
+
+    [System.Text.RegularExpressions.GeneratedRegex("^[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\\.[0-7]$")]
+    private static partial System.Text.RegularExpressions.Regex PciAddress();
 }

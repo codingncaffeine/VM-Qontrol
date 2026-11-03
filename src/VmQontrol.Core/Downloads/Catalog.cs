@@ -41,7 +41,8 @@ public static class Catalog
             if (json.TrimStart().StartsWith('['))
             {
                 Directory.CreateDirectory(paths.Cache);
-                await File.WriteAllTextAsync(cache, json, ct).ConfigureAwait(false);
+                await File.WriteAllTextAsync(cache + ".new", json, ct).ConfigureAwait(false);
+                File.Move(cache + ".new", cache, overwrite: true);
             }
             else if (File.Exists(cache))
             {
@@ -53,12 +54,24 @@ public static class Catalog
             }
         }
 
-        return Parse(json);
+        try
+        {
+            return Parse(json);
+        }
+        catch (Exception ex) when (ex is JsonException or NullReferenceException or InvalidOperationException)
+        {
+            // A damaged cache would stay damaged for a day: it goes, and the list is asked for once more.
+            Log.Warn($"The download catalog could not be read ({ex.Message}); asking quickget again.");
+            try { File.Delete(cache); } catch (IOException) { }
+            if (refresh) return [];
+            return await LoadAsync(paths, refresh: true, ct).ConfigureAwait(false);
+        }
     }
 
     public static IReadOnlyList<CatalogSystem> Parse(string json)
     {
-        var raw = JsonSerializer.Deserialize<List<Raw>>(json) ?? [];
+        var raw = (JsonSerializer.Deserialize<List<Raw?>>(json) ?? []).OfType<Raw>()
+            .Where(r => r.Os is not null && r.DisplayName is not null && r.Release is not null).Select(r => r with { Option = r.Option ?? "", Png = r.Png ?? "" }).ToList();
         return raw.GroupBy(r => r.Os)
             .Select(g => new CatalogSystem(g.Key, g.First().DisplayName, g.First().Png,
                 g.Select(r => new CatalogEntry(r.DisplayName, r.Os, r.Release, r.Option, r.Png))

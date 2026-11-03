@@ -100,9 +100,11 @@ public static class WindowsDownload
         {
             string T(string name) => f[name]?.InnerText.Trim() ?? "";
             var name = T("FileName");
+            // A plain file name only: it becomes a file in the discs folder.
+            if (Path.GetFileName(name) != name || name.StartsWith('.')) continue;
             if (!name.EndsWith(".esd", StringComparison.OrdinalIgnoreCase) || !long.TryParse(T("Size"), NumberStyles.None, CultureInfo.InvariantCulture, out var size)) continue;
             var url = T("FilePath");
-            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || !uri.Host.EndsWith(".microsoft.com", StringComparison.OrdinalIgnoreCase)) continue;
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https") || !uri.Host.EndsWith(".microsoft.com", StringComparison.OrdinalIgnoreCase)) continue;
             files.Add((T("LanguageCode").ToLowerInvariant(), T("Architecture").ToLowerInvariant(), name.Contains("CLIENTBUSINESS", StringComparison.OrdinalIgnoreCase), size, T("Sha1").ToLowerInvariant(), url, name, T("Edition")));
         }
 

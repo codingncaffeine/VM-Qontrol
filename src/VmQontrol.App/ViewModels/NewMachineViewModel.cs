@@ -552,6 +552,23 @@ public sealed partial class NewMachineViewModel : ObservableObject
         IsoSummary = "Reading the disc…";
         var result = await Task.Run(() =>
         {
+            // A damaged or deliberately odd disc image must end in words, never a wizard stuck on "Reading the disc…".
+            try
+            {
+                return Detect(path);
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                VmQontrol.Core.Log.Warn($"Reading {path} failed: {ex}");
+                return new DiscDetection(true, null, $"This disc image could not be read ({ex.Message}). It may be damaged; download it again.", [], "");
+            }
+        }).ConfigureAwait(false);
+        Ui.Post(() => FinishDetection(result));
+    }
+
+    private DiscDetection Detect(string path)
+    {
+        {
             var volume = IsoVolume.Read(path);
             if (volume is null) return new DiscDetection(true, null, "This file is not a disc image. A failed download can save an error page with an .iso name; download it again.", [], "");
             if (WindowsMedia.Inspect(path) is { } w)
@@ -569,8 +586,11 @@ public sealed partial class NewMachineViewModel : ObservableObject
             }
 
             return new DiscDetection(false, new GuestConfig { Os = "linux" }, $"A disc labeled \"{volume.VolumeId}\". Its system is not known; choose it on the next page.", [], volume.VolumeId, linux);
-        }).ConfigureAwait(false);
-        Ui.Post(() =>
+        }
+    }
+
+    private void FinishDetection(DiscDetection result)
+    {
         {
             Detecting = false;
             IsoProblem = result.Problem;
@@ -585,7 +605,7 @@ public sealed partial class NewMachineViewModel : ObservableObject
             OnPropertyChanged(nameof(EasyInstallPossible));
             OnPropertyChanged(nameof(EasyInstallShown));
             NextCommand.NotifyCanExecuteChanged();
-        });
+        }
     }
 
     partial void OnEasyInstallChanged(bool value)
@@ -616,7 +636,18 @@ public sealed partial class NewMachineViewModel : ObservableObject
     private async Task LoadCatalogAsync()
     {
         CatalogNote = "Loading the catalog…";
-        var quickget = await Catalog.LoadAsync(_shell.Paths).ConfigureAwait(false);
+        IReadOnlyList<CatalogSystem> quickget;
+        try
+        {
+            quickget = await Catalog.LoadAsync(_shell.Paths).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or global::System.Text.Json.JsonException)
+        {
+            // The list of other systems failed; Windows from Microsoft still works, and the note says what happened.
+            VmQontrol.Core.Log.Warn($"The download catalog failed: {ex.Message}");
+            quickget = [];
+        }
+
         // Windows comes from Microsoft's own catalog (the Media Creation Tool's), not quickget's scripted web-page download.
         var icon = quickget.FirstOrDefault(s => s.Os == "windows")?.IconUrl ?? "";
         var windows = new CatalogSystem("windows", "Windows", icon,

@@ -113,30 +113,102 @@ public sealed record AppSettings
     /// <summary>What stays free for this computer, in MiB, for a computer with <paramref name="totalMiB"/>.</summary>
     public long KeepFreeMiB(long totalMiB) => KeepFreeGB is { } gb ? gb * 1024L : Hosts.MemoryHeadroom.AutomaticKeepFreeMiB(totalMiB);
 
+    /// <summary>Why the settings file could not be read at the last Load (its copy is kept beside it); <c>null</c> = it was fine.</summary>
+    public static string? LoadProblem { get; private set; }
+
     public static AppSettings Load(QontrolPaths paths)
     {
+        LoadProblem = null;
         try
         {
             if (File.Exists(paths.SettingsFile))
             {
-                var loaded = JsonSerializer.Deserialize(File.ReadAllText(paths.SettingsFile), AppSettingsJson.Default.AppSettings);
-                if (loaded is not null) return loaded.LibraryRoots.Count > 0 ? loaded : loaded with { LibraryRoots = [paths.DefaultLibrary] };
+                var loaded = JsonSerializer.Deserialize(File.ReadAllText(paths.SettingsFile), AppSettingsJson.Default.AppSettings)
+                             ?? throw new JsonException("the file holds no settings");
+                loaded = loaded.Normalized();
+                return loaded.LibraryRoots.Count > 0 ? loaded : loaded with { LibraryRoots = [paths.DefaultLibrary] };
             }
         }
-        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException or NotSupportedException or InvalidOperationException)
         {
-            Log.Warn($"Settings could not be read ({ex.Message}); using the defaults.");
+            // Never written over: the file is kept as it is, beside the new one, and the app says so.
+            var kept = $"{paths.SettingsFile}.bad-{DateTime.Now:yyyyMMdd-HHmmss}";
+            try
+            {
+                File.Copy(paths.SettingsFile, kept, overwrite: false);
+            }
+            catch (Exception copy) when (copy is IOException or UnauthorizedAccessException)
+            {
+                kept = "(it could not be copied)";
+            }
+
+            LoadProblem = $"The settings file could not be read ({ex.Message}). It was kept as {kept}; VM Qontrol started with its defaults, so library folders, favorites and folders may need adding again.";
+            Log.Warn(LoadProblem);
         }
 
         return new AppSettings { LibraryRoots = [paths.DefaultLibrary] };
     }
 
+    /// <summary>A file written by hand (or by an older build) may hold null where a list belongs: each becomes empty.</summary>
+    private AppSettings Normalized() => this with
+    {
+        LibraryRoots = (LibraryRoots ?? []).Where(r => !string.IsNullOrWhiteSpace(r) && Path.IsPathRooted(r)).ToList(),
+        Favorites = Favorites ?? [],
+        Groups = (Groups ?? []).Where(g => !string.IsNullOrWhiteSpace(g)).ToList(),
+        GroupOf = (GroupOf ?? []).Where(p => p.Key is not null && !string.IsNullOrWhiteSpace(p.Value)).ToDictionary(p => p.Key, p => p.Value),
+        CollapsedGroups = CollapsedGroups ?? [],
+        UsbNeverAsk = UsbNeverAsk ?? [],
+        Segments = (Segments ?? []).Where(x => x is not null && !string.IsNullOrWhiteSpace(x.Name)).ToList(),
+        Viewer = string.IsNullOrWhiteSpace(Viewer) ? "auto" : Viewer,
+        Theme = string.IsNullOrWhiteSpace(Theme) ? "system" : Theme,
+    };
+
+    private static readonly Lock SaveLock = new();
+
+    /// <summary>
+    /// Writes the settings whole or not at all (a new file, flushed to disk, then renamed over the old one). Saves from
+    /// several threads queue behind one lock, so none is lost to another's half-written file.
+    /// </summary>
     public void Save(QontrolPaths paths)
     {
-        Directory.CreateDirectory(paths.Config);
-        var temp = paths.SettingsFile + ".new";
-        File.WriteAllText(temp, JsonSerializer.Serialize(this, AppSettingsJson.Default.AppSettings));
-        File.Move(temp, paths.SettingsFile, overwrite: true);
+        lock (SaveLock)
+        {
+            Directory.CreateDirectory(paths.Config);
+            var temp = $"{paths.SettingsFile}.{Environment.ProcessId}.new";
+            using (var stream = File.Create(temp))
+            {
+                JsonSerializer.Serialize(stream, this, AppSettingsJson.Default.AppSettings);
+                stream.Flush(flushToDisk: true);
+            }
+
+            File.Move(temp, paths.SettingsFile, overwrite: true);
+        }
+    }
+
+    private static AppSettings? _pending;
+
+    /// <summary>
+    /// Saves on a worker. Saves asked for in a row write the newest settings only (an older copy never lands last); a
+    /// failure is logged, and the change stays in memory for the next save.
+    /// </summary>
+    public void SaveInBackground(QontrolPaths paths)
+    {
+        Volatile.Write(ref _pending, this);
+        _ = Task.Run(() =>
+        {
+            lock (SaveLock)
+            {
+                if (Interlocked.Exchange(ref _pending, null) is not { } newest) return;
+                try
+                {
+                    newest.Save(paths);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    Log.Warn($"Settings could not be saved: {ex.Message}");
+                }
+            }
+        });
     }
 }
 

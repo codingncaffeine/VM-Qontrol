@@ -51,7 +51,31 @@ public static class MachineRunner
     private static readonly JsonSerializerOptions LockJson = new() { WriteIndented = true };
 
     /// <summary>Starts the machine and returns once QEMU is ready (or throws with QEMU's own reason).</summary>
+    /// <summary>
+    /// A lock held for the whole of a start (beside the runtime folder, never in it): a second start of the same machine,
+    /// from this app, another window or vmq, is refused instead of clearing the first one's folder, and Find leaves a
+    /// folder alone while a start holds it.
+    /// </summary>
+    private static FileStream? TryStartLock(QontrolPaths paths, string machineId)
+    {
+        Directory.CreateDirectory(paths.Runtime);
+        try
+        {
+            return new FileStream(paths.RuntimeFor(machineId) + ".starting", FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+    }
+
     public static async Task<RunningMachine> StartAsync(MachineConfig m, string machineDirectory, QontrolPaths paths, HostCapabilities host, StartOptions options, CancellationToken ct = default)
+    {
+        await using var starting = TryStartLock(paths, m.Id) ?? throw new StartRefusedException([$"{m.Name} is being started already (by this app, another window or vmq)."]);
+        return await StartLockedAsync(m, machineDirectory, paths, host, options, ct).ConfigureAwait(false);
+    }
+
+    private static async Task<RunningMachine> StartLockedAsync(MachineConfig m, string machineDirectory, QontrolPaths paths, HostCapabilities host, StartOptions options, CancellationToken ct)
     {
         if (m.IsTemplate)
             throw new StartRefusedException([$"{m.Name} is a template. A template is never started, so every machine made from it begins the same way: make a machine from it, or turn it back into a machine."]);
@@ -60,12 +84,18 @@ public static class MachineRunner
         if (problems.Count > 0) throw new StartRefusedException(problems);
 
         var runtime = new RuntimePaths(paths.RuntimeFor(m.Id));
+        if (Directory.Exists(runtime.Directory) && AnyProcessNames(runtime.Directory))
+            throw new StartRefusedException([$"A QEMU process for {m.Name} is still running without VM Qontrol's record of it (its folder is {runtime.Directory}). Stop that process first."]);
         if (Directory.Exists(runtime.Directory)) Directory.Delete(runtime.Directory, recursive: true);
         Directory.CreateDirectory(runtime.Directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         var logs = LogDirectory(paths, m);
         Directory.CreateDirectory(logs);
 
         string Full(string f) => Path.IsPathRooted(f) ? f : Path.Combine(machineDirectory, f);
+        // A new machine's system disk is made at its first power on. A machine that has run before keeps its disk: if it
+        // is gone, a blank one in its place would look like a machine that lost everything, so the start is refused.
+        if (m.Disks.Count > 0 && !File.Exists(Full(m.Disks[0].File)) && HasRunBefore(m, machineDirectory))
+            throw new StartRefusedException([$"{m.Name}'s system disk {m.Disks[0].File} is missing, and the machine has been used before, so no blank disk is made in its place. Put the disk back (look in the library's {MachineLifecycle.BasesFolder} folder for a file starting with {m.Id[..Math.Min(12, m.Id.Length)]}-disk0), or remove the disk in Settings to start with a new one."]);
         if (m.Disks.Count > 0 && !File.Exists(Full(m.Disks[0].File)))
             await QemuImg.CreateAsync(Full(m.Disks[0].File), m.Disks[0].Format, m.Disks[0].SizeGiB, m.Disks[0].Preallocation, ct).ConfigureAwait(false);
         for (var i = 1; i < m.Disks.Count; i++)
@@ -164,7 +194,12 @@ public static class MachineRunner
         if (launch.VarsToCreate is { } vars)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(vars.Destination)!);
-            File.Copy(vars.Template, vars.Destination);
+            // Whole or not at all: a short copy would make every later start fail on the flash's size.
+            var part = vars.Destination + ".part";
+            if (File.Exists(part)) File.Delete(part); // a leftover copies its template's read-only mode
+            File.Copy(vars.Template, part);
+            File.SetUnixFileMode(part, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            File.Move(part, vars.Destination);
             // Distribution templates are read-only; the machine's own copy must be writable.
             File.SetUnixFileMode(vars.Destination, UnixFileMode.UserRead | UnixFileMode.UserWrite);
         }
@@ -249,7 +284,11 @@ public static class MachineRunner
         }
 
         if (ssh is { } bound) PortAllocator.Release(bound);
+        int? spawned = null;
+        try
+        {
         var pid = ReadPid(runtime.Pid) ?? throw new StartRefusedException(["QEMU started but wrote no process id."]);
+        spawned = pid;
         // Pinning, as soon as QEMU's threads exist (before the guest runs, when it was started stopped).
         if (m.Performance.PinnedCpus.Count > 0 || m.Performance.EmulatorCpus.Count > 0)
         {
@@ -279,7 +318,9 @@ public static class MachineRunner
                 ? PressKeysAsync(runtime, m.Name, "ret", 40, "start the installer")
                 : Task.CompletedTask;
         var running = new RunningMachine(m.Id, m.Name, pid, runtime.Directory, machineDirectory, DateTimeOffset.Now, ssh) { BootAssist = assist, Notices = notices };
-        await File.WriteAllTextAsync(runtime.Lock, JsonSerializer.Serialize(new JsonObject
+        // Written whole or not at all: a reader never sees half a lock (and takes the folder for a stopped machine's).
+        var lockTemp = runtime.Lock + ".new";
+        await File.WriteAllTextAsync(lockTemp, JsonSerializer.Serialize(new JsonObject
         {
             ["id"] = m.Id,
             ["name"] = m.Name,
@@ -287,7 +328,8 @@ public static class MachineRunner
             ["machineDirectory"] = machineDirectory,
             ["started"] = running.Started.ToString("O"),
             ["sshPort"] = ssh,
-        }, LockJson), ct).ConfigureAwait(false);
+        }, LockJson), CancellationToken.None).ConfigureAwait(false);
+        File.Move(lockTemp, runtime.Lock, overwrite: true);
         Log.Info($"{m.Name}: started (process {pid}){(ssh is { } port ? $", SSH on host port {port}" : "")}{(resuming ? ", resuming" : "")}");
         if (resuming)
         {
@@ -315,6 +357,18 @@ public static class MachineRunner
         }
 
         return running;
+        }
+        catch (Exception ex) when (ex is not StartRefusedException || !File.Exists(runtime.Lock))
+        {
+            // QEMU is up but the start did not finish (no process id, a QMP or disk error, cancelled): nothing of it may
+            // stay behind running where the app cannot see or stop it.
+            if (spawned is { } orphan) TryKill(orphan);
+            if (swtpmPid is { } p) TryKill(p);
+            foreach (var sharePid in shareProcesses) TryKill(sharePid);
+            TryDelete(runtime.Directory);
+            Log.Warn($"{m.Name}: the start did not finish ({ex.Message}); what it had started was stopped.");
+            throw ex as StartRefusedException ?? new StartRefusedException([$"{m.Name} did not start: {ex.Message}"]);
+        }
     }
 
     /// <summary>
@@ -423,15 +477,46 @@ public static class MachineRunner
         {
         }
 
-        try
+        // Cleared only when nothing owns it: no start in progress and no QEMU naming the folder on its command line.
+        using (var starting = TryStartLock(paths, m.Id))
         {
-            Directory.Delete(runtime.Directory, recursive: true);
-        }
-        catch (IOException)
-        {
+            if (starting is not null && !AnyProcessNames(runtime.Directory))
+            {
+                try
+                {
+                    Directory.Delete(runtime.Directory, recursive: true);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                }
+            }
         }
 
         return null;
+    }
+
+    /// <summary>Signs a machine has been powered on before: firmware variables, a TPM, snapshots or an install signal in its folder.</summary>
+    private static bool HasRunBefore(MachineConfig m, string machineDirectory) =>
+        File.Exists(Path.Combine(machineDirectory, m.Firmware.VarsFile)) && m.Firmware.Kind == FirmwareKind.Uefi
+        || Directory.Exists(Path.Combine(machineDirectory, "tpm"))
+        || File.Exists(Path.Combine(machineDirectory, Snapshots.SnapshotStore.FileName))
+        || File.Exists(Path.Combine(machineDirectory, Install.InstallSignal.FileName));
+
+    private static bool AnyProcessNames(string runtimeDirectory)
+    {
+        foreach (var dir in Directory.EnumerateDirectories("/proc"))
+        {
+            if (!int.TryParse(Path.GetFileName(dir), out _)) continue;
+            try
+            {
+                if (File.ReadAllText(Path.Combine(dir, "cmdline")).Contains(runtimeDirectory, StringComparison.Ordinal)) return true;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+            }
+        }
+
+        return false;
     }
 
     public static string LogDirectory(QontrolPaths paths, MachineConfig m) => Path.Combine(paths.State, "machines", m.Id);
@@ -570,7 +655,7 @@ public static class MachineRunner
         {
             if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
         }
-        catch (IOException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
         }
     }

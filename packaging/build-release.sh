@@ -14,6 +14,10 @@ ID=io.github.codingncaffeine.VMQontrol
 ART=scratch/release-art
 
 grep -q "<release version=\"$VER\"" "packaging/$ID.metainfo.xml" || { echo "!! packaging/$ID.metainfo.xml has no <release> for $VER" >&2; exit 3; }
+# Every recipe carries the same version, or a package is built from (or points at) another release.
+for recipe in packaging/alpine/APKBUILD packaging/aur/PKGBUILD; do
+    grep -q "^pkgver=$VER\$" "$recipe" || { echo "!! $recipe is not at pkgver=$VER" >&2; exit 3; }
+done
 rm -rf "$OUT" "$ART" && mkdir -p "$OUT"
 
 for rid in linux-x64 linux-musl-x64; do

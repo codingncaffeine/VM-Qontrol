@@ -28,6 +28,7 @@ public static class MachineMove
 
     public static async Task<string> MoveAsync(MachineConfig machine, string directory, string targetParent, CancellationToken ct = default)
     {
+        MachineLifecycle.RefuseIfRunning(machine);
         var source = Path.GetFullPath(directory).TrimEnd('/');
         var target = Path.Combine(Path.GetFullPath(targetParent), Path.GetFileName(source));
         // Bases outside the folder, read before anything moves: (disk name inside the folder, full path of its base).
@@ -45,18 +46,39 @@ public static class MachineMove
         }
         catch (IOException) when (!Directory.Exists(target) && Directory.Exists(source))
         {
-            // Another filesystem: copy, check, then remove the original.
-            await CopyTreeAsync(source, target, ct).ConfigureAwait(false);
-            if (Size(source) != Size(target)) throw new IOException("The copy came out a different size; the machine was left where it was.");
+            // Another filesystem: copy into a hidden folder beside the target (the library never lists it), check it, rename it
+            // into place, then remove the original. Interrupted at any point, there is never a second copy of the machine
+            // under its own name, and a failed copy leaves nothing behind.
+            var moving = Path.Combine(Path.GetFullPath(targetParent), $".{Path.GetFileName(source)}.moving");
+            try
+            {
+                if (Directory.Exists(moving)) Directory.Delete(moving, recursive: true);
+                await CopyTreeAsync(source, moving, ct).ConfigureAwait(false);
+                if (Size(source) != Size(moving)) throw new IOException("The copy came out a different size; the machine was left where it was.");
+                Directory.Move(moving, target);
+            }
+            catch
+            {
+                try { if (Directory.Exists(moving)) Directory.Delete(moving, recursive: true); } catch (IOException) { }
+                throw;
+            }
+
             Directory.Delete(source, recursive: true);
         }
 
-        foreach (var (file, baseFile) in links)
+        try
         {
-            var disk = Path.Combine(target, file);
-            var info = await QemuImg.InfoAsync(disk, ct).ConfigureAwait(false);
-            await QemuImg.RunAsync(ct, "rebase", "-u", "-b", Path.GetRelativePath(Path.GetDirectoryName(disk)!, baseFile!),
-                "-F", info["backing-filename-format"]?.GetValue<string>() ?? "qcow2", disk).ConfigureAwait(false);
+            foreach (var (file, baseFile) in links)
+            {
+                var disk = Path.Combine(target, file);
+                var info = await QemuImg.InfoAsync(disk, CancellationToken.None).ConfigureAwait(false);
+                await QemuImg.RunAsync(CancellationToken.None, "rebase", "-u", "-b", Path.GetRelativePath(Path.GetDirectoryName(disk)!, baseFile!),
+                    "-F", info["backing-filename-format"]?.GetValue<string>() ?? "qcow2", disk).ConfigureAwait(false);
+            }
+        }
+        catch (IOException ex)
+        {
+            throw new IOException($"The machine was moved to {target}, but its link to the shared disk it is layered on could not be updated ({ex.Message}). It will not start until that is fixed: move it back, or ask for help with the shared disk.", ex);
         }
 
         return target;
@@ -70,8 +92,10 @@ public static class MachineMove
             var start = new ProcessStartInfo("cp") { RedirectStandardError = true, UseShellExecute = false };
             foreach (var a in (string[])["-a", "--sparse=always", "--reflink=auto", source, target]) start.ArgumentList.Add(a);
             using var p = Process.Start(start)!;
-            var error = await p.StandardError.ReadToEndAsync(ct).ConfigureAwait(false);
-            await p.WaitForExitAsync(ct).ConfigureAwait(false);
+            using var kill = ct.Register(() => { try { p.Kill(); } catch (InvalidOperationException) { } });
+            var error = await p.StandardError.ReadToEndAsync(CancellationToken.None).ConfigureAwait(false);
+            await p.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+            ct.ThrowIfCancellationRequested();
             if (p.ExitCode == 0) return;
             if (Directory.Exists(target)) Directory.Delete(target, recursive: true);
             if (!error.Contains("unrecognized option", StringComparison.Ordinal) && !error.Contains("invalid option", StringComparison.Ordinal))

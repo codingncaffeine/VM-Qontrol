@@ -92,8 +92,18 @@ public static class MachineExport
             if (!asTar) return (target, notes);
             var tar = Path.Combine(destination, Path.GetFileName(target) + ".tar");
             progress.Report(new ImportProgress(m.Disks.Count, m.Disks.Count, 100, "Packing it into one file…"));
-            await using (var stream = new FileStream(tar, FileMode.CreateNew))
-                await TarFile.CreateFromDirectoryAsync(target, stream, includeBaseDirectory: true, ct).ConfigureAwait(false);
+            try
+            {
+                await using (var stream = new FileStream(tar, FileMode.CreateNew))
+                    await TarFile.CreateFromDirectoryAsync(target, stream, includeBaseDirectory: true, ct).ConfigureAwait(false);
+            }
+            catch
+            {
+                // A half-written .tar looks like a finished one: it goes.
+                try { File.Delete(tar); } catch (IOException) { }
+                throw;
+            }
+
             Directory.Delete(target, recursive: true);
             return (tar, notes);
         }
@@ -168,11 +178,19 @@ public static class MachineExport
         Directory.CreateDirectory(staging);
         try
         {
-            await using (var stream = File.OpenRead(tar))
-                await TarFile.ExtractToDirectoryAsync(stream, staging, overwriteFiles: false, ct).ConfigureAwait(false);
+            await ExtractPlainAsync(tar, staging, ct).ConfigureAwait(false);
             var inner = Directory.GetDirectories(staging) is [var only] ? only : throw new InvalidDataException("The file does not hold one machine folder.");
             if (await VerifyAsync(inner, ct).ConfigureAwait(false) is { Count: > 0 } problems) throw new InvalidDataException(string.Join(" ", problems));
             var machine = MachineStore.Load(Path.Combine(inner, MachineStore.FileName));
+            // A machine that arrives as a file is someone else's settings: what reaches outside its own folder is removed.
+            var (safe, removed) = WithoutHostAccess(machine, inner);
+            if (removed.Count > 0)
+            {
+                machine = safe with { Notes = (safe.Notes.Length > 0 ? safe.Notes + "\n" : "") + "Removed when it was brought in from a file (add them again in Settings if you want them): " + string.Join("; ", removed) + "." };
+                MachineStore.Save(machine, Path.Combine(inner, MachineStore.FileName));
+                Log.Info($"{machine.Name}: brought in from {tar}; removed {string.Join("; ", removed)}.");
+            }
+
             var target = MachineFactory.FolderFor(libraryRoot, machine.Name);
             Directory.Move(inner, target);
             return target;
@@ -181,6 +199,57 @@ public static class MachineExport
         {
             if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true);
         }
+    }
+
+    /// <summary>
+    /// Unpacks plain files and folders only, each inside <paramref name="folder"/>: a link, a device or a path that leaves
+    /// the folder is refused (a link to a folder elsewhere would let a later file be written through it).
+    /// </summary>
+    private static async Task ExtractPlainAsync(string tar, string folder, CancellationToken ct)
+    {
+        var root = Path.GetFullPath(folder) + "/";
+        await using var stream = File.OpenRead(tar);
+        await using var reader = new TarReader(stream);
+        while (await reader.GetNextEntryAsync(copyData: false, ct).ConfigureAwait(false) is { } entry)
+        {
+            var target = Path.GetFullPath(Path.Combine(folder, entry.Name));
+            if (!target.StartsWith(root, StringComparison.Ordinal) && target + "/" != root)
+                throw new InvalidDataException($"The file holds {entry.Name}, which points outside its folder; nothing was brought in.");
+            switch (entry.EntryType)
+            {
+                case TarEntryType.Directory:
+                    Directory.CreateDirectory(target);
+                    break;
+                case TarEntryType.RegularFile or TarEntryType.V7RegularFile or TarEntryType.ContiguousFile:
+                    Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                    if (File.Exists(target)) throw new InvalidDataException($"The file holds {entry.Name} twice; nothing was brought in.");
+                    await entry.ExtractToFileAsync(target, overwrite: false, ct).ConfigureAwait(false);
+                    break;
+                case TarEntryType.GlobalExtendedAttributes or TarEntryType.ExtendedAttributes:
+                    break;
+                default:
+                    throw new InvalidDataException($"The file holds {entry.Name}, which is not a plain file ({entry.EntryType}); nothing was brought in.");
+            }
+        }
+    }
+
+    /// <summary>The machine without what reaches outside its own folder, and those things in words.</summary>
+    public static (MachineConfig Machine, List<string> Removed) WithoutHostAccess(MachineConfig m, string folder)
+    {
+        var removed = new List<string>();
+        var root = Path.GetFullPath(folder) + "/";
+        bool Inside(string file) => !Path.IsPathRooted(file) && Path.GetFullPath(Path.Combine(folder, file)).StartsWith(root, StringComparison.Ordinal);
+        if (m.ExtraArgs.Count > 0) { removed.Add($"extra QEMU arguments ({string.Join(" ", m.ExtraArgs)})"); m = m with { ExtraArgs = [] }; }
+        if (m.HostDrives.Count > 0) { removed.Add("host drives"); m = m with { HostDrives = [] }; }
+        if (m.HostSerialPorts.Count > 0) { removed.Add("host serial ports"); m = m with { HostSerialPorts = [] }; }
+        if (m.Shares.Count > 0) { removed.Add("shared folders"); m = m with { Shares = [] }; }
+        if (m.Performance.PciDevices.Count > 0) { removed.Add("PCI devices"); m = m with { Performance = m.Performance with { PciDevices = [] } }; }
+        if (m.Usb.Passthrough.Count > 0) { removed.Add("USB devices it takes at power on"); m = m with { Usb = m.Usb with { Passthrough = [] } }; }
+        var media = m.Media.Where(x => Inside(x.File)).ToList();
+        if (media.Count != m.Media.Count) { removed.Add("discs from outside its folder"); m = m with { Media = media }; }
+        if (m.Disks.Any(d => !Inside(d.File)))
+            throw new InvalidDataException("The machine's disks are not all inside its own folder; it was not brought in.");
+        return (m, removed);
     }
 
     /// <summary>
@@ -195,22 +264,28 @@ public static class MachineExport
         var lines = new List<string>
         {
             "#!/usr/bin/quickemu --vm",
-            $"# Written by VM Qontrol {BuildInfo.Version} for {m.Name}.",
-            $"guest_os=\"{m.Guest.Os}\"",
-            $"disk_img=\"{Rel(m.Disks[0].File)}\"",
+            $"# Written by VM Qontrol {BuildInfo.Version} for {OneLine(m.Name)}.",
+            $"guest_os={Q(m.Guest.Os)}",
+            $"disk_img={Q(Rel(m.Disks[0].File))}",
             $"disk_size=\"{m.Disks[0].SizeGiB}G\"",
         };
-        if (m.Media.FirstOrDefault(x => x.Role == MediaRole.Installer && x.Connect != Connect.Never) is { } iso) lines.Add($"iso=\"{Rel(iso.File)}\"");
-        if (m.Media.FirstOrDefault(x => x.Role == MediaRole.Drivers) is { } fixedIso) lines.Add($"fixed_iso=\"{Rel(fixedIso.File)}\"");
-        if (m.MemoryMiB is { } mem) lines.Add($"ram=\"{(mem % 1024 == 0 ? $"{mem / 1024}G" : $"{mem}M")}\"");
-        if (m.Cpu.Cores is { } cores) lines.Add($"cpu_cores=\"{cores}\"");
-        lines.Add($"boot=\"{(m.Firmware.Kind == FirmwareKind.Uefi ? "efi" : "legacy")}\"");
+        if (m.Media.FirstOrDefault(x => x.Role == MediaRole.Installer && x.Connect != Connect.Never) is { } iso) lines.Add($"iso={Q(Rel(iso.File))}");
+        if (m.Media.FirstOrDefault(x => x.Role == MediaRole.Drivers) is { } fixedIso) lines.Add($"fixed_iso={Q(Rel(fixedIso.File))}");
+        if (m.MemoryMiB is { } mem) lines.Add($"ram={Q((mem % 1024 == 0 ? $"{mem / 1024}G" : $"{mem}M"))}");
+        if (m.Cpu.Cores is { } cores) lines.Add($"cpu_cores={Q(cores)}");
+        lines.Add($"boot={Q((m.Firmware.Kind == FirmwareKind.Uefi ? "efi" : "legacy"))}");
         if (m.Firmware.SecureBoot) lines.Add("secureboot=\"on\"");
-        lines.Add($"tpm=\"{(m.Tpm ? "on" : "off")}\"");
-        if (m.Nics.FirstOrDefault()?.Mac is { } mac) lines.Add($"macaddr=\"{mac}\"");
-        if (m.Input.Layout is { Length: > 0 } layout) lines.Add($"keyboard_layout=\"{layout}\"");
+        lines.Add($"tpm={Q((m.Tpm ? "on" : "off"))}");
+        if (m.Nics.FirstOrDefault()?.Mac is { } mac) lines.Add($"macaddr={Q(mac)}");
+        if (m.Input.Layout is { Length: > 0 } layout) lines.Add($"keyboard_layout={Q(layout)}");
         var conf = Path.Combine(parent, folder + ".conf");
+        if (lines.Any(l => l.Contains('\n') || l.Contains('\r'))) throw new InvalidDataException("A value for the .conf spans lines.");
         File.WriteAllText(conf, string.Join("\n", lines) + "\n", new UTF8Encoding(false));
         return conf;
     }
+
+    /// <summary>quickemu reads its .conf as a bash script: every value goes in single quotes, a quote inside closed and escaped.</summary>
+    private static string Q(object? value) => "'" + (Convert.ToString(value, CultureInfo.InvariantCulture) ?? "").Replace("'", "'\\''", StringComparison.Ordinal) + "'";
+
+    private static string OneLine(string text) => text.ReplaceLineEndings(" ");
 }

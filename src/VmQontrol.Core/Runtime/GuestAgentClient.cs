@@ -26,12 +26,12 @@ public sealed class GuestAgentClient(string socketPath)
         var result = new List<GuestAddress>();
         foreach (var nic in interfaces.OfType<JsonObject>())
         {
-            var name = nic["name"]?.GetValue<string>() ?? "";
+            var name = nic["name"].Str() ?? "";
             if (name == "lo" || name.StartsWith("Loopback", StringComparison.Ordinal)) continue;
             foreach (var ip in (nic["ip-addresses"] as JsonArray ?? []).OfType<JsonObject>())
             {
-                var address = ip["ip-address"]?.GetValue<string>() ?? "";
-                var v6 = ip["ip-address-type"]?.GetValue<string>() == "ipv6";
+                var address = ip["ip-address"].Str() ?? "";
+                var v6 = ip["ip-address-type"].Str() == "ipv6";
                 if (address.Length > 0 && !address.StartsWith("fe80", StringComparison.OrdinalIgnoreCase)) result.Add(new GuestAddress(name, address, v6));
             }
         }
@@ -47,10 +47,10 @@ public sealed class GuestAgentClient(string socketPath)
         var any = false;
         foreach (var nic in interfaces.OfType<JsonObject>())
         {
-            var name = nic["name"]?.GetValue<string>() ?? "";
+            var name = nic["name"].Str() ?? "";
             if (name == "lo" || name.StartsWith("Loopback", StringComparison.Ordinal) || nic["statistics"] is not JsonObject stats) continue;
-            rx += stats["rx-bytes"]?.GetValue<long>() ?? 0;
-            tx += stats["tx-bytes"]?.GetValue<long>() ?? 0;
+            rx += stats["rx-bytes"].Long() ?? 0;
+            tx += stats["tx-bytes"].Long() ?? 0;
             any = true;
         }
 
@@ -70,7 +70,7 @@ public sealed class GuestAgentClient(string socketPath)
         try
         {
             var read = await CallAsync("guest-file-read", new JsonObject { ["handle"] = handle, ["count"] = 65536 }, timeout, ct).ConfigureAwait(false);
-            return read?["buf-b64"]?.GetValue<string>() is { } b64 ? Convert.FromBase64String(b64) : null;
+            return read?["buf-b64"].Str() is { } b64 ? GuestJson.Base64(b64) : null;
         }
         finally
         {
@@ -96,22 +96,22 @@ public sealed class GuestAgentClient(string socketPath)
         };
         if (input is not null) request["input-data"] = Convert.ToBase64String(input);
         if (await CallAsync("guest-exec", request, TimeSpan.FromSeconds(10), ct).ConfigureAwait(false) is not JsonObject started
-            || started["pid"]?.GetValue<long>() is not { } pid)
+            || started["pid"].Long() is not { } pid)
             return null;
         var until = DateTime.UtcNow + runFor;
         var delay = TimeSpan.FromMilliseconds(50);
         while (true)
         {
             if (await CallAsync("guest-exec-status", new JsonObject { ["pid"] = pid }, TimeSpan.FromSeconds(10), ct).ConfigureAwait(false) is not JsonObject status) return null;
-            if (status["exited"]?.GetValue<bool>() == true)
-                return new ExecResult(status["exitcode"]?.GetValue<int>() ?? (status["signal"] is not null ? 128 + status["signal"]!.GetValue<int>() : null),
+            if (status["exited"].Bool() == true)
+                return new ExecResult(status["exitcode"].Int() ?? (status["signal"] is not null ? 128 + status["signal"].Int() : null),
                     Decode(status["out-data"]), Decode(status["err-data"]), false);
             if (DateTime.UtcNow >= until) return new ExecResult(null, "", "", true);
             await Task.Delay(delay, ct).ConfigureAwait(false);
             if (delay < TimeSpan.FromMilliseconds(500)) delay *= 2;
         }
 
-        static string Decode(JsonNode? b64) => b64?.GetValue<string>() is { } s ? Encoding.UTF8.GetString(Convert.FromBase64String(s)) : "";
+        static string Decode(JsonNode? b64) => b64.Str() is { } s ? Encoding.UTF8.GetString(GuestJson.Base64(s)) : "";
     }
 
     /// <summary>The agent moves files in pieces of this size (its own limit on one read is 48 MiB; small pieces keep each call short).</summary>
@@ -134,7 +134,7 @@ public sealed class GuestAgentClient(string socketPath)
             while ((read = await source.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
             {
                 var wrote = await CallAsync("guest-file-write", new JsonObject { ["handle"] = handle, ["buf-b64"] = Convert.ToBase64String(buffer, 0, read) }, TimeSpan.FromSeconds(30), ct).ConfigureAwait(false);
-                if (wrote?["count"]?.GetValue<long>() != read) return null;
+                if (wrote?["count"].Long() != read) return null;
                 total += read;
                 progress?.Report(total);
             }
@@ -159,15 +159,15 @@ public sealed class GuestAgentClient(string socketPath)
             while (true)
             {
                 if (await CallAsync("guest-file-read", new JsonObject { ["handle"] = handle, ["count"] = Chunk }, TimeSpan.FromSeconds(30), ct).ConfigureAwait(false) is not JsonObject read) return null;
-                if (read["buf-b64"]?.GetValue<string>() is { Length: > 0 } b64)
+                if (read["buf-b64"].Str() is { Length: > 0 } b64)
                 {
-                    var bytes = Convert.FromBase64String(b64);
+                    var bytes = GuestJson.Base64(b64);
                     await target.WriteAsync(bytes, ct).ConfigureAwait(false);
                     total += bytes.Length;
                     progress?.Report(total);
                 }
 
-                if (read["eof"]?.GetValue<bool>() == true) return total;
+                if (read["eof"].Bool() == true) return total;
             }
         }
         finally
@@ -187,15 +187,15 @@ public sealed class GuestAgentClient(string socketPath)
     public async Task<int?> OnlineAllProcessorsAsync(TimeSpan timeout, CancellationToken ct = default)
     {
         if (await CallAsync("guest-get-vcpus", null, timeout, ct).ConfigureAwait(false) is not JsonArray cpus) return null;
-        var offline = cpus.OfType<JsonObject>().Where(c => c["online"]?.GetValue<bool>() == false && c["can-offline"] is not null).ToList();
+        var offline = cpus.OfType<JsonObject>().Where(c => c["online"].Bool() == false && c["can-offline"] is not null).ToList();
         if (offline.Count > 0)
         {
-            var set = new JsonArray([.. offline.Select(c => (JsonNode)new JsonObject { ["logical-id"] = c["logical-id"]!.GetValue<long>(), ["online"] = true })]);
+            var set = new JsonArray([.. offline.Select(c => (JsonNode)new JsonObject { ["logical-id"] = (c["logical-id"].Long() ?? 0), ["online"] = true })]);
             await CallAsync("guest-set-vcpus", new JsonObject { ["vcpus"] = set }, timeout, ct).ConfigureAwait(false);
             if (await CallAsync("guest-get-vcpus", null, timeout, ct).ConfigureAwait(false) is JsonArray again) cpus = again;
         }
 
-        return cpus.OfType<JsonObject>().Count(c => c["online"]?.GetValue<bool>() == true);
+        return cpus.OfType<JsonObject>().Count(c => c["online"].Bool() == true);
     }
 
     /// <summary>Asks the guest to shut down cleanly. The agent does not answer this one; no exception means it was sent.</summary>
@@ -227,15 +227,15 @@ public sealed class GuestAgentClient(string socketPath)
             await SendAsync(socket, new JsonObject { ["execute"] = "guest-sync-delimited", ["arguments"] = new JsonObject { ["id"] = sync } }, cts.Token).ConfigureAwait(false);
             var reader = new LineReader(socket);
             await reader.SkipPastAsync(0xFF, cts.Token).ConfigureAwait(false);
-            if (JsonNode.Parse(await reader.ReadLineAsync(cts.Token).ConfigureAwait(false))?["return"]?.GetValue<long>() != sync) return null;
+            if (JsonNode.Parse(await reader.ReadLineAsync(cts.Token).ConfigureAwait(false))?["return"].Long() != sync) return null;
             var message = new JsonObject { ["execute"] = command };
             if (arguments is not null) message["arguments"] = arguments;
             await SendAsync(socket, message, cts.Token).ConfigureAwait(false);
             var answer = JsonNode.Parse(await reader.ReadLineAsync(cts.Token).ConfigureAwait(false));
-            LastError = answer?["error"]?["desc"]?.GetValue<string>();
+            LastError = answer?["error"]?["desc"].Str();
             return answer?["return"];
         }
-        catch (Exception ex) when (ex is OperationCanceledException or IOException or SocketException or System.Text.Json.JsonException)
+        catch (Exception ex) when (ex is OperationCanceledException or IOException or SocketException or System.Text.Json.JsonException or InvalidOperationException or FormatException)
         {
             LastError = ex is OperationCanceledException ? "The guest agent did not answer in time." : $"The guest agent stopped answering ({ex.Message}).";
             return null;
@@ -266,6 +266,8 @@ public sealed class GuestAgentClient(string socketPath)
     /// <summary>Reads bytes from a socket a line at a time, without a StreamReader's read-ahead hiding the 0xFF marker.</summary>
     private sealed class LineReader(Socket socket)
     {
+        private const int MaxLine = 64 << 20;
+
         private readonly byte[] _buffer = new byte[65536];
         private int _start, _end;
 
@@ -287,6 +289,8 @@ public sealed class GuestAgentClient(string socketPath)
                 var take = newline < 0 ? span : span[..newline];
                 foreach (var b in take)
                     if (b != 0xFF) bytes.WriteByte(b);
+                // A guest that never ends its line is not answering: past this size it is cut off, not held in memory.
+                if (bytes.Length > MaxLine) throw new IOException($"The guest agent sent more than {MaxLine >> 20} MiB in one answer.");
                 _start += take.Length;
                 if (newline >= 0)
                 {
@@ -307,6 +311,33 @@ public sealed class GuestAgentClient(string socketPath)
             _start = 0;
             _end = await socket.ReceiveAsync(_buffer, SocketFlags.None, ct).ConfigureAwait(false);
             if (_end == 0) throw new IOException("The guest agent closed the connection.");
+        }
+    }
+}
+
+/// <summary>
+/// Reading what the guest sent: the guest decides what its agent answers, so a value of the wrong type (a number where a
+/// name belongs) or broken base64 reads as missing instead of failing the caller.
+/// </summary>
+internal static class GuestJson
+{
+    public static string? Str(this JsonNode? node) => node is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
+
+    public static long? Long(this JsonNode? node) => node is JsonValue v && v.TryGetValue<long>(out var l) ? l : null;
+
+    public static int? Int(this JsonNode? node) => node is JsonValue v && v.TryGetValue<int>(out var i) ? i : null;
+
+    public static bool? Bool(this JsonNode? node) => node is JsonValue v && v.TryGetValue<bool>(out var b) ? b : null;
+
+    public static byte[] Base64(string text)
+    {
+        try
+        {
+            return Convert.FromBase64String(text);
+        }
+        catch (FormatException)
+        {
+            return [];
         }
     }
 }

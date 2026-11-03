@@ -950,7 +950,11 @@ public sealed partial class SettingsViewModel : ObservableObject
         string status;
         try
         {
-            var r = await Task.Run(() => DiskCompact.CompactAsync(row.FullPath)).ConfigureAwait(false);
+            var r = await Task.Run(() =>
+            {
+                MachineLifecycle.RefuseIfRunning(_machine.Machine);
+                return DiskCompact.CompactAsync(row.FullPath);
+            }).ConfigureAwait(false);
             status = r.Saved > 0
                 ? $"Compacted: {Formats.Bytes(r.BytesBefore)} → {Formats.Bytes(r.BytesAfter)}, {Formats.Bytes(r.Saved)} given back."
                 : $"Compacted: nothing to give back ({Formats.Bytes(r.BytesAfter)} is all in use).";

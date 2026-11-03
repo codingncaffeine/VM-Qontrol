@@ -206,8 +206,9 @@ public sealed class ImportTests
         var f = MachineImporter.Read(Path.Combine(profile.Root, "missing.vhdx"), profile.Paths.DefaultLibrary);
         Assert.Equal(("disk", FirmwareKind.Uefi), (f.Kind, f.Firmware));
         Assert.Contains(f.Notes, n => n.Contains("check the system", StringComparison.Ordinal));
-        var ex = await Assert.ThrowsAsync<IOException>(() => MachineImporter.ImportAsync(f, profile.Paths.DefaultLibrary, new Progress<ImportProgress>(_ => { }), TestContext.Current.CancellationToken));
-        Assert.Contains("could not be copied", ex.Message, StringComparison.Ordinal);
+        // A disk that is not there is refused before anything is made (audit S1 checks every named file first).
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => MachineImporter.ImportAsync(f, profile.Paths.DefaultLibrary, new Progress<ImportProgress>(_ => { }), TestContext.Current.CancellationToken));
+        Assert.Contains("is not a file", ex.Message, StringComparison.Ordinal);
         Assert.False(Directory.Exists(Path.Combine(profile.Paths.DefaultLibrary, "missing")));
     }
 

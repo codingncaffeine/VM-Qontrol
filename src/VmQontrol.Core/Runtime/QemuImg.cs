@@ -37,9 +37,21 @@ public static class QemuImg
         }
 
         using var owned = process;
-        var output = process.StandardOutput.ReadToEndAsync(ct);
-        var error = process.StandardError.ReadToEndAsync(ct);
-        await process.WaitForExitAsync(ct).ConfigureAwait(false);
+        // Cancelled means stopped: a convert left running would keep writing a copy nobody wants.
+        using var kill = ct.Register(() =>
+        {
+            try
+            {
+                process.Kill();
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        });
+        var output = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
+        var error = process.StandardError.ReadToEndAsync(CancellationToken.None);
+        await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+        ct.ThrowIfCancellationRequested();
         if (process.ExitCode != 0) throw new IOException($"qemu-img {args[0]} failed: {(await error.ConfigureAwait(false)).Trim()}");
         return await output.ConfigureAwait(false);
     }

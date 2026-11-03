@@ -16,7 +16,13 @@ public static class IsoWriter
     /// upper-cases it.</summary>
     public static void Write(string isoFile, string volumeId, IReadOnlyDictionary<string, byte[]> files, bool keepLabelCase = false)
     {
-        using var stream = File.Create(isoFile);
+        // Answer discs hold a password hash or, for Windows, the password and product key: readable by this account only.
+        if (File.Exists(isoFile)) File.Delete(isoFile);
+        using var stream = new FileStream(isoFile, new FileStreamOptions
+        {
+            Mode = FileMode.CreateNew, Access = FileAccess.ReadWrite,
+            UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite,
+        });
         Write(stream, volumeId, files, keepLabelCase);
     }
 
