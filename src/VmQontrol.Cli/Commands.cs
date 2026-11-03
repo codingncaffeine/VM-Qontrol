@@ -219,6 +219,16 @@ internal static class Commands
 
         output.WriteLine($"Volume:    {iso.VolumeId}{(iso.Bootable ? "  (bootable)" : "")}");
         if (iso.PublisherId.Length > 0) output.WriteLine($"Publisher: {iso.PublisherId}");
+        // Windows discs say exactly which release and editions they hold, beyond what their label can; a disc built from Microsoft's
+        // download has a label osinfo-db does not know, so the disc itself is read first.
+        if (WindowsMedia.Inspect(file) is { } windows)
+        {
+            output.WriteLine($"System:    {windows.Description}, {windows.Architecture}");
+            foreach (var e in windows.Editions) output.WriteLine($"  Edition {e.Index}: {e.DisplayName}");
+            output.WriteLine($"Profile:   {(windows.Server ? "windows-server" : "windows")} {windows.Release}");
+            return 0;
+        }
+
         var db = OsInfoDb.LoadInstalled();
         if (db is null)
         {
@@ -229,15 +239,6 @@ internal static class Commands
         if (db.Identify(iso) is not { } match)
         {
             output.WriteLine("No operating system in osinfo-db recognises this disc.");
-            return 0;
-        }
-
-        // Windows discs say exactly which release and editions they hold, beyond what their label can.
-        if (WindowsMedia.Inspect(file) is { } windows)
-        {
-            output.WriteLine($"System:    {windows.Description}, {windows.Architecture}");
-            foreach (var e in windows.Editions) output.WriteLine($"  Edition {e.Index}: {e.DisplayName}");
-            output.WriteLine($"Profile:   {(windows.Server ? "windows-server" : "windows")} {windows.Release}");
             return 0;
         }
 

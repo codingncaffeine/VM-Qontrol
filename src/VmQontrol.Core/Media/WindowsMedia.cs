@@ -6,7 +6,7 @@ using System.Xml;
 namespace VmQontrol.Core.Media;
 
 /// <summary>An edition inside a Windows installation image (Home, Pro, Education…), by its index in the image.</summary>
-public sealed record WindowsEdition(int Index, string Name, string DisplayName, int Build = 0);
+public sealed record WindowsEdition(int Index, string Name, string DisplayName, int Build = 0, string EditionId = "");
 
 /// <summary>What a Windows installation disc really holds.</summary>
 public sealed record WindowsMediaInfo(int Build, string Branch, string Architecture, string Release, bool Server, IReadOnlyList<WindowsEdition> Editions)
@@ -26,18 +26,29 @@ public sealed record WindowsMediaInfo(int Build, string Branch, string Architect
 /// </summary>
 public static class WindowsMedia
 {
+    /// <summary>
+    /// Microsoft's discs carry UDF; discs VM Qontrol builds from Microsoft's download (and many remastered ones) carry
+    /// ISO 9660 + Joliet only, so both filesystems are read.
+    /// </summary>
     public static WindowsMediaInfo? Inspect(string isoFile)
     {
-        using var udf = UdfReader.Open(isoFile);
-        return udf is null ? null : Inspect(udf);
+        using (var udf = UdfReader.Open(isoFile))
+        {
+            if (udf is not null && Inspect(udf) is { } found) return found;
+        }
+
+        using var iso = IsoFiles.Open(isoFile);
+        return iso is null ? null : Inspect((p, limit) => iso.Read(p, limit), iso.ReadAt);
     }
 
-    public static WindowsMediaInfo? Inspect(UdfReader udf)
+    public static WindowsMediaInfo? Inspect(UdfReader udf) => Inspect((p, limit) => udf.ReadFile(p, limit), udf.ReadAt);
+
+    private static WindowsMediaInfo? Inspect(Func<string, int, byte[]?> readFile, Func<string, long, int, byte[]?> readAt)
     {
-        if (udf.ReadFile("sources/idwbinfo.txt", 64 * 1024) is not { } info) return null;
+        if (readFile("sources/idwbinfo.txt", 64 * 1024) is not { } info) return null;
         var fields = Encoding.ASCII.GetString(info).Split('\n').Select(l => l.Trim().Split('=', 2)).Where(p => p.Length == 2)
             .ToDictionary(p => p[0].Trim(), p => p[1].Trim(), StringComparer.OrdinalIgnoreCase);
-        var editions = Editions(udf, "sources/install.wim") ?? Editions(udf, "sources/install.esd") ?? [];
+        var editions = Editions(readAt, "sources/install.wim") ?? Editions(readAt, "sources/install.esd") ?? [];
         // The image catalogue names the exact build; the branch is the fallback (Windows 10 22H2's file has no build at all).
         var build = editions.Select(e => e.Build).FirstOrDefault(b => b > 0);
         if (build == 0 && int.TryParse(fields.GetValueOrDefault("BuildBuild"), NumberStyles.None, CultureInfo.InvariantCulture, out var stated)) build = stated;
@@ -76,13 +87,29 @@ public static class WindowsMedia
     };
 
     /// <summary>The editions in a WIM/ESD image, from the XML resource its header points at.</summary>
-    public static IReadOnlyList<WindowsEdition>? Editions(UdfReader udf, string path)
+    public static IReadOnlyList<WindowsEdition>? Editions(UdfReader udf, string path) => Editions(udf.ReadAt, path);
+
+    /// <summary>The editions in a WIM/ESD file on this computer (a download, before it becomes a disc).</summary>
+    public static IReadOnlyList<WindowsEdition>? EditionsInFile(string file)
     {
-        if (udf.ReadAt(path, 0, 208) is not { } header || !header.AsSpan(0, 5).SequenceEqual("MSWIM"u8)) return null;
+        using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.RandomAccess);
+        return Editions((_, offset, count) =>
+        {
+            if (offset < 0 || offset + count > stream.Length) return null;
+            var bytes = new byte[count];
+            stream.Position = offset;
+            stream.ReadExactly(bytes);
+            return bytes;
+        }, file);
+    }
+
+    private static IReadOnlyList<WindowsEdition>? Editions(Func<string, long, int, byte[]?> readAt, string path)
+    {
+        if (readAt(path, 0, 208) is not { } header || !header.AsSpan(0, 5).SequenceEqual("MSWIM"u8)) return null;
         // The XML data resource header: 7-byte size + flags, then the offset.
         var size = (long)(BinaryPrimitives.ReadUInt64LittleEndian(header.AsSpan(72)) & 0x00FF_FFFF_FFFF_FFFF);
         var offset = (long)BinaryPrimitives.ReadUInt64LittleEndian(header.AsSpan(80));
-        if (size <= 0 || size > 8 * 1024 * 1024 || udf.ReadAt(path, offset, (int)size) is not { } xmlBytes) return null;
+        if (size <= 0 || size > 8 * 1024 * 1024 || readAt(path, offset, (int)size) is not { } xmlBytes) return null;
         return ParseCatalogue(Encoding.Unicode.GetString(xmlBytes).TrimStart('﻿'));
     }
 
@@ -97,7 +124,7 @@ public static class WindowsMedia
             var name = image.SelectSingleNode("NAME")?.InnerText.Trim() ?? "";
             var display = image.SelectSingleNode("DISPLAYNAME")?.InnerText.Trim() is { Length: > 0 } d ? d : name;
             int.TryParse(image.SelectSingleNode("WINDOWS/VERSION/BUILD")?.InnerText.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var build);
-            editions.Add(new WindowsEdition(index, name, display, build));
+            editions.Add(new WindowsEdition(index, name, display, build, image.SelectSingleNode("WINDOWS/EDITIONID")?.InnerText.Trim() ?? ""));
         }
 
         return editions;
