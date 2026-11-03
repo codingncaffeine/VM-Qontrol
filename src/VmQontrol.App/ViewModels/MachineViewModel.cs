@@ -129,13 +129,14 @@ public sealed partial class MachineViewModel : ObservableObject
     private Bitmap? _screen;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(GuestAddressText))]
     private string? _guestAddress;
 
     [ObservableProperty]
     private string? _sshCommand;
 
     [ObservableProperty]
-    private bool _isFavourite;
+    private bool _isFavorite;
 
     [ObservableProperty]
     private bool _isSelected;
@@ -249,8 +250,28 @@ public sealed partial class MachineViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(GuestToolsOk))]
     private bool? _guestToolsAnswering;
 
+    /// <summary>
+    /// The machine has run past <see cref="ClipboardGrace"/> and its guest agent still does not answer: the tools are
+    /// taken as not installed (the card says so in the warning color, the header carries a pill that leads to it).
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(GuestToolsStatus))]
+    [NotifyPropertyChangedFor(nameof(GuestToolsPrimary))]
+    [NotifyPropertyChangedFor(nameof(GuestAddressText))]
+    private bool _guestToolsMissing;
+
+    /// <summary>The address line: the guest's address, or why there is none yet.</summary>
+    public string GuestAddressText => GuestAddress ?? (GuestToolsMissing ? "Needs the guest tools (not installed)" : "Waiting for the guest tools…");
+
+    /// <summary>"How to install" is the card's main button while the tools are missing.</summary>
+    public bool GuestToolsPrimary => GuestToolsMissing && !ShowGuestToolsSteps;
+
+    [RelayCommand]
+    private void ShowGuestTools() => RevealGuestTools();
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(GuestToolsStepsButton))]
+    [NotifyPropertyChangedFor(nameof(GuestToolsPrimary))]
     private bool _showGuestToolsSteps;
 
     public string GuestToolsStepsButton => ShowGuestToolsSteps ? "Hide the steps" : "How to install";
@@ -264,11 +285,12 @@ public sealed partial class MachineViewModel : ObservableObject
     public string GuestToolsStatus => !IsActive ? "Power the machine on to check for them." : GuestToolsAnswering switch
     {
         true => "Running: the address, a clean shut down and the clock work through them.",
-        false => "Not answering. Either the system is still starting, or the tools are not installed yet.",
+        false when GuestToolsMissing => "Not installed. Copy and paste between this computer and the machine needs them, and so do a screen that follows the window's size, the machine's address and a clean shut down.",
+        false => "Not answering yet: the system is still starting (or the tools are not installed).",
         null => "Checking…",
     };
 
-    /// <summary>"ok", "warn" or "off": the colour of the status dot.</summary>
+    /// <summary>"ok", "warn" or "off": the color of the status dot.</summary>
     public string GuestToolsDot => !IsActive || GuestToolsAnswering is null ? "off" : GuestToolsAnswering == true ? "ok" : "warn";
 
     [RelayCommand]
@@ -954,6 +976,7 @@ public sealed partial class MachineViewModel : ObservableObject
         Screen = null;
         GuestAddress = null;
         GuestToolsAnswering = null;
+        GuestToolsMissing = false;
         SshCommand = null;
         CableOut = false;
         CaptureFile = null;
@@ -1023,6 +1046,7 @@ public sealed partial class MachineViewModel : ObservableObject
             {
                 GuestAddress = text;
                 GuestToolsAnswering = addresses is not null;
+                GuestToolsMissing = addresses is null && !watcher.Exited.IsCompleted && DateTimeOffset.Now - watcher.Machine.Started > ClipboardGrace;
                 if (releaseId is not null) { _guestReleaseId = releaseId; OnPropertyChanged(nameof(GuestToolsAdvice)); }
             });
             await Task.WhenAny(watcher.Exited, Task.Delay(10_000)).ConfigureAwait(false);
@@ -1034,7 +1058,7 @@ public sealed partial class MachineViewModel : ObservableObject
 
     /// <summary>
     /// A viewer shows the machine, copy and paste is on, the system has SPICE guest tools, and its agent does not answer:
-    /// paste in the guest is greyed out until they are in (the SPICE agent comes with them; the QEMU guest agent, which
+    /// paste in the guest is grayed out until they are in (the SPICE agent comes with them; the QEMU guest agent, which
     /// is what answers here, comes in the same installer on Windows and the same package set on Linux).
     /// </summary>
     public bool ClipboardNeedsTools { get; private set; }
@@ -1317,7 +1341,7 @@ public sealed partial class MachineViewModel : ObservableObject
         var machine = Machine with { Display = Machine.Display with { Viewer = _shell.Settings.Viewer } };
         _ = Task.Run(() =>
         {
-            var viewer = ViewerLauncher.Open(machine, running);
+            var viewer = ViewerLauncher.Open(machine, running, App.Paths);
             Ui.Post(() =>
             {
                 if (viewer is null)
@@ -1351,7 +1375,7 @@ public sealed partial class MachineViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void ToggleFavourite() => _shell.SetFavourite(this, !IsFavourite);
+    private void ToggleFavorite() => _shell.SetFavorite(this, !IsFavorite);
 
     [RelayCommand]
     private void MoveToFolder() => _shell.AskFolder(this);

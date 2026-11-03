@@ -52,14 +52,20 @@
                 </Button>
               </StackPanel>
             </Border>
+            <Button x:Name="GuestToolsPill" Classes="icononly" Padding="0" VerticalAlignment="Center" Command="{Binding ShowGuestToolsCommand}" IsVisible="{Binding GuestToolsMissing}"
+                    ToolTip.Tip="Copy and paste with this computer needs the guest tools: this shows how to put them in" AutomationProperties.Name="Guest tools not installed">
+              <Border Classes="pill warn" Padding="8,2">
+                <TextBlock Text="Guest tools not installed" VerticalAlignment="Center" />
+              </Border>
+            </Button>
             <TextBlock Text="{Binding GuestLabel}" Classes="muted" VerticalAlignment="Center" />
             <TextBlock Text="·" Classes="muted" VerticalAlignment="Center" />
             <TextBlock Text="{Binding KindLabel}" Classes="muted" VerticalAlignment="Center" />
           </StackPanel>
         </StackPanel>
-        <Button Grid.Column="2" Classes="icononly" VerticalAlignment="Top" Command="{Binding ToggleFavouriteCommand}"
-                ToolTip.Tip="Favourites are listed first in the library">
-          <Path Classes="icon" Data="{StaticResource IconStar}" Classes.favourite="{Binding IsFavourite}" />
+        <Button Grid.Column="2" Classes="icononly" VerticalAlignment="Top" Command="{Binding ToggleFavoriteCommand}"
+                ToolTip.Tip="Favorites are listed first in the library">
+          <Path Classes="icon" Data="{StaticResource IconStar}" Classes.favorite="{Binding IsFavorite}" />
         </Button>
       </Grid>
 
@@ -197,7 +203,7 @@
                         ToolTip.Tip="Moves the machine's folder to another folder or drive (the machine must be off); a linked machine keeps its shared disk" />
               <MenuItem Header="Open the machine's folder" Command="{Binding OpenFolderCommand}" />
               <MenuItem Header="Copy the QEMU command line" Command="{Binding CopyCommandLineCommand}" />
-              <MenuItem Header="{Binding IsFavourite, Converter={x:Static vm:Text.FavouriteToggle}}" Command="{Binding ToggleFavouriteCommand}" />
+              <MenuItem Header="{Binding IsFavorite, Converter={x:Static vm:Text.FavoriteToggle}}" Command="{Binding ToggleFavoriteCommand}" />
               <Separator />
               <MenuItem Header="Delete…" Command="{Binding DeleteMachineCommand}" />
             </MenuFlyout>
@@ -277,7 +283,7 @@
               <Border Classes="card" IsVisible="{Binding IsActive}">
                 <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto" RowSpacing="6">
                   <TextBlock Text="Address" Classes="muted" />
-                  <SelectableTextBlock Grid.Column="1" Text="{Binding GuestAddress, FallbackValue='Waiting for the guest tools…', TargetNullValue='Waiting for the guest tools…'}" />
+                  <SelectableTextBlock Grid.Column="1" Text="{Binding GuestAddressText}" Classes.warn="{Binding GuestToolsMissing}" />
                   <TextBlock Grid.Row="1" Text="SSH" Classes="muted" IsVisible="{Binding SshCommand, Converter={x:Static ObjectConverters.IsNotNull}}" />
                   <StackPanel Grid.Row="1" Grid.Column="1" Spacing="8" IsVisible="{Binding SshCommand, Converter={x:Static ObjectConverters.IsNotNull}}">
                     <SelectableTextBlock Text="{Binding SshCommand}" FontFamily="monospace" TextWrapping="Wrap" />
@@ -307,10 +313,10 @@
                       <Ellipse Classes="state" Classes.running="{Binding GuestToolsOk}" Classes.paused="{Binding GuestToolsWarn}" VerticalAlignment="Center" />
                       <TextBlock Text="GUEST TOOLS" Classes="section" VerticalAlignment="Center" />
                     </StackPanel>
-                    <Button x:Name="GuestToolsHow" Grid.Column="1" Classes="tool" Command="{Binding ToggleGuestToolsStepsCommand}"
+                    <Button x:Name="GuestToolsHow" Grid.Column="1" Classes.tool="{Binding !GuestToolsPrimary}" Classes.primary="{Binding GuestToolsPrimary}" Command="{Binding ToggleGuestToolsStepsCommand}"
                             Content="{Binding GuestToolsStepsButton}" />
                   </Grid>
-                  <TextBlock Text="{Binding GuestToolsStatus}" TextWrapping="Wrap" />
+                  <TextBlock x:Name="GuestToolsStatusText" Text="{Binding GuestToolsStatus}" TextWrapping="Wrap" Classes.warn="{Binding GuestToolsMissing}" />
                   <StackPanel x:Name="GuestToolsSteps" Spacing="10" IsVisible="{Binding ShowGuestToolsSteps}">
                     <TextBlock Text="{Binding GuestToolsAdvice.Summary}" Classes="help" TextWrapping="Wrap" />
                     <ItemsControl ItemsSource="{Binding GuestToolsAdvice.Steps}">

@@ -61,7 +61,7 @@ internal static class Commands
           support FILE.tar.gz Collect what someone helping you needs (system, QEMU, checks, logs, machine settings) into
                               one file, with your home folder, user name, notes and account names left out.
           doctor              Check this computer: what VM Qontrol needs, what is missing, and the command that installs it.
-          version             Print the version and licence.
+          version             Print the version and license.
           help                Show this help.
 
         list, inspect and detect only read. MACHINE is a name in the library, a vm.json, a machine folder or a quickemu .conf.
@@ -85,7 +85,7 @@ internal static class Commands
                     return Core.Runtime.SegmentServer.Main(paths, args);
                 case "version" or "--version" or "-V":
                     output.WriteLine($"vmq {BuildInfo.Stamp}");
-                    output.WriteLine(BuildInfo.Licence);
+                    output.WriteLine(BuildInfo.License);
                     return 0;
                 case "help" or "--help" or "-h":
                     output.WriteLine(Usage);
@@ -352,7 +352,7 @@ internal static class Commands
 
         if (db.Identify(iso) is not { } match)
         {
-            output.WriteLine("No operating system in osinfo-db recognises this disc.");
+            output.WriteLine("No operating system in osinfo-db recognizes this disc.");
             return 0;
         }
 
@@ -562,7 +562,7 @@ internal static class Commands
         }
         if (!headless && m.Display.Backend == DisplayBackend.Spice)
         {
-            var viewer = ViewerLauncher.Open(m, running);
+            var viewer = ViewerLauncher.Open(m, running, paths);
             output.WriteLine(viewer is null ? "No SPICE viewer is installed (spicy or remote-viewer); install one to see the screen." : $"Opened {viewer}.");
         }
 

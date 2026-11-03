@@ -14,7 +14,7 @@ using VmQontrol.Core.Runtime;
 namespace VmQontrol.Tests;
 
 /// <summary>
-/// The user's report (2026-11-03): copied on Linux, paste greyed out in Windows 10 — the guest had no guest tools, so no
+/// The user's report (2026-11-03): copied on Linux, paste grayed out in Windows 10 — the guest had no guest tools, so no
 /// SPICE agent, and nothing said so. Now, while a viewer shows a machine whose guest tools do not answer, the status
 /// bar says copy and paste needs them, and its click opens the machine's guest tools steps. The viewer here is a SPICE
 /// main-channel link made by the test (no display, no sound channel); control: before it connects, no hint.
@@ -114,6 +114,77 @@ public sealed class ClipboardHintTests
         {
             MachineViewModel.ClipboardGrace = grace;
             viewer?.Dispose();
+            await MachineRunner.PowerOffAsync(running, CancellationToken.None);
+            await MachineRunner.WaitForExitAsync(running, TimeSpan.FromSeconds(10), CancellationToken.None);
+        }
+    }
+
+    /// <summary>
+    /// The user's follow-up (2026-11-03): the Summary card said only "Not answering", and nothing at the top of the page
+    /// said the tools were missing. Past the grace period the card says "Not installed" (what needs them, in the warning
+    /// color) and the header's pill leads to the steps. Control: inside the grace period, neither.
+    /// </summary>
+    [Trait("Tier", "Window")]
+    [Fact]
+    public async Task Missing_guest_tools_are_named_on_the_machine_page()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var profile = new TestProfile("tools-missing");
+        var dir = Path.Combine(profile.Paths.DefaultLibrary, "Win");
+        Directory.CreateDirectory(dir);
+        var m = new MachineConfig { Name = "Win", MemoryMiB = 256, Cpu = new CpuConfig { Cores = 1 }, Firmware = new FirmwareConfig { Kind = FirmwareKind.Bios },
+            Guest = new GuestConfig { Os = "windows", Release = "10" }, Disks = [new DiskConfig { File = "disk0.qcow2", SizeGiB = 1, Bus = DiskBus.Sata }] };
+        await QemuImg.CreateAsync(Path.Combine(dir, "disk0.qcow2"), "qcow2", 1, ct: ct);
+        MachineStore.Save(m, Path.Combine(dir, "vm.json"));
+        var running = await MachineRunner.StartAsync(m, dir, profile.Paths, HostProbe.Probe(), new StartOptions { Headless = true }, ct);
+        var grace = MachineViewModel.ClipboardGrace;
+        MachineViewModel.ClipboardGrace = TimeSpan.FromHours(1);
+        try
+        {
+            var seen = await Ui.Run(() =>
+            {
+                var shell = new ShellViewModel(profile.Paths, AppSettings.Load(profile.Paths)) { WatchUsb = false };
+                var window = new MainWindow { DataContext = shell, Width = 1320, Height = 860 };
+                Avalonia.Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
+                window.Show();
+                _ = shell.StartAsync();
+                Ui.PumpUntil(() => shell.Machines.Count == 1 && shell.Machines[0].IsRunning, "the running machine", 20);
+                shell.Selected = shell.Machines[0];
+                Ui.PumpUntil(() => shell.Machines[0].GuestToolsAnswering == false, "the agent check", 20);
+                Ui.Pump(0.5);
+                var page = window.GetVisualDescendants().OfType<MachineView>().Single();
+                Button Pill() => page.GetVisualDescendants().OfType<Button>().First(b => b.Name == "GuestToolsPill");
+                TextBlock Status() => page.GetVisualDescendants().OfType<TextBlock>().First(t => t.Name == "GuestToolsStatusText");
+                var controlPill = Pill().IsEffectivelyVisible;
+                var controlText = Status().Text;
+                MachineViewModel.ClipboardGrace = TimeSpan.FromSeconds(1);
+                Ui.PumpUntil(() => shell.Machines[0].GuestToolsMissing, "the tools to count as missing", 15);
+                Ui.Pump(0.4);
+                var pill = Pill().IsEffectivelyVisible;
+                var text = Status().Text;
+                var warn = Status().Classes.Contains("warn");
+                Ui.Capture(window, "phase17", "tools-missing-dark");
+                Avalonia.Application.Current!.RequestedThemeVariant = ThemeVariant.Light;
+                Ui.Pump(0.3);
+                Ui.Capture(window, "phase17", "tools-missing-light");
+                Ui.Click(window, Pill());
+                Ui.Pump(0.5);
+                var steps = shell.Selected?.ShowGuestToolsSteps;
+                Ui.Capture(window, "phase17", "tools-missing-steps");
+                window.Close();
+                return (controlPill, controlText, pill, text, warn, steps);
+            });
+
+            Assert.False(seen.controlPill);
+            Assert.StartsWith("Not answering yet", seen.controlText);
+            Assert.True(seen.pill);
+            Assert.StartsWith("Not installed. Copy and paste", seen.text);
+            Assert.True(seen.warn);
+            Assert.True(seen.steps);
+        }
+        finally
+        {
+            MachineViewModel.ClipboardGrace = grace;
             await MachineRunner.PowerOffAsync(running, CancellationToken.None);
             await MachineRunner.WaitForExitAsync(running, TimeSpan.FromSeconds(10), CancellationToken.None);
         }
