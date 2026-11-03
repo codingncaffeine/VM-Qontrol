@@ -39,8 +39,10 @@ public static class SettingsHistory
         Diff("Secure Boot", before.Firmware.SecureBoot, after.Firmware.SecureBoot, v => (bool?)v == true ? "on" : "off");
         Diff("TPM", before.Tpm, after.Tpm, v => (bool?)v == true ? "on" : "off");
         Diff("Disks", string.Join(", ", before.Disks.Select(d => $"{Path.GetFileName(d.File)} {d.SizeGiB} GB {d.Bus}")), string.Join(", ", after.Disks.Select(d => $"{Path.GetFileName(d.File)} {d.SizeGiB} GB {d.Bus}")));
+        Diff("Disk speed limits", string.Join(", ", before.Disks.Select(Limits)), string.Join(", ", after.Disks.Select(Limits)));
         Diff("CD/DVD and floppies", string.Join(", ", before.Media.Select(m => $"{m.Role} {Path.GetFileName(m.File)} {m.Connect}")), string.Join(", ", after.Media.Select(m => $"{m.Role} {Path.GetFileName(m.File)} {m.Connect}")));
         Diff("Network", string.Join(", ", before.Nics.Select(Nic)), string.Join(", ", after.Nics.Select(Nic)));
+        Diff("Network cable at power on", before.Nics.FirstOrDefault()?.ConnectedAtPowerOn ?? true, after.Nics.FirstOrDefault()?.ConnectedAtPowerOn ?? true, v => v is true ? "connected" : "left out");
         Diff("Display", $"{before.Display.Backend} {before.Display.Device} GL {before.Display.Gl}", $"{after.Display.Backend} {after.Display.Device} GL {after.Display.Gl}");
         Diff("Starting resolution", (before.Display.Width, before.Display.Height), (after.Display.Width, after.Display.Height),
             v => v is ValueTuple<int?, int?> { Item1: { } w, Item2: { } h } ? $"{w} × {h}" : "automatic");
@@ -82,6 +84,9 @@ public static class SettingsHistory
 
     private static string Nic(NicConfig n) => $"{n.Mode}{(n.Bridge is { } b ? " " + b : "")}{(n.Model is { } m ? " " + m : "")}{(n.Mac is { } mac ? " " + mac : "")}" +
                                               (n.Forwards.Count > 0 ? $" forwards {string.Join(' ', n.Forwards.Select(f => $"{f.Protocol}:{f.HostPort}->{f.GuestPort}"))}" : "");
+
+    private static string Limits(DiskConfig d) =>
+        $"{Path.GetFileName(d.File)} {(d.LimitMBps is { } mb ? $"{mb} MB/s" : "no MB/s limit")} {(d.LimitIops is { } io ? $"{io} IOPS" : "no IOPS limit")}";
 
     public static string PathFor(string historyDirectory) => Path.Combine(historyDirectory, FileName);
 

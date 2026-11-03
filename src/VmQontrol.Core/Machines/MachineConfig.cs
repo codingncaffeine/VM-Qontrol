@@ -240,6 +240,13 @@ public sealed record DiskConfig
 
     /// <summary>qemu-img preallocation: off, metadata, falloc or full.</summary>
     public string Preallocation { get; set; } = "off";
+
+    /// <summary>Most megabytes a second the disk reads and writes together (VirtualBox's bandwidth group, virt-manager's
+    /// iotune); <c>null</c> = as fast as this computer's drive.</summary>
+    public int? LimitMBps { get; set; }
+
+    /// <summary>Most reads and writes a second together; <c>null</c> = no limit.</summary>
+    public int? LimitIops { get; set; }
 }
 
 public enum MediaRole
@@ -319,6 +326,10 @@ public sealed record NicConfig
     public int? SshHostPort { get; set; }
 
     public List<PortForward> Forwards { get; set; } = [];
+
+    /// <summary>The cable is plugged in at power on (Workstation's "Connect at power on"); false = the guest starts with
+    /// its link down until Connect the network cable.</summary>
+    public bool ConnectedAtPowerOn { get; set; } = true;
 }
 
 public enum DisplayBackend

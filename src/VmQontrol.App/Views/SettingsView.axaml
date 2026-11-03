@@ -376,6 +376,23 @@
                       <Grid ColumnDefinitions="*,Auto">
                         <StackPanel>
                           <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="Speed limit" Classes="label" VerticalAlignment="Center" />
+                            <Border Classes="badge-next" VerticalAlignment="Center"><TextBlock Text="Applies at next power on" /></Border>
+                          </StackPanel>
+                          <TextBlock Text="Recommended: 0, no limit. A limit keeps a busy machine from slowing this computer's drive for everything else, or shows how a system behaves on a slow disk. Reads and writes count together." Classes="help" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                          <NumericUpDown x:Name="DiskLimitMBps" Value="{Binding LimitMBps}" Minimum="0" Maximum="100000" Increment="10" FormatString="0" Width="130" />
+                          <TextBlock Text="MB/s" VerticalAlignment="Center" Classes="muted" />
+                          <NumericUpDown x:Name="DiskLimitIops" Value="{Binding LimitIops}" Minimum="0" Maximum="1000000" Increment="100" FormatString="0" Width="130" />
+                          <TextBlock Text="IOPS" VerticalAlignment="Center" Classes="muted" />
+                        </StackPanel>
+                      </Grid>
+                    </Border>
+                    <Border Classes="row">
+                      <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                          <StackPanel Orientation="Horizontal" Spacing="8">
                             <TextBlock Text="Compact" Classes="label" VerticalAlignment="Center" />
                             <Border Classes="badge-now" VerticalAlignment="Center"><TextBlock Text="Applies now" /></Border>
                           </StackPanel>
@@ -514,6 +531,18 @@
                     <TextBox Text="{Binding Mac}" PlaceholderText="Automatic" Width="230" VerticalAlignment="Center" />
                     <Button Classes="tool" Content="New" Command="{Binding NewMacCommand}" VerticalAlignment="Center" ToolTip.Tip="Make a new random address" />
                   </StackPanel>
+                </Grid>
+              </Border>
+              <Border Classes="row" IsVisible="{Binding HasNetwork}">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <TextBlock Text="Cable connected at power on" Classes="label" VerticalAlignment="Center" />
+                      <Border Classes="badge-next" VerticalAlignment="Center"><TextBlock Text="Applies at next power on" /></Border>
+                    </StackPanel>
+                    <TextBlock Text="Recommended on. Off starts the machine with its network cable pulled out, as for a system that must not go online before it is set up; ⋯ → Connect the network cable plugs it in while it runs." Classes="help" />
+                  </StackPanel>
+                  <ToggleSwitch x:Name="ConnectedAtPowerOn" Grid.Column="1" IsChecked="{Binding ConnectedAtPowerOn}" VerticalAlignment="Center" />
                 </Grid>
               </Border>
             </StackPanel>

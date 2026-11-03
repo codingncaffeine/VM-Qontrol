@@ -30,6 +30,24 @@
                 </Button>
               </StackPanel>
             </Border>
+            <Border x:Name="CablePill" Classes="pill warn" IsVisible="{Binding CableOut}" VerticalAlignment="Center" Padding="8,2,4,2">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <TextBlock Text="Cable out" VerticalAlignment="Center" />
+                <Button x:Name="PlugCable" Classes="icononly" Command="{Binding SetCableCommand}" Padding="4,1" ToolTip.Tip="Connect the network cable" AutomationProperties.Name="Connect the network cable">
+                  <Button.CommandParameter><x:Boolean>True</x:Boolean></Button.CommandParameter>
+                  <Path Classes="icon" Data="{StaticResource IconNetwork}" Width="10" Height="10" Stretch="Uniform" />
+                </Button>
+              </StackPanel>
+            </Border>
+            <Border x:Name="CapturePill" Classes="pill" IsVisible="{Binding IsCapturing}" VerticalAlignment="Center" Padding="8,2,4,2">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Ellipse Width="7" Height="7" Fill="{DynamicResource QAccent}" VerticalAlignment="Center" />
+                <TextBlock Text="Capturing traffic" VerticalAlignment="Center" />
+                <Button x:Name="StopCapture" Classes="icononly" Command="{Binding StopCaptureCommand}" Padding="4,1" ToolTip.Tip="Stop capturing and finish the .pcap file" AutomationProperties.Name="Stop capturing network traffic">
+                  <Path Classes="icon" Data="{StaticResource IconStop}" Width="10" Height="10" Stretch="Uniform" />
+                </Button>
+              </StackPanel>
+            </Border>
             <TextBlock Text="{Binding GuestLabel}" Classes="muted" VerticalAlignment="Center" />
             <TextBlock Text="·" Classes="muted" VerticalAlignment="Center" />
             <TextBlock Text="{Binding KindLabel}" Classes="muted" VerticalAlignment="Center" />
@@ -150,6 +168,16 @@
                   <MenuItem Header="Ctrl+Alt+F12" Command="{Binding SendKeysCommand}" CommandParameter="ctrl+alt+f12" />
                 </MenuItem>
               </MenuItem>
+              <MenuItem x:Name="DisconnectCableItem" Header="Disconnect the network cable" Command="{Binding SetCableCommand}" IsVisible="{Binding CanDisconnectCable}"
+                        ToolTip.Tip="Pull the machine's network cable out while it runs; the system sees its network go away">
+                <MenuItem.CommandParameter><x:Boolean>False</x:Boolean></MenuItem.CommandParameter>
+              </MenuItem>
+              <MenuItem x:Name="ConnectCableItem" Header="Connect the network cable" Command="{Binding SetCableCommand}" IsVisible="{Binding CanConnectCable}"
+                        ToolTip.Tip="Plug the machine's network cable back in">
+                <MenuItem.CommandParameter><x:Boolean>True</x:Boolean></MenuItem.CommandParameter>
+              </MenuItem>
+              <MenuItem x:Name="CaptureItem" Header="Capture network traffic" Command="{Binding StartCaptureCommand}" IsVisible="{Binding CanCapture}"
+                        ToolTip.Tip="Write every packet the machine sends and receives to a .pcap file in its folder, for Wireshark; stop from the mark beside its state" />
               <MenuItem Header="Save a screenshot" Command="{Binding SaveScreenshotCommand}" IsVisible="{Binding IsActive}" />
               <MenuItem x:Name="RecordScreenItem" Header="Record the screen" Command="{Binding StartRecordingCommand}" IsVisible="{Binding CanRecord}"
                         ToolTip.Tip="Record what the machine shows into a video in your Videos folder (no sound); stop from the red mark beside its state" />

@@ -43,6 +43,15 @@ internal static class Commands
                               Throw the saved state away: the next start begins afresh, as after a power cut.
           pause / resume / reset MACHINE
           screenshot MACHINE FILE.png
+          exec MACHINE PROGRAM [ARG...]
+                              Run a program inside the guest and print what it printed (needs the guest agent; Windows'
+                              agent runs programs only when allowed). The exit code is the program's.
+          copy-to MACHINE FILE GUEST-PATH / copy-from MACHINE GUEST-PATH FILE
+                              Copy a file into or out of the guest through its agent, with no shared folder or network.
+          cable MACHINE on|off
+                              Plug the machine's network cable in or pull it out while it runs.
+          capture MACHINE FILE.pcap / capture MACHINE --stop
+                              Write every packet of the machine's network adapter to a file Wireshark opens.
           import FILE [--name NAME]
                       Copy a machine from VMware (.vmx), VirtualBox (.vbox), an OVF appliance (.ovf, .ova), libvirt
                       (.xml), a disk on its own, or a VM Qontrol export (.tar) into the library. The original is only read.
@@ -133,8 +142,55 @@ internal static class Commands
                         await MachineRunner.ScreenshotAsync(r, args[2]).ConfigureAwait(false);
                         output.WriteLine($"Saved {Path.GetFullPath(args[2])}");
                     });
-                case "inspect" or "detect" or "create" or "clone" or "template" or "start" or "status" or "shutdown" or "poweroff" or "suspend" or "discard-suspended" or "pause" or "resume" or "reset" or "screenshot":
-                    error.WriteLine($"vmq {command}: something is missing ({(command == "detect" ? "the disc image" : command == "screenshot" ? "the machine and the file" : command == "clone" ? "the machine and the new name" : command == "create" ? "the name" : "the machine")}). Run 'vmq help' for the list.");
+                case "exec" when args.Length > 2:
+                {
+                    var code = 0;
+                    var rc = Control(args[1], paths, output, error, async r =>
+                    {
+                        var agent = new GuestAgentClient(r.Paths.Agent);
+                        var result = await agent.ExecAsync(args[2], args[3..], null, TimeSpan.FromMinutes(10)).ConfigureAwait(false);
+                        if (result is null)
+                        {
+                            error.WriteLine($"vmq exec: {agent.LastError ?? "the guest agent refused"}");
+                            code = 1;
+                            return;
+                        }
+
+                        output.Write(result.Output);
+                        error.Write(result.Errors);
+                        if (result.TimedOut) error.WriteLine("vmq exec: the program was still running after 10 minutes; it carries on in the guest.");
+                        code = result.ExitCode ?? 124;
+                    });
+                    return rc != 0 ? rc : code;
+                }
+                case "copy-to" when args.Length > 3:
+                    return CopyGuest(args[1], args[2], args[3], toGuest: true, paths, output, error);
+                case "copy-from" when args.Length > 3:
+                    return CopyGuest(args[1], args[3], args[2], toGuest: false, paths, output, error);
+                case "cable" when args.Length > 2 && args[2] is "on" or "off":
+                    return Control(args[1], paths, output, error, async r =>
+                    {
+                        await using var qmp = await QmpClient.ConnectAsync(r.Paths.Control, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+                        await LiveNetwork.SetCableAsync((c, a) => qmp.ExecuteAsync(c, a), r.Paths, args[2] == "on").ConfigureAwait(false);
+                        output.WriteLine(args[2] == "on" ? $"{r.Name}: the network cable is plugged in." : $"{r.Name}: the network cable is out; the guest sees no network until 'vmq cable {args[1]} on'.");
+                    });
+                case "capture" when args.Length > 2:
+                    return Control(args[1], paths, output, error, async r =>
+                    {
+                        await using var qmp = await QmpClient.ConnectAsync(r.Paths.Control, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+                        if (args[2] == "--stop")
+                        {
+                            var file = LiveNetwork.CapturePath(r.Paths);
+                            await LiveNetwork.StopCaptureAsync((c, a) => qmp.ExecuteAsync(c, a), r.Paths).ConfigureAwait(false);
+                            output.WriteLine(file is null ? $"{r.Name}: the capture stopped." : $"{r.Name}: the capture stopped; {file} is complete.");
+                            return;
+                        }
+
+                        await LiveNetwork.StartCaptureAsync((c, a) => qmp.ExecuteAsync(c, a), r.Paths, args[2]).ConfigureAwait(false);
+                        output.WriteLine($"{r.Name}: capturing into {Path.GetFullPath(args[2])}; 'vmq capture {args[1]} --stop' finishes the file.");
+                    });
+                case "inspect" or "detect" or "create" or "clone" or "template" or "start" or "status" or "shutdown" or "poweroff" or "suspend" or "discard-suspended" or "pause" or "resume" or "reset" or "screenshot" or "exec" or "copy-to" or "copy-from" or "cable" or "capture":
+                    error.WriteLine($"vmq {command}: something is missing ({(command == "detect" ? "the disc image" : command == "screenshot" ? "the machine and the file" : command == "exec" ? "the machine and the program" : command is "copy-to" or "copy-from" ? "the machine and both files" : command == "cable" ? "the machine and on or off" : command == "capture" ? "the machine and the file, or --stop" : command == "clone" ? "the machine and the new name" : command == "create" ? "the name" : "the machine")}). Run 'vmq help' for the list.");
                     return 2;
                 default:
                     error.WriteLine($"vmq: unknown command '{command}'. Run 'vmq help' for the list.");
@@ -563,5 +619,38 @@ internal static class Commands
     private sealed class SyncProgress(Action<Core.Import.ImportProgress> report) : IProgress<Core.Import.ImportProgress>
     {
         public void Report(Core.Import.ImportProgress value) => report(value);
+    }
+
+    /// <summary>Copies one file between this computer and the guest through the guest agent.</summary>
+    private static int CopyGuest(string machine, string local, string guest, bool toGuest, QontrolPaths paths, TextWriter output, TextWriter error)
+    {
+        var failed = false;
+        var rc = Control(machine, paths, output, error, async r =>
+        {
+            var agent = new GuestAgentClient(r.Paths.Agent);
+            long? bytes;
+            if (toGuest)
+            {
+                await using var source = File.OpenRead(local);
+                bytes = await agent.WriteFileAsync(guest, source).ConfigureAwait(false);
+            }
+            else
+            {
+                var partial = local + ".part";
+                await using (var target = File.Create(partial)) bytes = await agent.ReadFileAsync(guest, target).ConfigureAwait(false);
+                if (bytes is null) File.Delete(partial);
+                else File.Move(partial, local, overwrite: true);
+            }
+
+            if (bytes is null)
+            {
+                error.WriteLine($"vmq copy: {agent.LastError ?? "the guest agent refused"}");
+                failed = true;
+                return;
+            }
+
+            output.WriteLine(toGuest ? $"Copied {bytes:N0} bytes to {r.Name}: {guest}" : $"Copied {bytes:N0} bytes from {r.Name} to {Path.GetFullPath(local)}");
+        });
+        return rc != 0 ? rc : failed ? 1 : 0;
     }
 }

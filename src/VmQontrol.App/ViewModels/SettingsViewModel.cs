@@ -66,6 +66,12 @@ public sealed partial class DiskRow(DiskConfig disk, string machineDirectory) : 
     [ObservableProperty] private decimal _sizeGb = disk.SizeGiB;
     [ObservableProperty] private Option _bus = SettingsViewModel.BusOptions.First(o => o.Value == disk.Bus.ToString());
 
+    /// <summary>Most MB a second it reads and writes together; 0 = no limit.</summary>
+    [ObservableProperty] private decimal _limitMBps = disk.LimitMBps ?? 0;
+
+    /// <summary>Most reads and writes a second; 0 = no limit.</summary>
+    [ObservableProperty] private decimal _limitIops = disk.LimitIops ?? 0;
+
     /// <summary>The smallest size allowed: a disk can grow, never shrink.</summary>
     public decimal MinimumGb => Original.SizeGiB;
 
@@ -74,7 +80,13 @@ public sealed partial class DiskRow(DiskConfig disk, string machineDirectory) : 
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(Used))] private string _compactStatus = "";
     [ObservableProperty] private bool _compacting;
 
-    public DiskConfig ToConfig() => Original with { SizeGiB = (long)SizeGb, Bus = Enum.Parse<DiskBus>(Bus.Value!) };
+    public DiskConfig ToConfig() => Original with
+    {
+        SizeGiB = (long)SizeGb,
+        Bus = Enum.Parse<DiskBus>(Bus.Value!),
+        LimitMBps = LimitMBps > 0 ? (int)LimitMBps : null,
+        LimitIops = LimitIops > 0 ? (int)LimitIops : null,
+    };
 }
 
 /// <summary>A shared folder in the settings.</summary>
@@ -303,6 +315,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         Bridge = nic.Bridge ?? "br0";
         Segment = nic.Segment ?? "lab";
         SshForward = nic.SshForward;
+        ConnectedAtPowerOn = nic.ConnectedAtPowerOn;
         SshPort = nic.SshHostPort ?? 0;
         foreach (var f in nic.Forwards) Forwards.Add(new ForwardRow(f));
         foreach (var sh in m.Shares) Shares.Add(new ShareRow(sh));
@@ -575,7 +588,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private decimal _newDiskGb = 32;
 
     // Network
-    [ObservableProperty] [NotifyPropertyChangedFor(nameof(IsBridged), nameof(IsNat), nameof(IsSegment))] private Option _netMode;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(IsBridged), nameof(IsNat), nameof(IsSegment), nameof(HasNetwork))] private Option _netMode;
     [ObservableProperty] private Option _nicModel;
     [ObservableProperty] private string _mac;
     [ObservableProperty] private string _bridge;
@@ -584,6 +597,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     public bool IsSegment => NetMode.Value == "Segment";
     [ObservableProperty] private bool _sshForward;
     [ObservableProperty] private decimal _sshPort;
+
+    /// <summary>The network cable is plugged in at power on (the ⋯ menu pulls it out or plugs it in while running).</summary>
+    [ObservableProperty] private bool _connectedAtPowerOn = true;
 
     public ObservableCollection<ForwardRow> Forwards { get; } = [];
 
@@ -594,6 +610,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     public bool IsBridged => NetMode.Value == "Bridge";
 
     public bool IsNat => NetMode.Value is "User" or "Restricted";
+
+    public bool HasNetwork => NetMode.Value != "None";
 
     // USB, sound, display, input, serial
     [ObservableProperty] private Option _usbController;
@@ -750,6 +768,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             Bridge = IsBridged ? Bridge.Trim() : null,
             Segment = IsSegment ? Segment.Trim() : null,
             SshForward = SshForward,
+            ConnectedAtPowerOn = ConnectedAtPowerOn,
             SshHostPort = SshPort > 0 ? (int)SshPort : null,
             Forwards = Forwards.Select(f => f.ToConfig()).ToList(),
         };

@@ -185,6 +185,8 @@ public static class MachineRunner
         }
 
         var hostDrives = m.HostDrives.Count > 0;
+        // A cable left out at power on is pulled before the firmware runs, so the guest never sees a link.
+        var cableOut = m.Nics.FirstOrDefault() is { Mode: not NetMode.None, ConnectedAtPowerOn: false };
 
         // A suspended machine carries on from its saved state (the firmware screen means starting afresh instead).
         var resuming = MachineSuspend.IsSuspended(machineDirectory) && !options.FirmwareSetup;
@@ -193,7 +195,7 @@ public static class MachineRunner
         {
             var list = new List<string>(built);
             // Host drives plug in before the firmware runs, so the machine waits stopped until they are in.
-            if (options.Paused || (hostDrives && !resuming)) list.Add("-S");
+            if (options.Paused || ((hostDrives || cableOut) && !resuming)) list.Add("-S");
             if (resuming) list.AddRange(["-incoming", "defer"]);
             // QEMU detaches once it is ready; until then its errors come back on stderr and the exit code says whether it started.
             list.Add("-daemonize");
@@ -259,7 +261,7 @@ public static class MachineRunner
         }
 
         // Before the boot helpers below: they press keys the firmware must see running.
-        if (hostDrives && !resuming) notices.AddRange(await ConnectHostDrivesAsync(m, runtime, run: !options.Paused, ct).ConfigureAwait(false));
+        if ((hostDrives || cableOut) && !resuming) notices.AddRange(await PrepareStoppedAsync(m, runtime, cableOut, run: !options.Paused, ct).ConfigureAwait(false));
         else if (hostDrives) notices.Add("The host drives were not connected: a machine carrying on from a saved state keeps the hardware it was saved with.");
         var installing = !resuming && !(m.Disks.Count > 0 && DiskState.IsUsed(Full(m.Disks[0].File)))
                          && m.Media.Any(x => x.Role == MediaRole.Installer && x.Connect != Connect.Never);
@@ -308,15 +310,27 @@ public static class MachineRunner
     }
 
     /// <summary>
-    /// Plugs the machine's host drives in while it waits stopped (-S), then lets it run. A drive that is unplugged, busy or
+    /// Pulls the network cable when it is left out at power on, and plugs the machine's host drives in, while it waits stopped (-S), then lets it run. A drive that is unplugged, busy or
     /// refused is left out and named; the machine still starts, as a computer does with an empty USB port.
     /// </summary>
-    private static async Task<IReadOnlyList<string>> ConnectHostDrivesAsync(MachineConfig m, RuntimePaths runtime, bool run, CancellationToken ct)
+    private static async Task<IReadOnlyList<string>> PrepareStoppedAsync(MachineConfig m, RuntimePaths runtime, bool cableOut, bool run, CancellationToken ct)
     {
         var notices = new List<string>();
         await using var qmp = await QmpClient.ConnectAsync(runtime.Control, TimeSpan.FromSeconds(5), ct).ConfigureAwait(false);
         try
         {
+            if (cableOut)
+            {
+                try
+                {
+                    await LiveNetwork.SetCableAsync((c, a) => qmp.ExecuteAsync(c, a, ct), runtime, connected: false, ct).ConfigureAwait(false);
+                }
+                catch (QmpException ex)
+                {
+                    notices.Add($"The network cable could not be left out: {ex.Description}");
+                }
+            }
+
             foreach (var drive in m.HostDrives)
             {
                 try

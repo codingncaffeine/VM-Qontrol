@@ -283,7 +283,10 @@ public static class QemuCommandBuilder
             // The machine's memory from the reserved pool; QEMU refuses to start when the pool is too small (said before power on).
             args.AddRange(["-object", $"memory-backend-memfd,id=mem,size={MemoryArg(memory)}{hugeOptions}", "-numa", "node,memdev=mem"]);
         }
-        if (balloon) args.AddRange(["-device", "virtio-balloon"]);
+        // Free page reporting (Linux 5.7+, the VirtIO Windows balloon driver): memory the guest frees goes back to this
+        // computer by itself, as Hyper-V's Dynamic Memory does. VM Qontrol's own machines only (an imported quickemu machine
+        // keeps quickemu's line), and never beside a passed-through PCI device, whose DMA needs every page pinned.
+        if (balloon) args.AddRange(["-device", m.ImportedFrom is null && m.Performance.PciDevices.Count == 0 ? "virtio-balloon,free-page-reporting=on" : "virtio-balloon"]);
         args.AddRange(["-pidfile", ctx.Runtime.Pid]);
         args.AddRange(os is "windows" or "windows-server" or "reactos" or "freedos"
             ? ["-rtc", "base=localtime,clock=host,driftfix=slew"]
@@ -429,22 +432,22 @@ public static class QemuCommandBuilder
                     "-drive", $"id=BootLoader,if=none,format=qcow2,file={(loader is null ? "" : File(loader.File))}"]);
                 if (m.Media.FirstOrDefault(x => x.Role == MediaRole.Recovery && Attached(x)) is { } recovery)
                     args.AddRange(["-device", "ide-hd,bus=ahci.1,drive=RecoveryImage", "-drive", $"id=RecoveryImage,if=none,format=raw,file={File(recovery.File)}"]);
-                args.AddRange(["-device", $"{device0 ?? macDisk},drive=SystemDisk", "-drive", $"id=SystemDisk,if=none,format=qcow2,file={diskPath},{optimisations}"]);
+                args.AddRange(["-device", $"{device0 ?? macDisk},drive=SystemDisk", "-drive", $"id=SystemDisk,if=none,format=qcow2,file={diskPath},{optimisations}{Throttle(disk)}"]);
             }
             else if (os == "kolibrios")
-                args.AddRange(["-device", "ahci,id=ahci", "-device", "ide-hd,bus=ahci.0,drive=SystemDisk", "-drive", $"id=SystemDisk,if=none,format=qcow2,file={diskPath},{optimisations}"]);
+                args.AddRange(["-device", "ahci,id=ahci", "-device", "ide-hd,bus=ahci.0,drive=SystemDisk", "-drive", $"id=SystemDisk,if=none,format=qcow2,file={diskPath},{optimisations}{Throttle(disk)}"]);
             else if (os == "reactos" && device0 is null)
                 args.AddRange(["-drive", $"if=ide,index=0,media=disk,file={diskPath}"]);
             else if (os == "windows-server" && device0 is null)
-                args.AddRange(["-device", "ide-hd,drive=SystemDisk", "-drive", $"id=SystemDisk,if=none,format=qcow2,file={diskPath},{optimisations}"]);
+                args.AddRange(["-device", "ide-hd,drive=SystemDisk", "-drive", $"id=SystemDisk,if=none,format=qcow2,file={diskPath},{optimisations}{Throttle(disk)}"]);
             else
-                args.AddRange(["-device", $"{device0 ?? "virtio-blk-pci"},drive=SystemDisk", "-drive", $"id=SystemDisk,if=none,format={disk.Format},file={diskPath},{optimisations}"]);
+                args.AddRange(["-device", $"{device0 ?? "virtio-blk-pci"},drive=SystemDisk", "-drive", $"id=SystemDisk,if=none,format={disk.Format},file={diskPath},{optimisations}{Throttle(disk)}"]);
 
             for (var i = 1; i < m.Disks.Count; i++)
             {
                 var extra = m.Disks[i];
                 var dev = extra.Bus switch { DiskBus.Sata or DiskBus.Ide => "ide-hd", DiskBus.Nvme => $"nvme,serial=vmqdisk{i}", DiskBus.Pvscsi => "scsi-hd,bus=pvscsi0.0", DiskBus.Scsi => "scsi-hd,bus=vscsi0.0", _ => "virtio-blk-pci" };
-                args.AddRange(["-device", $"{dev},drive=Disk{i}", "-drive", $"id=Disk{i},if=none,format={extra.Format},file={File(extra.File)},{optimisations}"]);
+                args.AddRange(["-device", $"{dev},drive=Disk{i}", "-drive", $"id=Disk{i},if=none,format={extra.Format},file={File(extra.File)},{optimisations}{Throttle(extra)}"]);
             }
         }
 
@@ -630,6 +633,11 @@ public static class QemuCommandBuilder
 
     /// <summary>QEMU option values escape a comma by doubling it.</summary>
     /// <summary>The adapter's own address when the machine has one (an imported machine keeps its MAC).</summary>
+    /// <summary>QEMU's I/O throttling for a disk with limits (none on a disk without, so quickemu's lines are unchanged).</summary>
+    private static string Throttle(DiskConfig d) =>
+        (d.LimitMBps is { } mb and > 0 ? string.Create(CultureInfo.InvariantCulture, $",throttling.bps-total={(long)mb * 1_000_000}") : "")
+        + (d.LimitIops is { } io and > 0 ? string.Create(CultureInfo.InvariantCulture, $",throttling.iops-total={io}") : "");
+
     private static string MacOption(NicConfig nic) => nic.Mac is { } mac ? ",mac=" + mac : "";
 
     private static string EscapeOption(string value) => value.Replace(",", ",,", StringComparison.Ordinal);

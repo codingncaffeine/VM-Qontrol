@@ -109,7 +109,8 @@ public sealed partial class MachineViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StateText), nameof(IsRunning), nameof(IsOff), nameof(IsPaused), nameof(CanPause), nameof(IsActive), nameof(ScreenPlaceholder),
-        nameof(CanOpenFirmware), nameof(CanDiscardSuspended), nameof(CanPowerOn), nameof(CanMakeTemplate), nameof(GuestToolsStatus), nameof(GuestToolsDot), nameof(GuestToolsWarn), nameof(GuestToolsOk))]
+        nameof(CanOpenFirmware), nameof(CanDiscardSuspended), nameof(CanPowerOn), nameof(CanMakeTemplate), nameof(GuestToolsStatus), nameof(GuestToolsDot), nameof(GuestToolsWarn), nameof(GuestToolsOk),
+        nameof(CanConnectCable), nameof(CanDisconnectCable), nameof(CanCapture))]
     private PowerState _state = PowerState.Off;
 
     /// <summary>Off with its state saved: Power on carries on from where it was.</summary>
@@ -539,6 +540,86 @@ public sealed partial class MachineViewModel : ObservableObject
         _shell.Paths.Isolated ? Path.Combine(_shell.Paths.Data, name)
         : Environment.GetFolderPath(folder) is { Length: > 0 } f ? f : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), name);
 
+    // ── Network cable and traffic capture (Workstation's Connected, VirtualBox's network trace).
+
+    /// <summary>The running machine's network cable is pulled out.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanConnectCable), nameof(CanDisconnectCable))]
+    private bool _cableOut;
+
+    /// <summary>The .pcap a running capture writes, or <c>null</c>.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsCapturing), nameof(CanCapture))]
+    private string? _captureFile;
+
+    public bool HasNetwork => Machine.Nics.FirstOrDefault() is { Mode: not NetMode.None };
+
+    public bool CanConnectCable => IsActive && HasNetwork && CableOut;
+
+    public bool CanDisconnectCable => IsActive && HasNetwork && !CableOut;
+
+    public bool IsCapturing => CaptureFile is not null;
+
+    public bool CanCapture => IsActive && HasNetwork && !IsCapturing;
+
+    [RelayCommand]
+    private async Task SetCableAsync(bool connected)
+    {
+        if (_watcher is not { } watcher) return;
+        try
+        {
+            await LiveNetwork.SetCableAsync((c, a) => watcher.ExecuteAsync(c, a), watcher.Machine.Paths, connected).ConfigureAwait(false);
+            Ui.Post(() =>
+            {
+                CableOut = !connected;
+                _shell.Note(connected ? $"{Name}'s network cable is plugged in." : $"{Name}'s network cable is out: the system sees no network until Connect the network cable.");
+            });
+        }
+        catch (Exception ex) when (ex is QmpException or IOException)
+        {
+            Ui.Post(() => _shell.Show(new NoticeViewModel(connected ? "The cable could not be plugged in" : "The cable could not be pulled out", [ex is QmpException q ? q.Description : ex.Message], isError: true)));
+        }
+    }
+
+    [RelayCommand]
+    private async Task StartCaptureAsync()
+    {
+        if (_watcher is not { } watcher || CaptureFile is not null) return;
+        var file = Path.Combine(Entry.Directory, "captures", $"{Name} {DateTime.Now:yyyy-MM-dd HH.mm.ss}.pcap");
+        try
+        {
+            await LiveNetwork.StartCaptureAsync((c, a) => watcher.ExecuteAsync(c, a), watcher.Machine.Paths, file).ConfigureAwait(false);
+            Ui.Post(() =>
+            {
+                CaptureFile = file;
+                _shell.Note($"Capturing {Name}'s network traffic.");
+            });
+        }
+        catch (Exception ex) when (ex is QmpException or IOException or UnauthorizedAccessException)
+        {
+            Ui.Post(() => _shell.Show(new NoticeViewModel("Network traffic could not be captured", [ex is QmpException q ? q.Description : ex.Message], isError: true)));
+        }
+    }
+
+    [RelayCommand]
+    private async Task StopCaptureAsync()
+    {
+        if (_watcher is not { } watcher || CaptureFile is not { } file) return;
+        try
+        {
+            await LiveNetwork.StopCaptureAsync((c, a) => watcher.ExecuteAsync(c, a), watcher.Machine.Paths).ConfigureAwait(false);
+            Ui.Post(() =>
+            {
+                CaptureFile = null;
+                _shell.Note($"Saved the capture to {file} (Wireshark opens it).");
+            });
+        }
+        catch (Exception ex) when (ex is QmpException or IOException)
+        {
+            Ui.Post(() => _shell.Show(new NoticeViewModel("The capture could not be stopped", [ex is QmpException q ? q.Description : ex.Message], isError: true)));
+        }
+    }
+
     // ── Screen recording: frames of the guest's display into a video (D26).
 
     private ScreenRecorder? _recorder;
@@ -778,6 +859,8 @@ public sealed partial class MachineViewModel : ObservableObject
                     : Machine.Devices.Vsock && System.IO.File.Exists("/etc/ssh/ssh_config.d/20-systemd-ssh-proxy.conf") ? Machine.Guest.SshVsockCommand(QemuCommandBuilder.VsockCid(Machine.Id))
                     : null;
                 OnState(watcher.State);
+                CableOut = LiveNetwork.IsUnplugged(running.Paths);
+                CaptureFile = LiveNetwork.CapturePath(running.Paths);
             });
             _ = watcher.Exited.ContinueWith(_ => Ui.Post(OnExited), TaskScheduler.Default);
             _ = PollGuestAsync(watcher);
@@ -812,6 +895,8 @@ public sealed partial class MachineViewModel : ObservableObject
         GuestAddress = null;
         GuestToolsAnswering = null;
         SshCommand = null;
+        CableOut = false;
+        CaptureFile = null;
         _shell.Note(_suspending ? $"{Name} is suspended." : $"{Name} powered off.");
         _suspending = false;
         _ = RefreshSuspendedAsync();
