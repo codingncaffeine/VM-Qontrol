@@ -750,6 +750,18 @@ public sealed partial class ShellViewModel : ObservableObject
     }
 
     /// <summary>A line for the status bar and the log.</summary>
+    /// <summary>
+    /// The status bar's standing hint while a viewer can hold a machine's mouse (the viewer is not ours, so this is where
+    /// VM Qontrol says how to get it back); <c>null</c> when every machine's mouse moves freely.
+    /// </summary>
+    [ObservableProperty] private string? _mouseHint;
+
+    /// <summary>A machine's capture state changed: the bar shows the first machine that can hold the mouse.</summary>
+    public void MouseCaptureChanged() =>
+        MouseHint = _all.FirstOrDefault(m => m.CanHoldMouse) is { } m
+            ? $"releases the mouse from {m.Name}. Once its system is installed, the mouse moves freely by itself."
+            : null;
+
     public void Note(string text)
     {
         Status = text;

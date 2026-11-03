@@ -15,9 +15,15 @@
     <DockPanel>
       <!-- Status bar: the last thing that happened. -->
       <Border DockPanel.Dock="Bottom" Background="{DynamicResource QSidebar}" BorderBrush="{DynamicResource QBorder}" BorderThickness="0,1,0,0" Padding="16,6">
-        <Grid ColumnDefinitions="*,Auto">
-          <TextBlock x:Name="StatusLine" Text="{Binding Status}" Classes="muted" FontSize="{DynamicResource QFontSmall}" />
-          <TextBlock Grid.Column="1" Text="Ctrl+K  all commands" Classes="muted" FontSize="{DynamicResource QFontSmall}" />
+        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="16">
+          <TextBlock x:Name="StatusLine" Text="{Binding Status}" Classes="muted" FontSize="{DynamicResource QFontSmall}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+          <!-- While a viewer (not ours) can hold a machine's mouse: how to get it back. -->
+          <StackPanel x:Name="MouseHintBar" Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"
+                      IsVisible="{Binding MouseHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <Border Classes="pill" VerticalAlignment="Center"><TextBlock Text="Ctrl+Alt" FontFamily="monospace" FontSize="{DynamicResource QFontSmall}" /></Border>
+            <TextBlock x:Name="MouseHintText" Text="{Binding MouseHint}" FontSize="{DynamicResource QFontSmall}" VerticalAlignment="Center" />
+          </StackPanel>
+          <TextBlock Grid.Column="2" Text="Ctrl+K  all commands" Classes="muted" FontSize="{DynamicResource QFontSmall}" VerticalAlignment="Center" />
         </Grid>
       </Border>
 

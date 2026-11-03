@@ -783,6 +783,7 @@ public sealed partial class MachineViewModel : ObservableObject
             _ = PollGuestAsync(watcher);
             _ = AutoProtectLoopAsync(watcher);
             _ = InstallLoopAsync(watcher);
+            _ = MouseCaptureLoopAsync(watcher);
         }
         catch (Exception ex) when (ex is IOException or System.Net.Sockets.SocketException or QmpException or TimeoutException)
         {
@@ -880,6 +881,53 @@ public sealed partial class MachineViewModel : ObservableObject
             });
             await Task.WhenAny(watcher.Exited, Task.Delay(10_000)).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>A viewer is connected and a click in it captures the mouse (see <see cref="MouseCapture"/>).</summary>
+    public bool CanHoldMouse { get; private set; }
+
+    /// <summary>
+    /// Once a second while the machine runs: whether a viewer can be holding its mouse. While it can, the status bar says
+    /// how to let go; the hint goes once the guest drives the pointer itself, the viewer closes, or the machine stops.
+    /// </summary>
+    private async Task MouseCaptureLoopAsync(MachineWatcher watcher)
+    {
+        try
+        {
+            while (!watcher.Exited.IsCompleted)
+            {
+                bool capture;
+                try
+                {
+                    capture = await MouseCapture.CanCaptureAsync(watcher).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is QmpException or IOException or ObjectDisposedException or InvalidOperationException)
+                {
+                    capture = false;
+                }
+
+                if (capture != CanHoldMouse)
+                {
+                    Log.Info(capture
+                        ? $"{Name}: the viewer can capture the mouse (server mouse mode); release hint shown."
+                        : $"{Name}: the mouse moves freely now (client mouse mode, or no viewer); release hint removed.");
+                    Ui.Post(() => SetCanHoldMouse(capture));
+                }
+
+                await Task.WhenAny(watcher.Exited, Task.Delay(1000)).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            Ui.Post(() => SetCanHoldMouse(false));
+        }
+    }
+
+    private void SetCanHoldMouse(bool value)
+    {
+        if (CanHoldMouse == value) return;
+        CanHoldMouse = value;
+        _shell.MouseCaptureChanged();
     }
 
     /// <summary>AutoProtect while the machine runs: a look once a minute, a snapshot when one is due.</summary>
