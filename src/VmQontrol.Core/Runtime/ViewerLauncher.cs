@@ -25,7 +25,7 @@ public static class ViewerLauncher
         if (Find(m.Display.Viewer) is not { } program) return null;
         var uri = $"spice+unix://{running.Paths.Spice}";
         // Both viewers take -f/--full-screen (spicy 0.42, remote-viewer 11).
-        List<string> full = m.Display.FullScreen ? ["--full-screen"] : [];
+        List<string> full = ViewerMemory.OpensFullScreen(m, running.MachineDirectory) ? ["--full-screen"] : [];
         return Path.GetFileName(program) == "spicy"
             ? (program, ["--uri=" + uri, "--title", m.Name, .. full])
             : (program, [uri, "--title", m.Name, "--auto-resize=always", .. full]);
@@ -33,7 +33,8 @@ public static class ViewerLauncher
 
     /// <summary>Starts the viewer and returns its program name, or <c>null</c> when none is installed.</summary>
     /// <remarks>remote-viewer's icon buttons get tooltips through <see cref="ViewerTooltips"/>, written under <paramref name="paths"/>' cache.</remarks>
-    public static string? Open(MachineConfig m, RunningMachine running, QontrolPaths? paths = null)
+    /// <remarks>With <paramref name="remember"/> (the app, which outlives the viewer), how the screen is left is kept: <see cref="ViewerMemory"/>.</remarks>
+    public static string? Open(MachineConfig m, RunningMachine running, QontrolPaths? paths = null, bool remember = false)
     {
         if (Command(m, running) is not { } command) return null;
         var start = new ProcessStartInfo(command.Program) { UseShellExecute = false };
@@ -44,7 +45,9 @@ public static class ViewerLauncher
             var own = Environment.GetEnvironmentVariable(ViewerTooltips.Variable);
             start.Environment[ViewerTooltips.Variable] = string.IsNullOrEmpty(own) ? overlay : $"{overlay}:{own}";
         }
-        using var _ = Process.Start(start);
+        var process = Process.Start(start);
+        if (remember && process is not null) _ = Task.Run(() => ViewerMemory.RememberWhenClosedAsync(process, running, m));
+        else process?.Dispose();
         return Path.GetFileName(command.Program);
     }
 

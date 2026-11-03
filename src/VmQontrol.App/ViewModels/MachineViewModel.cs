@@ -1486,7 +1486,7 @@ public sealed partial class MachineViewModel : ObservableObject
         var machine = Machine with { Display = Machine.Display with { Viewer = _shell.Settings.Viewer } };
         _ = Task.Run(() =>
         {
-            var viewer = ViewerLauncher.Open(machine, running, App.Paths);
+            var viewer = ViewerLauncher.Open(machine, running, App.Paths, remember: true);
             Ui.Post(() =>
             {
                 if (viewer is null)

@@ -225,7 +225,11 @@ public static class QemuCommandBuilder
         };
         var video = new StringBuilder(device);
         if (device is "virtio-vga" or "virtio-vga-gl" or "virtio-gpu" or "virtio-gpu-gl" or "virtio-gpu-pci" or "virtio-gpu-gl-pci" or "qxl" or "qxl-vga" or "bochs-display")
-            video.Append(CultureInfo.InvariantCulture, $",xres={(m.Display.Width is not null && m.Display.Height is not null ? m.Display.Width : 1280)},yres={(m.Display.Width is not null && m.Display.Height is not null ? m.Display.Height : 800)}");
+        {
+            // The machine's own resolution, else the one its screen was last left at (ViewerMemory), else 1280×800.
+            var (xres, yres) = Runtime.ViewerMemory.StartResolution(m, ctx.MachineDirectory);
+            video.Append(CultureInfo.InvariantCulture, $",xres={xres},yres={yres}");
+        }
         // More than one monitor: virtio and QXL graphics carry several outputs; the SPICE viewer opens a window for each.
         if (m.Display.Monitors is > 1 and var heads)
         {

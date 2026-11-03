@@ -89,7 +89,9 @@ public partial class MainWindow : Window
         {
             DesktopIdentity.Apply(this);
             WindowingBackend.WindowOpened(this);
+            KeepMonitors();
         };
+        Screens.Changed += (_, _) => KeepMonitors();
         Closed += (_, _) => (DataContext as ShellViewModel)?.Stop();
         // The size (and on X11 the place) while not maximized, so a window closed maximized comes back to both.
         PropertyChanged += (_, e) =>
@@ -391,4 +393,8 @@ public partial class MainWindow : Window
             });
         }
     }
+
+    /// <summary>The monitors' sizes in pixels, for telling a full-screen viewer from a window (ViewerMemory).</summary>
+    private void KeepMonitors() =>
+        Core.Runtime.ViewerMemory.Monitors = [.. Screens.All.Select(s => (s.Bounds.Width, s.Bounds.Height))];
 }
