@@ -58,32 +58,65 @@
             </Button>
             <TextBox x:Name="Search" AutomationProperties.Name="Search machines" DockPanel.Dock="Top" Classes="search" PlaceholderText="Search machines   (Ctrl+F)"
                      Text="{Binding Search}" Margin="0,0,0,16" />
-            <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="4,0,0,6">
+            <Grid x:Name="LibraryHeading" DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="2" Margin="4,0,0,6" Background="Transparent"
+                  Classes.droptarget="{Binding LibraryDropTarget}" ToolTip.Tip="Drop a machine here to take it out of its folder">
               <TextBlock Text="LIBRARY" Classes="section" VerticalAlignment="Center" />
-              <Button Grid.Column="1" Classes="icononly" Command="{Binding RefreshCommand}" ToolTip.Tip="Look for machines again (F5)">
+              <Button x:Name="NewFolder" Grid.Column="1" Classes="icononly" Command="{Binding NewGroupCommand}" ToolTip.Tip="New folder: sort machines into groups such as Windows, Linux or Work"
+                      AutomationProperties.Name="New folder">
+                <Path Classes="icon" Data="M12,5 L12,19 M5,12 L19,12" Width="14" Height="14" Stretch="Uniform" />
+              </Button>
+              <Button Grid.Column="2" Classes="icononly" Command="{Binding RefreshCommand}" ToolTip.Tip="Look for machines again (F5)">
                 <Path Classes="icon" Data="{StaticResource IconRefresh}" Width="14" Height="14" />
               </Button>
             </Grid>
             <TextBlock x:Name="LibraryEmpty" DockPanel.Dock="Top" Text="No machines yet." Classes="muted" Margin="4,0" TextWrapping="Wrap"
                        IsVisible="{Binding LibraryEmpty}" />
             <ListBox x:Name="Library" AutomationProperties.Name="Machines" Classes="library" ItemsSource="{Binding SidebarItems}" SelectedItem="{Binding SidebarSelection}">
+              <!-- Right-click between machines: New folder. -->
+              <ListBox.ContextMenu>
+                <ContextMenu>
+                  <MenuItem x:Name="LibraryNewFolder" Header="New folder…" Command="{Binding NewGroupCommand}" />
+                  <MenuItem Header="Look for machines again" Command="{Binding RefreshCommand}" InputGesture="F5" />
+                </ContextMenu>
+              </ListBox.ContextMenu>
               <ListBox.DataTemplates>
-                <DataTemplate x:DataType="vm:FolderHeading">
-                  <TextBlock Text="{Binding Header}" Classes="section" Margin="2,10,0,0" IsHitTestVisible="False" />
+                <DataTemplate x:DataType="vm:GroupHeading">
+                  <!-- The whole heading folds and unfolds the folder; machines dragged onto it move in. -->
+                  <Button Classes="groupheading" Classes.droptarget="{Binding IsDropTarget}" Command="{Binding ToggleCommand}" ToolTip.Tip="{Binding ToggleTip}"
+                          HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Margin="0,8,0,0" AutomationProperties.Name="{Binding Name}">
+                    <Button.ContextMenu>
+                      <ContextMenu>
+                        <MenuItem Header="{Binding PowerOnText}" Command="{Binding PowerOnCommand}" ToolTip.Tip="Power on every machine in this folder that is off, without opening their screens" />
+                        <MenuItem Header="{Binding ShutDownText}" Command="{Binding ShutDownCommand}" ToolTip.Tip="Ask every running machine in this folder to shut down, as its power button would" />
+                        <Separator />
+                        <MenuItem x:Name="FolderRename" Header="Rename…" Command="{Binding RenameCommand}" />
+                        <MenuItem Header="Move up" Command="{Binding MoveUpCommand}" IsEnabled="{Binding CanMoveUp}" />
+                        <MenuItem Header="Move down" Command="{Binding MoveDownCommand}" IsEnabled="{Binding CanMoveDown}" />
+                        <MenuItem Header="New folder…" Command="{Binding NewGroupCommand}" />
+                        <Separator />
+                        <MenuItem x:Name="FolderDelete" Header="Delete folder" Command="{Binding DeleteCommand}" ToolTip.Tip="The machines in it stay in the library; nothing is deleted from disk" />
+                      </ContextMenu>
+                    </Button.ContextMenu>
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
+                      <Path Classes="icon chevron" Classes.collapsed="{Binding IsCollapsed}" Data="M7,10 L12,15 L17,10" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="1" Text="{Binding Header}" Classes="section" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Grid.Column="2" Text="{Binding CountText}" Classes="muted" FontSize="{DynamicResource QFontSmall}" VerticalAlignment="Center" ToolTip.Tip="{Binding CountTip}" />
+                    </Grid>
+                  </Button>
                 </DataTemplate>
                 <DataTemplate x:DataType="vm:MachineViewModel">
                   <Grid ColumnDefinitions="Auto,*,Auto" Background="Transparent">
                     <Grid.ContextMenu>
                       <ContextMenu>
-                        <MenuItem Header="Move to folder…" Command="{Binding MoveToFolderCommand}" />
-                        <MenuItem Header="Remove from folder" Command="{Binding RemoveFromFolderCommand}" IsVisible="{Binding HasFolder}" />
-                        <MenuItem x:Name="FolderPowerOn" Header="{Binding FolderPowerOnText}" Command="{Binding $parent[ListBox].((vm:ShellViewModel)DataContext).PowerOnFolderCommand}" CommandParameter="{Binding FolderName}" IsVisible="{Binding HasFolder}"
+                        <MenuItem x:Name="MoveToFolder" Header="Move to folder…" Command="{Binding MoveToGroupCommand}" />
+                        <MenuItem Header="Take out of the folder" Command="{Binding RemoveFromGroupCommand}" IsVisible="{Binding HasGroup}" />
+                        <MenuItem x:Name="GroupPowerOn" Header="{Binding GroupPowerOnText}" Command="{Binding $parent[ListBox].((vm:ShellViewModel)DataContext).PowerOnGroupCommand}" CommandParameter="{Binding GroupName}" IsVisible="{Binding HasGroup}"
                                   ToolTip.Tip="Power on every machine in this folder that is off, without opening their screens" />
-                        <MenuItem x:Name="FolderShutDown" Header="{Binding FolderShutDownText}" Command="{Binding $parent[ListBox].((vm:ShellViewModel)DataContext).ShutDownFolderCommand}" CommandParameter="{Binding FolderName}" IsVisible="{Binding HasFolder}"
+                        <MenuItem x:Name="GroupShutDown" Header="{Binding GroupShutDownText}" Command="{Binding $parent[ListBox].((vm:ShellViewModel)DataContext).ShutDownGroupCommand}" CommandParameter="{Binding GroupName}" IsVisible="{Binding HasGroup}"
                                   ToolTip.Tip="Ask every running machine in this folder to shut down, as its power button would" />
                         <MenuItem Header="{Binding IsFavorite, Converter={x:Static vm:Text.FavoriteToggle}}" Command="{Binding ToggleFavoriteCommand}" />
                         <Separator />
-                        <MenuItem Header="Open folder" Command="{Binding OpenFolderCommand}" />
+                        <MenuItem Header="Show in file manager" Command="{Binding OpenFolderCommand}" />
                         <MenuItem Header="Copy command line" Command="{Binding CopyCommandLineCommand}" />
                       </ContextMenu>
                     </Grid.ContextMenu>
@@ -419,16 +452,16 @@
       </Border>
     </Panel>
 
-    <!-- Move to folder: a name, or one of the folders that exist. -->
-    <Panel x:Name="FolderLayer" IsVisible="{Binding FolderPrompt, Converter={x:Static ObjectConverters.IsNotNull}}" Background="{DynamicResource QScrim}">
+    <!-- A library folder's name: new, renamed, or picked for a machine. -->
+    <Panel x:Name="GroupLayer" IsVisible="{Binding GroupPrompt, Converter={x:Static ObjectConverters.IsNotNull}}" Background="{DynamicResource QScrim}">
       <Border Classes="card" Width="440" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="22,18"
-              DataContext="{Binding FolderPrompt}" x:DataType="vm:FolderPromptViewModel" BoxShadow="0 12 40 0 #60000000">
+              DataContext="{Binding GroupPrompt}" x:DataType="vm:GroupPromptViewModel" BoxShadow="0 12 40 0 #60000000">
         <StackPanel Spacing="12">
           <TextBlock Text="{Binding Title}" Classes="h1" TextWrapping="Wrap" />
-          <TextBlock Text="Folders group machines in the library. Type a new folder's name, or pick one below." Classes="muted" TextWrapping="Wrap" />
-          <TextBox x:Name="FolderName" Text="{Binding Name}" PlaceholderText="Folder name, e.g. Work or Testing">
+          <TextBlock Text="{Binding Help}" Classes="muted" TextWrapping="Wrap" />
+          <TextBox x:Name="GroupName" Text="{Binding Name}" PlaceholderText="Folder name, e.g. Windows, Linux or Work" MaxLength="60">
             <TextBox.KeyBindings>
-              <KeyBinding Gesture="Enter" Command="{Binding MoveCommand}" />
+              <KeyBinding Gesture="Enter" Command="{Binding ConfirmCommand}" />
             </TextBox.KeyBindings>
           </TextBox>
           <ItemsControl ItemsSource="{Binding Existing}" IsVisible="{Binding HasExisting}">
@@ -437,13 +470,13 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="x:String">
-                <Button Classes="tool" Content="{Binding}" Command="{Binding $parent[ItemsControl].((vm:FolderPromptViewModel)DataContext).PickCommand}" CommandParameter="{Binding}" />
+                <Button Classes="tool" Content="{Binding}" Command="{Binding $parent[ItemsControl].((vm:GroupPromptViewModel)DataContext).PickCommand}" CommandParameter="{Binding}" />
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
           <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
             <Button Classes="secondary" Content="Cancel" Command="{Binding CancelCommand}" />
-            <Button x:Name="FolderMove" Classes="primary" Content="Move" Command="{Binding MoveCommand}" />
+            <Button x:Name="GroupConfirm" Classes="primary" Content="{Binding ConfirmText}" Command="{Binding ConfirmCommand}" />
           </StackPanel>
         </StackPanel>
       </Border>

@@ -156,6 +156,35 @@
     <Setter Property="CornerRadius" Value="{DynamicResource QRadiusSmall}" />
   </Style>
 
+  <!-- Library folder headings: the whole row folds the folder; a machine dragged over it lights it up. -->
+  <Style Selector="Button.groupheading">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Padding" Value="6,4" />
+    <Setter Property="CornerRadius" Value="{DynamicResource QRadiusSmall}" />
+  </Style>
+  <Style Selector="Button.groupheading:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource QSurfaceRaised}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.groupheading.droptarget /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource QAccentSoft}" />
+  </Style>
+  <Style Selector="Grid.droptarget">
+    <Setter Property="Background" Value="{DynamicResource QAccentSoft}" />
+  </Style>
+  <Style Selector="Button.groupheading.droptarget /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="BorderBrush" Value="{DynamicResource QAccent}" />
+  </Style>
+  <Style Selector="Path.chevron">
+    <Setter Property="RenderTransform" Value="rotate(0deg)" />
+    <Setter Property="Opacity" Value="0.75" />
+  </Style>
+  <Style Selector="Path.chevron.collapsed">
+    <Setter Property="RenderTransform" Value="rotate(-90deg)" />
+  </Style>
+
   <!-- Guest badge -->
   <Style Selector="Border.badge">
     <Setter Property="Background" Value="{DynamicResource QBadgeOther}" />

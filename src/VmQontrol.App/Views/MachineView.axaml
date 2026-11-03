@@ -201,7 +201,7 @@
               </MenuItem>
               <MenuItem x:Name="MoveTo" Header="Move to…" IsVisible="{Binding !IsQuickemu}"
                         ToolTip.Tip="Moves the machine's folder to another folder or drive (the machine must be off); a linked machine keeps its shared disk" />
-              <MenuItem Header="Open the machine's folder" Command="{Binding OpenFolderCommand}" />
+              <MenuItem Header="Show in file manager" Command="{Binding OpenFolderCommand}" ToolTip.Tip="Open the machine's files (its disks and settings) in the file manager" />
               <MenuItem Header="Copy the QEMU command line" Command="{Binding CopyCommandLineCommand}" />
               <MenuItem Header="{Binding IsFavorite, Converter={x:Static vm:Text.FavoriteToggle}}" Command="{Binding ToggleFavoriteCommand}" />
               <Separator />

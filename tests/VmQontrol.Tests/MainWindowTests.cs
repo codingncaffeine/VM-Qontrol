@@ -112,22 +112,22 @@ public sealed class MainWindowTests
                 .Items.OfType<MenuItem>().First(m => (m.Header as string) == "Move to folder…");
             Assert.True(menu.IsEffectivelyVisible, "the context menu did not open");
             Ui.Click(window, menu);
-            Ui.PumpUntil(() => shell.FolderPrompt is not null, "the folder prompt");
+            Ui.PumpUntil(() => shell.GroupPrompt is not null, "the folder prompt");
             Ui.Pump(0.2);
-            var box = Named<TextBox>(window, "FolderName");
+            var box = Named<TextBox>(window, "GroupName");
             box.Focus();
             window.KeyTextInput("Retro");
-            Ui.Click(window, Named<Button>(window, "FolderMove"));
-            Ui.PumpUntil(() => shell.FolderPrompt is null, "the prompt to close");
+            Ui.Click(window, Named<Button>(window, "GroupConfirm"));
+            Ui.PumpUntil(() => shell.GroupPrompt is null, "the prompt to close");
             Ui.Pump(0.3);
             Ui.Capture(window, "phase3", "folders");
-            var order = shell.Machines.Select(m => $"{(m.ShowFolderHeader ? "[" + m.FolderHeader + "] " : "")}{m.Name}").ToList();
+            var order = shell.SidebarItems.Select(i => i is GroupHeading h ? $"[{h.Header}]" : ((MachineViewModel)i).Name).ToList();
             window.Close();
             return order;
         });
 
-        Assert.Equal(["freebsd", "linux", "[RETRO] haiku"], seen);
-        Assert.Equal("Retro", VmQontrol.Core.AppSettings.Load(profile.Paths).Folders.Single().Value);
+        Assert.Equal(["freebsd", "linux", "[RETRO]", "haiku"], seen);
+        Assert.Equal("Retro", VmQontrol.Core.AppSettings.Load(profile.Paths).GroupOf.Single().Value);
     }
 
     /// <summary>

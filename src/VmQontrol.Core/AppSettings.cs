@@ -23,8 +23,32 @@ public sealed record AppSettings
         }
     }
 
-    /// <summary>Machine id → the sidebar folder it is filed under.</summary>
-    public Dictionary<string, string> Folders { get; set; } = [];
+    /// <summary>The library's groups (the sidebar's headings), in the order the person put them; a group may be empty.</summary>
+    public List<string> Groups { get; set; } = [];
+
+    /// <summary>Machine id → the group it is in (a name from <see cref="Groups"/>); a machine not listed is in none.</summary>
+    public Dictionary<string, string> GroupOf { get; set; } = [];
+
+    /// <summary>Groups shown folded up in the sidebar.</summary>
+    public HashSet<string> CollapsedGroups { get; set; } = [];
+
+    /// <summary>Settings saved before groups (2026-11-03) called them folders: read once into <see cref="GroupOf"/>, never written.</summary>
+    [JsonPropertyName("folders")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, string>? FoldersBefore
+    {
+        get => null;
+        set
+        {
+            if (value is null) return;
+            foreach (var (id, group) in value) GroupOf.TryAdd(id, group);
+        }
+    }
+
+    /// <summary>Every group in order: <see cref="Groups"/>, then any a machine names that the list lacks (older settings).</summary>
+    public IReadOnlyList<string> OrderedGroups() =>
+        Groups.Concat(GroupOf.Values.Where(g => !Groups.Contains(g, StringComparer.Ordinal)).Distinct(StringComparer.Ordinal).Order(StringComparer.CurrentCultureIgnoreCase))
+            .Where(g => g.Length > 0).Distinct(StringComparer.Ordinal).ToList();
 
     /// <summary>"auto", "remote-viewer" or "spicy".</summary>
     public string Viewer { get; set; } = "auto";

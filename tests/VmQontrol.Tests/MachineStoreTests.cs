@@ -72,7 +72,8 @@ public sealed class MachineStoreTests
         var settings = VmQontrol.Core.AppSettings.Load(profile.Paths);
         Assert.Equal("spicy", settings.Viewer);
         Assert.NotNull(settings.Favorites);
-        Assert.NotNull(settings.Folders);
+        Assert.NotNull(settings.GroupOf);
+        Assert.NotNull(settings.Groups);
         Assert.Equal([profile.Paths.DefaultLibrary], settings.LibraryRoots);
     }
 }

@@ -1,5 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.VisualTree;
 using VmQontrol.App.Platform;
 using VmQontrol.App.ViewModels;
 
@@ -10,15 +12,11 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        // A folder heading row takes no pointer and no focus (containers are recycled, so set both ways).
+        // A folder heading row is never selected or focused (its button folds the folder); containers are recycled, so set both ways.
         if (this.FindControl<ListBox>("Library") is { } library)
         {
-            library.ContainerPrepared += (_, e) =>
-            {
-                var heading = e.Container.DataContext is FolderHeading;
-                e.Container.IsHitTestVisible = !heading;
-                e.Container.Focusable = !heading;
-            };
+            library.ContainerPrepared += (_, e) => e.Container.Focusable = e.Container.DataContext is not GroupHeading;
+            WireDragAndDrop(library);
         }
 
         // Every Opened, not once: a window shown again gets a new Wayland toplevel that needs its app id again.
@@ -83,7 +81,7 @@ public partial class MainWindow : Window
                 usb.CloseCommand.Execute(null);
                 e.Handled = true;
             }
-            else if (e.Key == Key.Escape && DataContext is ShellViewModel { FolderPrompt: { } prompt })
+            else if (e.Key == Key.Escape && DataContext is ShellViewModel { GroupPrompt: { } prompt })
             {
                 prompt.CancelCommand.Execute(null);
                 e.Handled = true;
@@ -99,5 +97,72 @@ public partial class MainWindow : Window
                 e.Handled = true;
             }
         };
+    }
+
+    /// <summary>
+    /// A machine only this window understands (its id): offering it as text would paste an id into any other window on
+    /// the desktop that takes a drop.
+    /// </summary>
+    internal static readonly DataFormat<byte[]> MachineDrag = DataFormat.CreateBytesApplicationFormat("vmqontrol-machine-id");
+
+    private bool _dragging;
+
+    private static string? Carried(DragEventArgs e) =>
+        e.DataTransfer.TryGetValue(MachineDrag) is { Length: > 0 } bytes ? System.Text.Encoding.UTF8.GetString(bytes) : null;
+
+    /// <summary>The folder a drop at this spot goes to: a heading's, a machine's own (dropped beside it), or "" (no folder).</summary>
+    private static string? TargetGroup(object? source, Control libraryHeading) =>
+        source is Control c && (c == libraryHeading || c.FindAncestorOfType<Grid>(includeSelf: true) is { Name: "LibraryHeading" })
+            ? ""
+            : (source as Control)?.DataContext switch
+            {
+                GroupHeading heading => heading.Name,
+                MachineViewModel machine => machine.GroupName,
+                _ => null,
+            };
+
+    /// <summary>Drag a machine onto a folder's heading (or a machine in it) to move it in; onto LIBRARY to take it out.</summary>
+    private void WireDragAndDrop(ListBox library)
+    {
+        var heading = this.FindControl<Grid>("LibraryHeading")!;
+        // Begun from the press, as the platform's drag needs; Avalonia starts it only once the pointer moves, so a click
+        // still just selects (the list item has handled the press by then, so this listens to handled presses too).
+        library.AddHandler(PointerPressedEvent, async (_, e) =>
+        {
+            if (_dragging || !e.GetCurrentPoint(library).Properties.IsLeftButtonPressed) return;
+            if ((e.Source as Control)?.DataContext is not MachineViewModel machine) return;
+            _dragging = true;
+            try
+            {
+                using var transfer = new DataTransfer();
+                transfer.Add(DataTransferItem.Create(MachineDrag, System.Text.Encoding.UTF8.GetBytes(machine.Id)));
+                await DragDrop.DoDragDropAsync(e, transfer, DragDropEffects.Move);
+            }
+            finally
+            {
+                _dragging = false;
+                (DataContext as ShellViewModel)?.MarkDrop(null);
+            }
+        }, RoutingStrategies.Bubble, handledEventsToo: true);
+
+        foreach (var target in new Control[] { library, heading })
+        {
+            DragDrop.SetAllowDrop(target, true);
+            target.AddHandler(DragDrop.DragOverEvent, (_, e) =>
+            {
+                var group = Carried(e) is not null ? TargetGroup(e.Source, heading) : null;
+                e.DragEffects = group is null ? DragDropEffects.None : DragDropEffects.Move;
+                (DataContext as ShellViewModel)?.MarkDrop(group);
+                e.Handled = true;
+            });
+            target.AddHandler(DragDrop.DragLeaveEvent, (_, _) => (DataContext as ShellViewModel)?.MarkDrop(null));
+            target.AddHandler(DragDrop.DropEvent, (_, e) =>
+            {
+                e.Handled = true;
+                if (DataContext is not ShellViewModel shell) return;
+                shell.MarkDrop(null);
+                if (Carried(e) is { } id && TargetGroup(e.Source, heading) is { } group) shell.Drop(id, group);
+            });
+        }
     }
 }

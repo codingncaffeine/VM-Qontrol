@@ -176,7 +176,7 @@ public sealed class WiderFieldWindowTests
             folders[m.Id] = "Lab";
         }
 
-        settings = settings with { Folders = folders };
+        settings = settings with { GroupOf = folders };
         settings.Save(profile.Paths);
         var machines = new List<VmQontrol.Core.Runtime.RunningMachine>();
         try
@@ -201,7 +201,7 @@ public sealed class WiderFieldWindowTests
                     return item;
                 }
 
-                var powerOn = Item("FolderPowerOn");
+                var powerOn = Item("GroupPowerOn");
                 var header = powerOn.Header as string;
                 Ui.Click(window, powerOn);
                 Ui.PumpUntil(() => shell.Machines.All(m => m.IsRunning), "both machines to run", 30);

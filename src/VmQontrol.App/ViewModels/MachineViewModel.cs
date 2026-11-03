@@ -141,28 +141,21 @@ public sealed partial class MachineViewModel : ObservableObject
     [ObservableProperty]
     private bool _isSelected;
 
-    /// <summary>The sidebar folder the machine is filed under; empty = not filed.</summary>
+    /// <summary>The library folder (group) the machine is in; empty = none.</summary>
     [ObservableProperty]
-    private string _folderName = "";
+    private string _groupName = "";
 
-    /// <summary>This machine opens its folder's group in the sidebar, so it shows the folder's heading above itself.</summary>
-    [ObservableProperty]
-    private bool _showFolderHeader;
+    public bool HasGroup => GroupName.Length > 0;
 
-    public string FolderHeader => FolderName.ToUpperInvariant();
+    public string GroupPowerOnText => $"Power on everything in {GroupName}";
 
-    public bool HasFolder => FolderName.Length > 0;
+    public string GroupShutDownText => $"Shut down everything in {GroupName}";
 
-    public string FolderPowerOnText => $"Power on everything in {FolderName}";
-
-    public string FolderShutDownText => $"Shut down everything in {FolderName}";
-
-    partial void OnFolderNameChanged(string value)
+    partial void OnGroupNameChanged(string value)
     {
-        OnPropertyChanged(nameof(FolderHeader));
-        OnPropertyChanged(nameof(HasFolder));
-        OnPropertyChanged(nameof(FolderPowerOnText));
-        OnPropertyChanged(nameof(FolderShutDownText));
+        OnPropertyChanged(nameof(HasGroup));
+        OnPropertyChanged(nameof(GroupPowerOnText));
+        OnPropertyChanged(nameof(GroupShutDownText));
     }
 
     public bool HasNotes => !string.IsNullOrWhiteSpace(Machine.Notes);
@@ -1378,10 +1371,10 @@ public sealed partial class MachineViewModel : ObservableObject
     private void ToggleFavorite() => _shell.SetFavorite(this, !IsFavorite);
 
     [RelayCommand]
-    private void MoveToFolder() => _shell.AskFolder(this);
+    private void MoveToGroup() => _shell.AskGroup(this);
 
     [RelayCommand]
-    private void RemoveFromFolder() => _shell.SetFolder(this, "");
+    private void RemoveFromGroup() => _shell.SetGroup(this, "");
 
     private async Task ControlAsync(string done, Func<RunningMachine, CancellationToken, Task> action)
     {

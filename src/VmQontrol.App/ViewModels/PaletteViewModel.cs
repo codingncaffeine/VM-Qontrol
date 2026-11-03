@@ -82,7 +82,15 @@ public sealed partial class PaletteViewModel(ShellViewModel shell) : ObservableO
             new("Refresh the library", "Library", () => _ = shell.RefreshAsync()),
             new("Show the host check", "Welcome", () => shell.Selected = null),
             new("Virtual networks", "Networking", shell.OpenNetwork),
+            new("New folder", "Library: sort machines into groups", shell.NewGroup),
         };
+        foreach (var g in shell.GroupNames)
+        {
+            var folded = shell.Settings.CollapsedGroups.Contains(g);
+            items.Add(new(folded ? $"Open folder {g}" : $"Fold folder {g}", "Library", () => shell.ToggleGroup(g)));
+            items.Add(new($"Power on everything in {g}", "Library", () => shell.PowerOnGroupCommand.Execute(g)));
+        }
+
         foreach (var m in shell.Machines) items.Add(new($"Go to {m.Name}", m.LibraryLabel, () => shell.Selected = m));
         if (shell.Selected is { } s)
         {
@@ -111,7 +119,9 @@ public sealed partial class PaletteViewModel(ShellViewModel shell) : ObservableO
             Add("Make into a template", s.MakeTemplateCommand, s.CanMakeTemplate);
             Add("Turn back into a machine", s.UndoTemplateCommand, s.IsTemplate);
             Add("Delete machine", s.DeleteMachineCommand, s.IsOff);
-            Add("Open folder", s.OpenFolderCommand);
+            Add("Show in file manager", s.OpenFolderCommand);
+            Add("Move to folder…", s.MoveToGroupCommand);
+            Add("Take out of the folder", s.RemoveFromGroupCommand, s.HasGroup);
             Add("Copy command line", s.CopyCommandLineCommand);
             Add(s.IsFavorite ? "Remove from favorites" : "Add to favorites", s.ToggleFavoriteCommand);
             items.Add(new("Show summary", s.Name, () => s.Tab = 0));

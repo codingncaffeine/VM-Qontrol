@@ -85,7 +85,7 @@ public sealed partial class ShellViewModel : ObservableObject
     public string? OpenOnStart { get; set; }
 
     [ObservableProperty]
-    private FolderPromptViewModel? _folderPrompt;
+    private GroupPromptViewModel? _groupPrompt;
 
     /// <summary>The New Machine wizard while it is open.</summary>
     [ObservableProperty]
@@ -526,7 +526,11 @@ public sealed partial class ShellViewModel : ObservableObject
                 var vm = new MachineViewModel(this, entry)
                 {
                     IsFavorite = Settings.Favorites.Contains(entry.Machine!.Id),
-                    FolderName = Settings.Folders.GetValueOrDefault(entry.Machine!.Id, ""),
+                    GroupName = Settings.GroupOf.GetValueOrDefault(entry.Machine!.Id, ""),
+                };
+                vm.PropertyChanged += (_, e) =>
+                {
+                    if (e.PropertyName is nameof(MachineViewModel.IsRunning)) RefreshGroupCounts();
                 };
                 _all.Add(vm);
                 models.Add(vm);
@@ -560,6 +564,8 @@ public sealed partial class ShellViewModel : ObservableObject
         if (newValue is not null) newValue.IsSelected = true;
     }
 
+    private readonly Dictionary<string, GroupHeading> _headings = new(StringComparer.Ordinal);
+
     private void ApplyFilter()
     {
         var term = Search.Trim();
@@ -567,21 +573,47 @@ public sealed partial class ShellViewModel : ObservableObject
             .Where(m => term.Length == 0 || m.Name.Contains(term, StringComparison.OrdinalIgnoreCase) || m.LibraryLabel.Contains(term, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(m => m.IsFavorite).ThenBy(m => m.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
         var keep = Selected;
+        var groups = Settings.OrderedGroups();
         Machines.Clear();
-        foreach (var m in shown.OrderBy(m => m.FolderName.Length == 0 ? "" : "\u0001" + m.FolderName, StringComparer.CurrentCultureIgnoreCase)) Machines.Add(m);
-        // Unfiled machines first, then each folder under its heading.
-        string? previous = null;
         SidebarItems.Clear();
-        foreach (var m in Machines)
+        // Machines in no folder first, then each folder in the person's order (an empty one too, unless searching);
+        // a folded folder hides its machines, except while a search looks through them.
+        foreach (var m in shown.Where(m => m.GroupName.Length == 0 || !groups.Contains(m.GroupName)))
         {
-            m.ShowFolderHeader = m.FolderName.Length > 0 && m.FolderName != previous;
-            if (m.ShowFolderHeader) SidebarItems.Add(new FolderHeading(m.FolderName));
+            Machines.Add(m);
             SidebarItems.Add(m);
-            previous = m.FolderName;
         }
 
+        foreach (var (group, index) in groups.Select((g, i) => (g, i)))
+        {
+            var members = shown.Where(m => m.GroupName == group).ToList();
+            if (term.Length > 0 && members.Count == 0) continue;
+            if (!_headings.TryGetValue(group, out var heading)) _headings[group] = heading = new GroupHeading(this, group);
+            heading.IsCollapsed = Settings.CollapsedGroups.Contains(group);
+            heading.CanMoveUp = index > 0;
+            heading.CanMoveDown = index < groups.Count - 1;
+            SidebarItems.Add(heading);
+            foreach (var m in members)
+            {
+                Machines.Add(m);
+                if (!heading.IsCollapsed || term.Length > 0) SidebarItems.Add(m);
+            }
+        }
+
+        foreach (var gone in _headings.Keys.Except(groups).ToList()) _headings.Remove(gone);
+        RefreshGroupCounts();
         OnPropertyChanged(nameof(SidebarSelection));
         if (keep is not null && shown.Contains(keep)) Selected = keep;
+    }
+
+    /// <summary>Each folder heading's machine count and how many of them run.</summary>
+    private void RefreshGroupCounts()
+    {
+        foreach (var (group, heading) in _headings)
+        {
+            var members = _all.Where(m => m.GroupName == group).ToList();
+            heading.SetCounts(members.Count, members.Count(m => m.IsRunning));
+        }
     }
 
     /// <summary>Whether a device is offered to machines when it is plugged in. Any thread.</summary>
@@ -735,47 +767,155 @@ public sealed partial class ShellViewModel : ObservableObject
     /// <summary>Powers on every machine of a library folder that is off, one after another, without opening their screens
     /// (VirtualBox's group Start; Workstation's old Teams). Each still gets its own checks (memory, missing files).</summary>
     [RelayCommand]
-    private async Task PowerOnFolderAsync(string folder)
+    private async Task PowerOnGroupAsync(string folder)
     {
-        var machines = _all.Where(m => m.FolderName == folder && m.CanPowerOn).ToList();
+        var machines = _all.Where(m => m.GroupName == folder && m.CanPowerOn).ToList();
         Note(machines.Count == 0 ? $"Every machine in {folder} is already on." : $"Powering on {machines.Count} machine{(machines.Count == 1 ? "" : "s")} in {folder}…");
         foreach (var m in machines) await m.PowerOnInBackgroundCommand.ExecuteAsync(null);
     }
 
     /// <summary>Asks every running machine of a folder to shut down, as its power button would.</summary>
     [RelayCommand]
-    private async Task ShutDownFolderAsync(string folder)
+    private async Task ShutDownGroupAsync(string folder)
     {
-        var machines = _all.Where(m => m.FolderName == folder && m.IsRunning).ToList();
+        var machines = _all.Where(m => m.GroupName == folder && m.IsRunning).ToList();
         Note(machines.Count == 0 ? $"No machine in {folder} is running." : $"Asking {machines.Count} machine{(machines.Count == 1 ? "" : "s")} in {folder} to shut down.");
         foreach (var m in machines) await m.ShutDownCommand.ExecuteAsync(null);
     }
 
-    public IReadOnlyList<string> FolderNames => _all.Select(m => m.FolderName).Where(f => f.Length > 0).Distinct().Order(StringComparer.CurrentCultureIgnoreCase).ToList();
+    /// <summary>The library's folders in the sidebar's order.</summary>
+    public IReadOnlyList<string> GroupNames => Settings.OrderedGroups();
 
-    public void AskFolder(MachineViewModel machine)
+    private void AskName(GroupPromptViewModel prompt, Action<string> done)
     {
-        var prompt = new FolderPromptViewModel(machine, FolderNames);
         prompt.Done += name =>
         {
-            FolderPrompt = null;
-            if (name is not null) SetFolder(machine, name);
+            GroupPrompt = null;
+            if (name is not null) done(name);
         };
-        FolderPrompt = prompt;
+        GroupPrompt = prompt;
     }
 
-    public void SetFolder(MachineViewModel machine, string folder)
+    /// <summary>New folder… (the library's right-click menu, its + button, the command palette).</summary>
+    [RelayCommand]
+    public void NewGroup() => AskName(
+        new GroupPromptViewModel("New folder", "Folders sort machines in the library, such as Windows, Linux or Work. They only group the list: no files move.", "Create", "", []),
+        AddGroup);
+
+    public void AddGroup(string name)
+    {
+        name = name.Trim();
+        if (name.Length == 0) return;
+        if (GroupNames.Contains(name, StringComparer.Ordinal))
+        {
+            Note($"A folder called {name} already exists.");
+            return;
+        }
+
+        UpdateSettings(s => s with { Groups = [.. s.OrderedGroups(), name] });
+        ApplyFilter();
+        Note($"Folder {name} made. Drag machines onto it, or right-click a machine and choose Move to folder.");
+    }
+
+    public void AskGroup(MachineViewModel machine) => AskName(
+        new GroupPromptViewModel($"Move {machine.Name} to a folder", "Pick a folder, or type a new folder's name.", "Move", machine.GroupName,
+            GroupNames.Where(g => g != machine.GroupName).ToList()),
+        name => SetGroup(machine, name));
+
+    /// <summary>Puts a machine in a folder (made if new); an empty name takes it out of any folder.</summary>
+    public void SetGroup(MachineViewModel machine, string folder)
     {
         folder = folder.Trim();
-        machine.FolderName = folder;
-        var folders = new Dictionary<string, string>(Settings.Folders);
-        if (folder.Length == 0) folders.Remove(machine.Id);
-        else folders[machine.Id] = folder;
-        Settings = Settings with { Folders = folders };
-        var settings = Settings;
-        _ = Task.Run(() => settings.Save(Paths));
+        if (folder == machine.GroupName) return;
+        machine.GroupName = folder;
+        UpdateSettings(s =>
+        {
+            var of = new Dictionary<string, string>(s.GroupOf);
+            if (folder.Length == 0) of.Remove(machine.Id);
+            else of[machine.Id] = folder;
+            var groups = s.OrderedGroups().ToList();
+            if (folder.Length > 0 && !groups.Contains(folder)) groups.Add(folder);
+            return s with { GroupOf = of, Groups = groups };
+        });
         ApplyFilter();
         Note(folder.Length == 0 ? $"{machine.Name} is no longer in a folder." : $"{machine.Name} is in {folder}.");
+    }
+
+    public void RenameGroup(string group) => AskName(
+        new GroupPromptViewModel($"Rename {group}", "The machines in it stay in it.", "Rename", group, []),
+        name =>
+        {
+            if (name == group) return;
+            var merge = GroupNames.Contains(name, StringComparer.Ordinal);
+            foreach (var m in _all.Where(m => m.GroupName == group)) m.GroupName = name;
+            UpdateSettings(s => s with
+            {
+                Groups = s.OrderedGroups().Select(g => g == group ? name : g).Distinct(StringComparer.Ordinal).ToList(),
+                GroupOf = s.GroupOf.ToDictionary(p => p.Key, p => p.Value == group ? name : p.Value),
+                CollapsedGroups = [.. s.CollapsedGroups.Where(g => g != group)],
+            });
+            ApplyFilter();
+            Note(merge ? $"{group}'s machines joined {name}." : $"{group} is now called {name}.");
+        });
+
+    /// <summary>Removes a folder; its machines stay in the library, in no folder (asks first when it holds any).</summary>
+    public async Task DeleteGroupAsync(string group)
+    {
+        var count = _all.Count(m => m.GroupName == group);
+        if (count > 0)
+        {
+            var notice = new NoticeViewModel($"Delete the folder {group}?",
+                [$"Its {count} machine{(count == 1 ? "" : "s")} stay{(count == 1 ? "s" : "")} in the library, outside any folder. Nothing is deleted from disk."],
+                confirm: "Delete folder");
+            Show(notice);
+            if (!await notice.Answer.ConfigureAwait(true)) return;
+        }
+
+        foreach (var m in _all.Where(m => m.GroupName == group)) m.GroupName = "";
+        UpdateSettings(s => s with
+        {
+            Groups = s.OrderedGroups().Where(g => g != group).ToList(),
+            GroupOf = s.GroupOf.Where(p => p.Value != group).ToDictionary(p => p.Key, p => p.Value),
+            CollapsedGroups = [.. s.CollapsedGroups.Where(g => g != group)],
+        });
+        ApplyFilter();
+        Note($"Folder {group} deleted.");
+    }
+
+    public void MoveGroup(string group, int by)
+    {
+        var groups = GroupNames.ToList();
+        var at = groups.IndexOf(group);
+        var to = at + by;
+        if (at < 0 || to < 0 || to >= groups.Count) return;
+        groups.RemoveAt(at);
+        groups.Insert(to, group);
+        UpdateSettings(s => s with { Groups = groups });
+        ApplyFilter();
+    }
+
+    public void ToggleGroup(string group)
+    {
+        var collapse = !Settings.CollapsedGroups.Contains(group);
+        UpdateSettings(s => s with { CollapsedGroups = collapse ? [.. s.CollapsedGroups, group] : [.. s.CollapsedGroups.Where(g => g != group)] });
+        ApplyFilter();
+    }
+
+    /// <summary>A machine dragged over the library's own heading: dropping it takes it out of its folder.</summary>
+    [ObservableProperty]
+    private bool _libraryDropTarget;
+
+    /// <summary>Lights the heading a drop would go to (<c>""</c> = the library's own; <c>null</c> = none).</summary>
+    public void MarkDrop(string? group)
+    {
+        LibraryDropTarget = group == "";
+        foreach (var (name, heading) in _headings) heading.IsDropTarget = name == group;
+    }
+
+    /// <summary>A machine dropped on a folder heading (or on the library's own heading: no folder).</summary>
+    public void Drop(string machineId, string group)
+    {
+        if (_all.FirstOrDefault(m => m.Id == machineId) is { } machine) SetGroup(machine, group);
     }
 
     public void Show(NoticeViewModel notice)
@@ -840,8 +980,69 @@ public sealed partial class ShellViewModel : ObservableObject
     }
 }
 
-/// <summary>A folder's heading in the sidebar.</summary>
-public sealed record FolderHeading(string Name)
+/// <summary>A library folder's heading in the sidebar: folds its machines away, takes machines dropped on it, and has a menu.</summary>
+public sealed partial class GroupHeading(ShellViewModel shell, string name) : ObservableObject
 {
+    public string Name { get; } = name;
+
     public string Header => Name.ToUpperInvariant();
+
+    [ObservableProperty]
+    private bool _isCollapsed;
+
+    [ObservableProperty]
+    private bool _canMoveUp;
+
+    [ObservableProperty]
+    private bool _canMoveDown;
+
+    /// <summary>"3", or "1 on · 3" while some run.</summary>
+    [ObservableProperty]
+    private string _countText = "";
+
+    [ObservableProperty]
+    private string _countTip = "";
+
+    /// <summary>A machine is being dragged over the heading.</summary>
+    [ObservableProperty]
+    private bool _isDropTarget;
+
+    public string ToggleTip => IsCollapsed ? $"Show the machines in {Name}" : $"Fold {Name} away";
+
+    partial void OnIsCollapsedChanged(bool value) => OnPropertyChanged(nameof(ToggleTip));
+
+    public string PowerOnText => $"Power on everything in {Name}";
+
+    public string ShutDownText => $"Shut down everything in {Name}";
+
+    public void SetCounts(int total, int running)
+    {
+        CountText = running > 0 ? $"{running} on · {total}" : total.ToString(System.Globalization.CultureInfo.CurrentCulture);
+        CountTip = total == 0 ? "No machines in this folder yet: drag one onto its name"
+            : $"{total} machine{(total == 1 ? "" : "s")}{(running > 0 ? $", {running} running" : "")}";
+    }
+
+    [RelayCommand]
+    private void Toggle() => shell.ToggleGroup(Name);
+
+    [RelayCommand]
+    private void Rename() => shell.RenameGroup(Name);
+
+    [RelayCommand]
+    private Task Delete() => shell.DeleteGroupAsync(Name);
+
+    [RelayCommand]
+    private void MoveUp() => shell.MoveGroup(Name, -1);
+
+    [RelayCommand]
+    private void MoveDown() => shell.MoveGroup(Name, 1);
+
+    [RelayCommand]
+    private Task PowerOn() => shell.PowerOnGroupCommand.ExecuteAsync(Name);
+
+    [RelayCommand]
+    private Task ShutDown() => shell.ShutDownGroupCommand.ExecuteAsync(Name);
+
+    [RelayCommand]
+    private void NewGroup() => shell.NewGroup();
 }
