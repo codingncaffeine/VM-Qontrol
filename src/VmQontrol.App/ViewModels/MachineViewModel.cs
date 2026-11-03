@@ -110,12 +110,12 @@ public sealed partial class MachineViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StateText), nameof(IsRunning), nameof(IsOff), nameof(IsPaused), nameof(CanPause), nameof(IsActive), nameof(ScreenPlaceholder),
         nameof(CanOpenFirmware), nameof(CanDiscardSuspended), nameof(CanPowerOn), nameof(CanMakeTemplate), nameof(GuestToolsStatus), nameof(GuestToolsDot), nameof(GuestToolsWarn), nameof(GuestToolsOk),
-        nameof(CanConnectCable), nameof(CanDisconnectCable), nameof(CanCapture), nameof(DiscardsChanges))]
+        nameof(CanConnectCable), nameof(CanDisconnectCable), nameof(CanCapture), nameof(DiscardsChanges), nameof(CanOpenDisk), nameof(CanOpenDiskForChanges))]
     private PowerState _state = PowerState.Off;
 
     /// <summary>Off with its state saved: Power on carries on from where it was.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(StateText), nameof(ScreenPlaceholder), nameof(PowerOnText), nameof(PowerOnTip), nameof(CanOpenFirmware), nameof(CanDiscardSuspended))]
+    [NotifyPropertyChangedFor(nameof(StateText), nameof(ScreenPlaceholder), nameof(PowerOnText), nameof(PowerOnTip), nameof(CanOpenFirmware), nameof(CanDiscardSuspended), nameof(CanOpenDiskForChanges))]
     private bool _isSuspended;
 
     private bool _suspending;
@@ -1322,8 +1322,141 @@ public sealed partial class MachineViewModel : ObservableObject
     private async Task RefreshSuspendedAsync()
     {
         var dir = Entry.Directory;
-        var suspended = await Task.Run(() => MachineSuspend.IsSuspended(dir)).ConfigureAwait(false);
-        Ui.Post(() => IsSuspended = suspended);
+        var paths = _shell.Paths;
+        var id = Machine.Id;
+        var (suspended, open) = await Task.Run(() => (MachineSuspend.IsSuspended(dir), DiskOpener.OpenFor(paths, id))).ConfigureAwait(false);
+        Ui.Post(() =>
+        {
+            IsSuspended = suspended;
+            OpenDisks = open;
+        });
+    }
+
+    /// <summary>The machine's disks open on this computer now (D37); the machine cannot start until they are closed.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasOpenDisk), nameof(OpenDiskText), nameof(CanOpenDisk), nameof(CanOpenDiskForChanges))]
+    private IReadOnlyList<OpenedDisk> _openDisks = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanOpenDisk), nameof(CanOpenDiskForChanges))]
+    private bool _changingDisk;
+
+    public bool HasOpenDisk => OpenDisks.Count > 0;
+
+    public string OpenDiskText => OpenDisks switch
+    {
+        [] => "",
+        [var d] => $"{(d.Writable ? "Open for changes" : "Open read-only")} at {d.MountPoint}. {Name} cannot start until it is closed.",
+        _ => $"{OpenDisks.Count} disks are open in {Path.GetDirectoryName(OpenDisks[0].MountPoint)}. {Name} cannot start until they are closed.",
+    };
+
+    public bool CanOpenDisk => IsOff && !HasOpenDisk && !ChangingDisk;
+
+    public bool CanOpenDiskForChanges => CanOpenDisk && !IsSuspended && !IsTemplate;
+
+    [RelayCommand]
+    private Task OpenDiskAsync() => OpenDisksAsync(writable: false);
+
+    [RelayCommand]
+    private async Task OpenDiskForChangesAsync()
+    {
+        var notice = new NoticeViewModel($"Open {Name}'s disk for changes?",
+            ["Whatever you change, add or delete there goes straight into the machine's disk.", "Take a snapshot first if you may want to go back. Read-only is the safe way to copy files out."],
+            confirm: "Open for changes");
+        _shell.Show(notice);
+        if (!await notice.Answer.ConfigureAwait(false)) return;
+        await OpenDisksAsync(writable: true).ConfigureAwait(false);
+    }
+
+    private async Task OpenDisksAsync(bool writable)
+    {
+        if (!await Task.Run(() => DiskOpener.Available).ConfigureAwait(false))
+        {
+            Ui.Post(() => _shell.Show(new NoticeViewModel("libguestfs is not installed",
+                ["VM Qontrol opens a machine's disk with libguestfs, which reads it safely in a small helper machine of its own.", Doctor.InstallCommand(Doctor.DetectThisDistro(), "guestmount")], isError: true)));
+            return;
+        }
+
+        Ui.Post(() => ChangingDisk = true);
+        var m = Machine;
+        var dir = Entry.Directory;
+        var paths = _shell.Paths;
+        var opened = new List<OpenedDisk>();
+        var errors = new List<string>();
+        var allowedKernel = false;
+        for (var i = 0; i < m.Disks.Count; i++)
+        {
+            try
+            {
+                opened.Add(await Task.Run(() => DiskOpener.OpenAsync(m, dir, paths, i, writable)).ConfigureAwait(false));
+            }
+            catch (DiskOpenException ex) when (ex.KernelUnreadable && !allowedKernel)
+            {
+                var ask = new NoticeViewModel("Let libguestfs read this computer's kernel?", [ex.Message, "This makes /boot/vmlinuz readable, as libguestfs advises; nothing else changes."], confirm: "Allow");
+                Ui.Post(() => _shell.Show(ask));
+                if (!await ask.Answer.ConfigureAwait(false)) break;
+                allowedKernel = true;
+                if (await Task.Run(() => DiskOpener.AllowKernelAsync()).ConfigureAwait(false) is { } refused) { errors.Add(refused); break; }
+                i--; // the same disk again
+            }
+            catch (DiskOpenException ex)
+            {
+                errors.Add(m.Disks.Count > 1 ? $"Disk {i + 1}: {ex.Message}" : ex.Message);
+            }
+        }
+
+        await RefreshSuspendedAsync().ConfigureAwait(false);
+        Ui.Post(() =>
+        {
+            ChangingDisk = false;
+            if (errors.Count > 0) _shell.Show(new NoticeViewModel(opened.Count > 0 ? "Not every disk could be opened" : "The disk could not be opened", errors, isError: true));
+            if (opened.Count > 0) ShowOpenDisk();
+        });
+    }
+
+    [RelayCommand]
+    private void ShowOpenDisk()
+    {
+        var folder = OpenDisks.Count == 1 ? OpenDisks[0].MountPoint : OpenDisks.Count > 1 ? Path.GetDirectoryName(OpenDisks[0].MountPoint) : null;
+        if (folder is null) return;
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                using var _ = Process.Start(new ProcessStartInfo("xdg-open") { ArgumentList = { folder }, UseShellExecute = false });
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+            }
+        });
+    }
+
+    [RelayCommand]
+    private async Task CloseDiskAsync()
+    {
+        var paths = _shell.Paths;
+        var open = OpenDisks;
+        Ui.Post(() => ChangingDisk = true);
+        string? error = null;
+        foreach (var d in open)
+        {
+            try
+            {
+                await Task.Run(() => DiskOpener.CloseAsync(paths, d)).ConfigureAwait(false);
+            }
+            catch (DiskOpenException ex)
+            {
+                error = ex.Message;
+            }
+        }
+
+        await RefreshSuspendedAsync().ConfigureAwait(false);
+        Ui.Post(() =>
+        {
+            ChangingDisk = false;
+            if (error is not null) _shell.Show(new NoticeViewModel("The disk is still in use", [error, "Close the file manager window or terminal that is in its folder, then try again."], isError: true));
+            else _shell.Note($"{Name}'s disk is closed; it can start again.");
+        });
     }
 
     [RelayCommand]

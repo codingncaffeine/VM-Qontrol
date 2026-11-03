@@ -46,6 +46,10 @@ internal static class Commands
                               last session's changes into its disks, or throw them away.
           discard-suspended MACHINE
                               Throw the saved state away: the next start begins afresh, as after a power cut.
+          open-disk MACHINE [--disk N] [--write]
+                              Open the machine's disk on this computer (read-only unless --write) and print where its
+                              files are; the machine must be off (a suspended one opens read-only). Needs libguestfs.
+          close-disk MACHINE  Close its opened disks; the machine can start again.
           pause / resume / reset MACHINE
           screenshot MACHINE FILE.png
           exec MACHINE PROGRAM [ARG...]
@@ -184,6 +188,38 @@ internal static class Commands
                     else DiscardSession.Discard(entry.Directory);
                     output.WriteLine(command == "keep-changes" ? $"{sm.Name}: the changes are written into its disks." : $"{sm.Name}: the changes are thrown away.");
                     return 0;
+                }
+                case "open-disk" or "close-disk" when args.Length > 1:
+                {
+                    var entry = Resolve(args[1], paths);
+                    if (entry?.Machine is not { } dm)
+                    {
+                        error.WriteLine($"vmq: no machine called '{args[1]}'.");
+                        return 1;
+                    }
+
+                    try
+                    {
+                        if (command == "close-disk")
+                        {
+                            var open = DiskOpener.OpenFor(paths, dm.Id);
+                            foreach (var d in open) DiskOpener.CloseAsync(paths, d).GetAwaiter().GetResult();
+                            output.WriteLine(open.Count == 0 ? $"{dm.Name} has no disk open." : $"{dm.Name}: its disk is closed; the machine can start.");
+                            return 0;
+                        }
+
+                        var at = Array.IndexOf(args, "--disk");
+                        var n = at > 0 && at + 1 < args.Length && int.TryParse(args[at + 1], out var v) ? v : 1;
+                        var opened = DiskOpener.OpenAsync(dm, entry.Directory, paths, n - 1, args.Contains("--write")).GetAwaiter().GetResult();
+                        output.WriteLine($"{dm.Name}: disk {n} is open {(opened.Writable ? "for writing" : "read-only")} at {opened.MountPoint}");
+                        output.WriteLine($"'vmq close-disk {args[1]}' closes it; the machine cannot start until then.");
+                        return 0;
+                    }
+                    catch (DiskOpenException ex)
+                    {
+                        error.WriteLine(ex.Message);
+                        return 1;
+                    }
                 }
                 case "discard-suspended" when args.Length > 1:
                     return DiscardSuspended(args[1], paths, output, error);

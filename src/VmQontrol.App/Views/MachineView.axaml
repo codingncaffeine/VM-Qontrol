@@ -202,6 +202,10 @@
               <MenuItem x:Name="MoveTo" Header="Move to…" IsVisible="{Binding !IsQuickemu}"
                         ToolTip.Tip="Moves the machine's folder to another folder or drive (the machine must be off); a linked machine keeps its shared disk" />
               <MenuItem Header="Show in file manager" Command="{Binding OpenFolderCommand}" ToolTip.Tip="Open the machine's files (its disks and settings) in the file manager" />
+              <MenuItem x:Name="OpenDiskItem" Header="Open its disk here" Command="{Binding OpenDiskCommand}" IsVisible="{Binding CanOpenDisk}"
+                        ToolTip.Tip="Look inside the machine's disk in the file manager, read-only, to copy files out (the machine must be off)" />
+              <MenuItem Header="Open its disk here for changes…" Command="{Binding OpenDiskForChangesCommand}" IsVisible="{Binding CanOpenDiskForChanges}"
+                        ToolTip.Tip="Open the machine's disk so files can be added, changed or deleted on it (the machine must be off)" />
               <MenuItem Header="Copy the QEMU command line" Command="{Binding CopyCommandLineCommand}" />
               <MenuItem Header="{Binding IsFavorite, Converter={x:Static vm:Text.FavoriteToggle}}" Command="{Binding ToggleFavoriteCommand}" />
               <Separator />
@@ -211,6 +215,21 @@
         </Button>
       </StackPanel>
       </Grid>
+
+      <!-- A disk open on this computer (D37): where, and closing it so the machine can start. -->
+      <Border x:Name="OpenDiskCard" Classes="card" IsVisible="{Binding HasOpenDisk}">
+        <Grid ColumnDefinitions="*,Auto">
+          <StackPanel Spacing="6">
+            <TextBlock Text="DISK OPEN ON THIS COMPUTER" Classes="section" />
+            <SelectableTextBlock Text="{Binding OpenDiskText}" TextWrapping="Wrap" />
+          </StackPanel>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="12,0,0,0">
+            <Button Classes="tool" Content="Show" Command="{Binding ShowOpenDiskCommand}" ToolTip.Tip="Open the disk's files in the file manager" />
+            <Button x:Name="CloseDisk" Classes="primary" Content="Close" Command="{Binding CloseDiskCommand}" IsEnabled="{Binding !ChangingDisk}"
+                    ToolTip.Tip="Write out any changes and close the disk, so the machine can start" />
+          </StackPanel>
+        </Grid>
+      </Border>
 
       <!-- The machine's notes (written in Settings). -->
       <Border Classes="card" IsVisible="{Binding HasNotes}">

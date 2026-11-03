@@ -134,6 +134,9 @@ public sealed partial class PaletteViewModel(ShellViewModel shell) : ObservableO
             Add("Turn back into a machine", s.UndoTemplateCommand, s.IsTemplate);
             Add("Delete machine", s.DeleteMachineCommand, s.IsOff, "Delete the machine (asks first)");
             Add("Show in file manager", s.OpenFolderCommand);
+            Add("Open its disk here", s.OpenDiskCommand, s.CanOpenDisk, "Open its disk here (read-only, in the file manager)");
+            Add("Open its disk here for changes", s.OpenDiskForChangesCommand, s.CanOpenDiskForChanges, "Open its disk here for changes (asks first)");
+            Add("Close its disk", s.CloseDiskCommand, s.HasOpenDisk);
             Add("Move to folder…", s.MoveToGroupCommand);
             Add("Take out of the folder", s.RemoveFromGroupCommand, s.HasGroup);
             Add("Copy command line", s.CopyCommandLineCommand);

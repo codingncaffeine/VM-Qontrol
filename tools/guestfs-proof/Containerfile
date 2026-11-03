@@ -1,0 +1,2 @@
+FROM docker.io/library/archlinux:latest
+RUN pacman -Sy --noconfirm libguestfs linux qemu-img fuse3 >/dev/null 2>&1; pacman -Scc --noconfirm >/dev/null; guestmount --version

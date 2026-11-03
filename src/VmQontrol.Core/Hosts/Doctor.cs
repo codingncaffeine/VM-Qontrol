@@ -46,6 +46,7 @@ public static class Doctor
         ["virtiofsd"] = new() { [DistroFamily.Arch] = "virtiofsd", [DistroFamily.Debian] = "virtiofsd", [DistroFamily.Fedora] = "virtiofsd", [DistroFamily.Alpine] = "virtiofsd", [DistroFamily.OpenSuse] = "virtiofsd" },
         ["passt"] = new() { [DistroFamily.Arch] = "passt", [DistroFamily.Debian] = "passt", [DistroFamily.Fedora] = "passt", [DistroFamily.Alpine] = "passt", [DistroFamily.OpenSuse] = "passt" },
         ["windows-download"] = new() { [DistroFamily.Arch] = "wimlib libisoburn libarchive", [DistroFamily.Debian] = "wimtools xorriso libarchive-tools", [DistroFamily.Fedora] = "wimlib-utils xorriso bsdtar", [DistroFamily.Alpine] = "wimlib xorriso libarchive-tools", [DistroFamily.OpenSuse] = "wimlib xorriso bsdtar" },
+        ["guestmount"] = new() { [DistroFamily.Arch] = "libguestfs", [DistroFamily.Debian] = "guestmount", [DistroFamily.Fedora] = "libguestfs", [DistroFamily.Alpine] = "guestfs-tools", [DistroFamily.OpenSuse] = "libguestfs" },
         ["quickemu"] = new() { [DistroFamily.Arch] = "quickemu", [DistroFamily.Debian] = "quickemu", [DistroFamily.Fedora] = "quickemu" },
     };
 
@@ -144,6 +145,9 @@ public static class Doctor
         checks.Add(onPath("virtiofsd") || exists("/usr/lib/virtiofsd") || exists("/usr/libexec/virtiofsd")
             ? new("Shared folders (virtiofsd)", CheckStatus.Ok, "Folders can be shared with machines at full speed.")
             : new("Shared folders (virtiofsd)", CheckStatus.Optional, "Shared folders fall back to a slower method without it.", InstallCommand(distro, "virtiofsd")));
+        checks.Add(onPath("guestmount")
+            ? new("Open a machine's disk (libguestfs)", CheckStatus.Ok, "A machine's disk can be opened in the file manager while the machine is off.")
+            : new("Open a machine's disk (libguestfs)", CheckStatus.Optional, "Opening a machine's disk in the file manager needs libguestfs' guestmount.", InstallCommand(distro, "guestmount")));
         checks.Add(onPath("passt")
             ? new("Fast networking (passt)", CheckStatus.Ok, "Machines get faster networking with IPv6.")
             : new("Fast networking (passt)", CheckStatus.Optional, "Networking uses QEMU's built-in method without it.", InstallCommand(distro, "passt")));

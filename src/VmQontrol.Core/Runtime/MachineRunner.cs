@@ -77,6 +77,8 @@ public static class MachineRunner
 
     private static async Task<RunningMachine> StartLockedAsync(MachineConfig m, string machineDirectory, QontrolPaths paths, HostCapabilities host, StartOptions options, CancellationToken ct)
     {
+        if (DiskOpener.OpenFor(paths, m.Id) is [var open, ..])
+            throw new StartRefusedException([$"{m.Name}'s disk is open on this computer ({open.MountPoint}). Close it first: the machine and this computer must not use the disk at once."]);
         if (m.IsTemplate)
             throw new StartRefusedException([$"{m.Name} is a template. A template is never started, so every machine made from it begins the same way: make a machine from it, or turn it back into a machine."]);
         if (Find(m, paths) is { } already) throw new StartRefusedException([$"{m.Name} is already running."]);
