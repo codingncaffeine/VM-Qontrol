@@ -6,30 +6,54 @@ A modern, intuitive manager for QEMU/KVM virtual machines on Linux. Create a mac
 an operating system from a catalog or use your own installer, and change every setting in a dialog that explains
 what it does and what the recommended value is. No daemon, no root, and one portable folder per machine.
 
-> **Status: early development.** Nothing is released yet. The first release will run machines in an external viewer
-> window; a console inside the app comes later.
+> **v0.0.5 is the first release.** Machines show in a viewer window (remote-viewer or spicy); a screen inside the app
+> comes later. Guides live in the [wiki](https://github.com/codingncaffeine/VM-Qontrol/wiki).
 
-## Planned for the first release
+## Install
 
-- A library of machines with live thumbnails, performance graphs and a serial console.
-- A New Virtual Machine wizard: your own ISO, or a download: Windows 10 and 11 straight from Microsoft's own catalog
-  (the one its Media Creation Tool uses, checked against Microsoft's checksums and made into an installer disc), other
-  systems from the quickget catalog. The operating system is detected from the media, with unattended installation
-  for Windows and the major Linux distributions. "Lean Windows" leaves out the bundled promotions, games and ads while
-  installing Microsoft's own, untouched Windows.
-- A settings dialog covering the whole machine: memory, processors, disks, CD/DVD, network, USB, sound, display,
-  TPM, firmware and boot options. Each setting shows when it takes effect; memory and processors can be added while
-  the machine runs. Disks on VirtIO, VirtIO SCSI, NVMe or SATA, grown or compacted; nested virtualization; a VirtIO
-  socket for SSH without a network.
-- Snapshots taken while a machine runs, full and linked clones, templates, suspend and resume.
-- USB passthrough, host drives (a whole disk, a partition or a CD/DVD drive, read-only unless you allow writing),
-  host serial ports, shared folders, clipboard sharing, NAT with port forwarding, bridged networking and private
-  networks between machines with their own addresses, in a virtual network editor.
-- PCI passthrough with CPU pinning and hugepages for gaming and GPU workloads.
-- Import from quickemu, VMware, VirtualBox, OVA and libvirt.
-- A host check that names anything missing and the command that installs it on your distribution.
+| Where | How |
+|-------|-----|
+| Arch (AUR) | `yay -S vm-qontrol-bin` (or any AUR helper) |
+| Debian / Ubuntu | download `vm-qontrol_<version>_amd64.deb` from [Releases](https://github.com/codingncaffeine/VM-Qontrol/releases), then `sudo apt install ./vm-qontrol_*_amd64.deb` |
+| Any glibc distribution | `VMQontrol-<version>-linux-x64.tar.gz`: extract, run `./vmqontrol` |
+| Alpine / musl | `VMQontrol-<version>-linux-musl-x64.tar.gz`: extract, run `./vmqontrol` |
 
-New here? [Getting started](docs/getting-started.md) and [Troubleshooting](docs/troubleshooting.md).
+.NET comes inside every package; QEMU and its helpers come from your distribution (table below). Run `vmq doctor`, or
+open the app's welcome page, to see what is missing and the command that installs it.
+
+## What it does
+
+- **A library of machines** with live thumbnails, performance graphs and a serial console. Sort machines into
+  **folders** (right-click the list → New folder, drag machines onto a folder, fold folders away), mark favorites,
+  search, and power a whole folder on or off.
+- **A New machine wizard**: your own ISO, or a download. Windows 10 and 11 come straight from Microsoft's own catalog
+  (the one its Media Creation Tool uses, checked against Microsoft's checksums and made into an installer disc);
+  other systems come from the quickget catalog. The system is detected from the media, and **Easy Install** sets up
+  Windows and the major Linux distributions unattended. "Lean Windows" leaves out the bundled promotions, games and
+  ads while installing Microsoft's own, untouched Windows.
+- **Settings that explain themselves**: memory, processors, disks, CD/DVD, network, USB, sound, display, TPM,
+  firmware and boot, each saying what it does, the recommended value, and when a change takes effect. Memory and
+  processors can be added while a machine runs. Disks on VirtIO, VirtIO SCSI, NVMe or SATA, grown or compacted;
+  speed limits; nested virtualization; a VirtIO socket for SSH without a network. Every saved change is kept in a
+  history you can go back to.
+- **Guest tools, guided**: the page says when a machine has none (copy and paste, screen resizing and resolutions need
+  them) and puts the driver disc in for you.
+- **Snapshots** taken while a machine runs, full and linked clones, templates, suspend and resume, and machines that
+  throw their changes away at power off.
+- **Devices**: USB passthrough from a toolbar menu (no password), host drives (a disk, a partition or a CD/DVD drive,
+  read-only unless you allow writing), host serial ports, shared folders, PCI passthrough with CPU pinning and huge
+  pages for gaming and GPU work.
+- **Networking**: NAT with port forwarding and one-click SSH, bridged networking, private networks between machines
+  with their own addresses (a virtual network editor), a network cable switch and traffic capture.
+- **Import** from quickemu, VMware, VirtualBox, OVA and libvirt; **export** as a portable folder, one .tar file, or a
+  quickemu .conf.
+- **Keyboard first**: Ctrl+K finds every action by name; Ctrl+? lists the shortcuts (Ctrl+N new machine, Ctrl+B power
+  on, Ctrl+E shut down, Ctrl+D settings, Ctrl+M snapshot…).
+- **`vmq`**, a command-line tool on the same engine: create, clone, start, shut down, suspend, import, run programs in a guest, copy files.
+- **A host check** that names anything missing and the command that installs it on your distribution.
+
+New here? [Getting started](docs/getting-started.md), [Troubleshooting](docs/troubleshooting.md), and the
+[wiki](https://github.com/codingncaffeine/VM-Qontrol/wiki).
 
 ## Requirements (Linux)
 
