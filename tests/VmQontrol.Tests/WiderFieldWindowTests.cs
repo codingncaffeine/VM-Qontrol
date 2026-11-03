@@ -156,4 +156,72 @@ public sealed class WiderFieldWindowTests
         Assert.Null(saved.Disks[0].LimitIops);
         Assert.False(saved.Nics[0].ConnectedAtPowerOn);
     }
+
+    [Trait("Tier", "Window")]
+    [Fact]
+    public async Task A_folder_powers_on_and_shuts_down_as_one_from_its_heading()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var profile = new TestProfile("folder-power");
+        var settings = AppSettings.Load(profile.Paths);
+        settings.KeepFreeGB = 0; // the memory question would depend on this computer's free memory
+        var folders = new Dictionary<string, string>();
+        foreach (var name in (string[])["One", "Two"])
+        {
+            var dir = Path.Combine(profile.Paths.DefaultLibrary, name);
+            Directory.CreateDirectory(dir);
+            var m = new MachineConfig { Name = name, MemoryMiB = 256, Cpu = new CpuConfig { Cores = 1 }, Firmware = new FirmwareConfig { Kind = FirmwareKind.Bios }, Disks = [new DiskConfig { File = "disk0.qcow2", SizeGiB = 1 }] };
+            await QemuImg.CreateAsync(Path.Combine(dir, "disk0.qcow2"), "qcow2", 1, ct: ct);
+            MachineStore.Save(m, Path.Combine(dir, "vm.json"));
+            folders[m.Id] = "Lab";
+        }
+
+        settings = settings with { Folders = folders };
+        settings.Save(profile.Paths);
+        var machines = new List<VmQontrol.Core.Runtime.RunningMachine>();
+        try
+        {
+            var seen = await Ui.Run(() =>
+            {
+                var shell = new ShellViewModel(profile.Paths, AppSettings.Load(profile.Paths)) { WatchUsb = false };
+                var window = new MainWindow { DataContext = shell, Width = 1320, Height = 860 };
+                Avalonia.Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
+                window.Show();
+                _ = shell.StartAsync();
+                Ui.PumpUntil(() => shell.Machines.Count == 2, "the library");
+                Ui.Pump(0.3);
+                MenuItem Item(string name)
+                {
+                    var row = window.GetVisualDescendants().OfType<ListBox>().First(l => l.Name == "Library").GetVisualDescendants().OfType<ListBoxItem>()
+                        .First(i => (i.DataContext as MachineViewModel)?.Name == "One");
+                    Ui.Click(window, row, Avalonia.Input.MouseButton.Right);
+                    Ui.Pump(0.3);
+                    var item = row.GetVisualDescendants().OfType<Grid>().Select(g => g.ContextMenu).First(c => c is not null)!.Items.OfType<MenuItem>().First(m => m.Name == name);
+                    Assert.True(item.IsEffectivelyVisible, "the machine's menu did not open");
+                    return item;
+                }
+
+                var powerOn = Item("FolderPowerOn");
+                var header = powerOn.Header as string;
+                Ui.Click(window, powerOn);
+                Ui.PumpUntil(() => shell.Machines.All(m => m.IsRunning), "both machines to run", 30);
+                var running = shell.Machines.Select(m => m.Running!).ToList();
+                Ui.Capture(window, "phase17", "folder-power-on");
+                window.Close();
+                return (running, header);
+            });
+            machines.AddRange(seen.running);
+            Assert.Equal("Power on everything in Lab", seen.header);
+            Assert.Equal(2, seen.running.Count);
+            foreach (var r in seen.running) Assert.Equal("running", await MachineRunner.StatusAsync(r, ct));
+        }
+        finally
+        {
+            foreach (var r in machines)
+            {
+                await MachineRunner.PowerOffAsync(r, CancellationToken.None);
+                await MachineRunner.WaitForExitAsync(r, TimeSpan.FromSeconds(10), CancellationToken.None);
+            }
+        }
+    }
 }

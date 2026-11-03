@@ -152,10 +152,16 @@ public sealed partial class MachineViewModel : ObservableObject
 
     public bool HasFolder => FolderName.Length > 0;
 
+    public string FolderPowerOnText => $"Power on everything in {FolderName}";
+
+    public string FolderShutDownText => $"Shut down everything in {FolderName}";
+
     partial void OnFolderNameChanged(string value)
     {
         OnPropertyChanged(nameof(FolderHeader));
         OnPropertyChanged(nameof(HasFolder));
+        OnPropertyChanged(nameof(FolderPowerOnText));
+        OnPropertyChanged(nameof(FolderShutDownText));
     }
 
     public bool HasNotes => !string.IsNullOrWhiteSpace(Machine.Notes);

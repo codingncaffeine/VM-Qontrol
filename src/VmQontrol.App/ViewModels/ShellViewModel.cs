@@ -713,6 +713,25 @@ public sealed partial class ShellViewModel : ObservableObject
     /// <summary>The library's templates, by name (the wizard offers them as a source).</summary>
     public IReadOnlyList<MachineViewModel> Templates => _all.Where(m => m.IsTemplate).OrderBy(m => m.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
 
+    /// <summary>Powers on every machine of a library folder that is off, one after another, without opening their screens
+    /// (VirtualBox's group Start; Workstation's old Teams). Each still gets its own checks (memory, missing files).</summary>
+    [RelayCommand]
+    private async Task PowerOnFolderAsync(string folder)
+    {
+        var machines = _all.Where(m => m.FolderName == folder && m.CanPowerOn).ToList();
+        Note(machines.Count == 0 ? $"Every machine in {folder} is already on." : $"Powering on {machines.Count} machine{(machines.Count == 1 ? "" : "s")} in {folder}…");
+        foreach (var m in machines) await m.PowerOnInBackgroundCommand.ExecuteAsync(null);
+    }
+
+    /// <summary>Asks every running machine of a folder to shut down, as its power button would.</summary>
+    [RelayCommand]
+    private async Task ShutDownFolderAsync(string folder)
+    {
+        var machines = _all.Where(m => m.FolderName == folder && m.IsRunning).ToList();
+        Note(machines.Count == 0 ? $"No machine in {folder} is running." : $"Asking {machines.Count} machine{(machines.Count == 1 ? "" : "s")} in {folder} to shut down.");
+        foreach (var m in machines) await m.ShutDownCommand.ExecuteAsync(null);
+    }
+
     public IReadOnlyList<string> FolderNames => _all.Select(m => m.FolderName).Where(f => f.Length > 0).Distinct().Order(StringComparer.CurrentCultureIgnoreCase).ToList();
 
     public void AskFolder(MachineViewModel machine)

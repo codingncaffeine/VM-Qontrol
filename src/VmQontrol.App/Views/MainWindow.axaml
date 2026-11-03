@@ -68,6 +68,10 @@
                       <ContextMenu>
                         <MenuItem Header="Move to folder…" Command="{Binding MoveToFolderCommand}" />
                         <MenuItem Header="Remove from folder" Command="{Binding RemoveFromFolderCommand}" IsVisible="{Binding HasFolder}" />
+                        <MenuItem x:Name="FolderPowerOn" Header="{Binding FolderPowerOnText}" Command="{Binding $parent[ListBox].((vm:ShellViewModel)DataContext).PowerOnFolderCommand}" CommandParameter="{Binding FolderName}" IsVisible="{Binding HasFolder}"
+                                  ToolTip.Tip="Power on every machine in this folder that is off, without opening their screens" />
+                        <MenuItem x:Name="FolderShutDown" Header="{Binding FolderShutDownText}" Command="{Binding $parent[ListBox].((vm:ShellViewModel)DataContext).ShutDownFolderCommand}" CommandParameter="{Binding FolderName}" IsVisible="{Binding HasFolder}"
+                                  ToolTip.Tip="Ask every running machine in this folder to shut down, as its power button would" />
                         <MenuItem Header="{Binding IsFavourite, Converter={x:Static vm:Text.FavouriteToggle}}" Command="{Binding ToggleFavouriteCommand}" />
                         <Separator />
                         <MenuItem Header="Open folder" Command="{Binding OpenFolderCommand}" />
