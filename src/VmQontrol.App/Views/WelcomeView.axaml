@@ -24,12 +24,17 @@
               <Run Text="Machines are kept in " /><Run Text="{Binding LibraryText}" FontWeight="SemiBold" /><Run Text=". Machines made with quickemu there are listed too, and stay usable with quickemu." />
             </TextBlock>
           </StackPanel>
-          <Button Grid.Column="1" Classes="tool" VerticalAlignment="Top" Command="{Binding RefreshCommand}" ToolTip.Tip="Look for machines again">
-            <StackPanel Orientation="Horizontal" Spacing="8">
-              <Path Classes="icon" Data="{StaticResource IconRefresh}" />
-              <TextBlock Text="Refresh" />
-            </StackPanel>
-          </Button>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Top">
+            <Button x:Name="AddLibraryFolder" Classes="tool" ToolTip.Tip="List the machines kept in another folder (a drive, a backup, a folder you chose when creating one)">
+              <TextBlock Text="Add machines from a folder…" />
+            </Button>
+            <Button Classes="tool" Command="{Binding RefreshCommand}" ToolTip.Tip="Look for machines again">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Path Classes="icon" Data="{StaticResource IconRefresh}" />
+                <TextBlock Text="Refresh" />
+              </StackPanel>
+            </Button>
+          </StackPanel>
         </Grid>
       </Border>
 

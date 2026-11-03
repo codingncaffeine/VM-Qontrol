@@ -88,6 +88,44 @@ public sealed partial class ShellViewModel : ObservableObject
 
     public IReadOnlyList<string> LibraryRoots => Settings.LibraryRoots;
 
+    /// <summary>
+    /// "Add machines from a folder…": the folder joins the library and its machines are listed. Picking a machine's own
+    /// folder (it holds vm.json or a quickemu .conf beside it) adds the folder it sits in.
+    /// </summary>
+    public async Task AddLibraryFolderAsync(string folder)
+    {
+        folder = Path.GetFullPath(folder).TrimEnd('/');
+        var root = await Task.Run(() => File.Exists(Path.Combine(folder, VmQontrol.Core.Machines.MachineStore.FileName)) || File.Exists(folder + ".conf")
+            ? Path.GetDirectoryName(folder) ?? folder
+            : folder).ConfigureAwait(false);
+        var known = IsLibraryRoot(root);
+        if (!known) await AddRootAsync(root, "added from the welcome page").ConfigureAwait(false);
+        await RefreshAsync().ConfigureAwait(false);
+        Ui.Post(() =>
+        {
+            var found = _all.Count(m => string.Equals(Path.GetDirectoryName(m.Folder), root, StringComparison.Ordinal));
+            var name = Path.GetFileName(root) is { Length: > 0 } n ? n : root;
+            Note(known
+                ? $"\u201c{name}\u201d is already in your library."
+                : $"\u201c{name}\u201d added to your library: {found} machine{(found == 1 ? "" : "s")} found there.");
+        });
+    }
+
+    private async Task AddRootAsync(string root, string why)
+    {
+        var settings = await Ui.InvokeAsync(() =>
+        {
+            Settings = Settings with { LibraryRoots = [.. Settings.LibraryRoots, root] };
+            OnPropertyChanged(nameof(LibraryText));
+            return Settings;
+        }).ConfigureAwait(false);
+        await Task.Run(() => settings.Save(Paths)).ConfigureAwait(false);
+        Log.Info($"Added {root} to the library ({why}).");
+    }
+
+    private bool IsLibraryRoot(string folder) =>
+        Settings.LibraryRoots.Any(r => string.Equals(Path.GetFullPath(r).TrimEnd('/'), Path.GetFullPath(folder).TrimEnd('/'), StringComparison.Ordinal));
+
     /// <summary>After a clone or a delete: the library is read again and, for a clone, the new machine selected.</summary>
     public async Task AfterLifecycleAsync(string? selectDirectory)
     {
@@ -476,6 +514,11 @@ public sealed partial class ShellViewModel : ObservableObject
     /// <summary>After the wizard: the new machine appears selected in the library and, if asked, powers on.</summary>
     public async Task FinishNewMachineAsync(string directory, bool powerOn)
     {
+        // A machine made in a folder the library does not look in yet: that folder joins the library, or the machine
+        // would exist on disk and nowhere in the app.
+        if (Path.GetDirectoryName(Path.GetFullPath(directory)) is { } parent && !IsLibraryRoot(parent))
+            await AddRootAsync(parent, "a new machine was made there").ConfigureAwait(false);
+
         await RefreshAsync().ConfigureAwait(false);
         Ui.Post(() =>
         {

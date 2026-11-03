@@ -78,4 +78,74 @@ public sealed class NewMachineButtonTests
             return true;
         });
     }
+
+    /// <summary>The wizard's "Location" changed to a folder the library does not look in: the machine still appears,
+    /// selected, and the folder joins the library for good (found on the user's machine: made on disk, missing in the app).</summary>
+    [Trait("Tier", "Smoke")]
+    [Fact]
+    public async Task A_machine_made_in_another_folder_appears_and_the_folder_joins_the_library()
+    {
+        using var profile = new TestProfile("otherfolder");
+        var elsewhere = Path.Combine(profile.Root, "Virtual Machines", "vm qontrol");
+        Directory.CreateDirectory(elsewhere);
+        await Ui.Run(() =>
+        {
+            var shell = new ShellViewModel(profile.Paths, AppSettings.Load(profile.Paths));
+            var window = new MainWindow { DataContext = shell, Width = 1320, Height = 900 };
+            window.Show();
+            _ = shell.StartAsync();
+            Ui.PumpUntil(() => shell.Welcome.Checked, "the host check");
+            Ui.Click(window, Named<Button>(window, "NewMachine"));
+            Ui.PumpUntil(() => shell.Wizard is not null, "the wizard");
+            var wizard = shell.Wizard!;
+            wizard.ChooseSourceCommand.Execute(SourceKind.Later);
+            wizard.LibraryRoot = elsewhere; // what the folder picker sets
+            wizard.Name = "Elsewhere";
+            wizard.PowerOnAfter = false;
+            for (var guard = 0; shell.Wizard is not null && guard < 10; guard++)
+            {
+                Ui.Click(window, Named<Button>(window, "Next"));
+                Ui.Pump(0.3);
+            }
+
+            Ui.PumpUntil(() => shell.Selected?.Name == "Elsewhere", "the new machine selected", 15);
+            Assert.Contains(shell.Machines, m => m.Name == "Elsewhere");
+            Assert.Contains(elsewhere, AppSettings.Load(profile.Paths).LibraryRoots); // saved, so it is there next time
+            window.Close();
+            return true;
+        });
+    }
+
+    /// <summary>"Add machines from a folder…" on the welcome page: a machine's own folder picked adds the folder it is in.</summary>
+    [Trait("Tier", "Window")]
+    [Fact]
+    public async Task Adding_a_folder_lists_its_machines_and_says_so()
+    {
+        using var profile = new TestProfile("addfolder");
+        var elsewhere = Path.Combine(profile.Root, "Virtual Machines", "vm qontrol");
+        VmQontrol.Core.Machines.MachineFactory.Create(new VmQontrol.Core.Machines.NewMachineRequest
+        {
+            Name = "Found",
+            LibraryRoot = elsewhere,
+            Guest = new VmQontrol.Core.Machines.GuestConfig { Os = "linux" },
+        });
+        await Ui.Run(() =>
+        {
+            var shell = new ShellViewModel(profile.Paths, AppSettings.Load(profile.Paths));
+            var window = new MainWindow { DataContext = shell, Width = 1320, Height = 900 };
+            window.Show();
+            _ = shell.StartAsync();
+            Ui.PumpUntil(() => shell.Welcome.Checked, "the host check");
+            Assert.True(Named<Button>(window, "AddLibraryFolder").IsEffectivelyVisible);
+            Assert.DoesNotContain(shell.Machines, m => m.Name == "Found");
+            _ = shell.AddLibraryFolderAsync(Path.Combine(elsewhere, "Found")); // what the folder picker gives
+            Ui.PumpUntil(() => shell.Machines.Any(m => m.Name == "Found"), "the machine listed", 15);
+            Ui.PumpUntil(() => shell.Status.Contains("1 machine found", StringComparison.Ordinal), "the note", 5);
+            Assert.Contains(elsewhere, AppSettings.Load(profile.Paths).LibraryRoots);
+            Assert.Contains(elsewhere, shell.LibraryText);
+            Ui.Capture(window, "addfolder", "welcome");
+            window.Close();
+            return true;
+        });
+    }
 }
