@@ -122,6 +122,10 @@ public sealed class EasyInstallLaterTests
             Ui.PumpUntil(() => wizard.Step == 5, "the summary");
             Ui.Pump(0.3);
             var nextText = Next().Content as string;
+            // A test never powers a machine on: untick it as a person would.
+            var powerOn = view.GetLogicalDescendants().OfType<CheckBox>().First(c => c.Name == "PowerOnAfter");
+            if (powerOn.IsChecked == true) Ui.Click(window, powerOn);
+            Ui.PumpUntil(() => !wizard.PowerOnAfter, "power on unticked");
             Ui.Capture(window, "s7", "easy-later-summary");
             Ui.Click(window, Next());
             Ui.PumpUntil(() => shell.Wizard is null && shell.Selected is { Install.Stage: InstallStage.NotStarted }, "the machine to install itself");
@@ -141,5 +145,10 @@ public sealed class EasyInstallLaterTests
         Assert.NotNull(saved.EasyInstall);
         Assert.Contains(saved.Media, x => x.Role == MediaRole.Unattended);
         Assert.Equal(3072, saved.MemoryMiB);
+        // The control for "a test never powers a machine on": no process carries this profile's folder.
+        var started = Directory.EnumerateDirectories("/proc").Where(d => int.TryParse(Path.GetFileName(d), out _))
+            .Select(d => { try { return File.ReadAllText(Path.Combine(d, "cmdline")); } catch (IOException) { return ""; } catch (UnauthorizedAccessException) { return ""; } })
+            .Count(c => c.Contains(profile.Root, StringComparison.Ordinal) && c.StartsWith("qemu", StringComparison.Ordinal));
+        Assert.Equal(0, started);
     }
 }

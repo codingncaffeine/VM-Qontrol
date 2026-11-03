@@ -78,8 +78,6 @@ public sealed class GuestToolsTests
             return shell.Machines[0];
         });
         await machine.InsertDriversDiscAsync(iso);
-        var known = await Ui.Run(() => { Ui.PumpUntil(() => machine.KnownDriversDisc is not null, "the disc on the machine"); return machine.KnownDriversDisc; });
-        Assert.Equal(iso, known);
         var saved = MachineStore.Load(Path.Combine(dir, "vm.json"));
         Assert.Contains(saved.Media, x => x.Role == MediaRole.Drivers && x.File == iso && x.Connect == Connect.Always);
         for (var i = 0; i < 50 && AppSettings.Load(profile.Paths).DriversIso is null; i++) await Task.Delay(100, TestContext.Current.CancellationToken);

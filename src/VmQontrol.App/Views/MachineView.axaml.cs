@@ -17,13 +17,6 @@ public partial class MachineView : UserControl
             _console = (DataContext as MachineViewModel)?.Console;
             if (_console is not null) _console.OutputAdded += OnOutput;
         };
-        if (this.FindControl<Button>("InsertDriversDisc") is { } insert)
-            insert.Click += async (_, _) =>
-            {
-                if (DataContext is not MachineViewModel m) return;
-                var path = m.KnownDriversDisc ?? await PickDriversDiscAsync();
-                if (path is not null) _ = Task.Run(() => m.InsertDriversDiscAsync(path));
-            };
         if (this.FindControl<Button>("ChooseDriversDisc") is { } choose)
             choose.Click += async (_, _) =>
             {

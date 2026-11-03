@@ -285,7 +285,15 @@
                       </ItemsControl.ItemTemplate>
                     </ItemsControl>
                     <Border Classes="code" IsVisible="{Binding GuestToolsAdvice.Command, Converter={x:Static ObjectConverters.IsNotNull}}">
-                      <SelectableTextBlock x:Name="GuestToolsCommand" Text="{Binding GuestToolsAdvice.Command}" FontFamily="monospace" TextWrapping="Wrap" />
+                      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                        <SelectableTextBlock x:Name="GuestToolsCommand" Text="{Binding GuestToolsAdvice.Command}" FontFamily="monospace" TextWrapping="Wrap" VerticalAlignment="Center" />
+                        <Button Grid.Column="1" Classes="tool" Command="{Binding CopyGuestToolsCommandCommand}" ToolTip.Tip="Copy the command, to paste in the machine's terminal" VerticalAlignment="Top">
+                          <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Path Classes="icon" Data="{StaticResource IconCopy}" />
+                            <TextBlock Text="Copy" />
+                          </StackPanel>
+                        </Button>
+                      </Grid>
                     </Border>
                     <ItemsControl ItemsSource="{Binding GuestToolsAdvice.AfterSteps}">
                       <ItemsControl.ItemTemplate>
@@ -297,11 +305,28 @@
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                    <WrapPanel IsVisible="{Binding GuestToolsAdvice.NeedsDriversDisc}" ItemSpacing="8" LineSpacing="8">
-                      <Button x:Name="InsertDriversDisc" Classes="primary" Content="Insert the driver disc" />
-                      <Button x:Name="ChooseDriversDisc" Classes="tool" Content="Choose virtio-win.iso…" />
-                      <Button Classes="tool" Content="Where to get it" Command="{Binding OpenDriversDiscPageCommand}" />
-                    </WrapPanel>
+                    <StackPanel Spacing="8" IsVisible="{Binding GuestToolsAdvice.NeedsDriversDisc}">
+                      <WrapPanel ItemSpacing="8" LineSpacing="8" IsVisible="{Binding !Shell.GuestToolsBusy}">
+                        <Button x:Name="InsertDriversDisc" Classes="primary" Command="{Binding InsertGuestToolsCommand}">
+                          <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Path Classes="icon" Data="{StaticResource IconDisc}" />
+                            <TextBlock Text="Insert the guest tools" IsVisible="{Binding Shell.HasGuestTools}" />
+                            <TextBlock Text="Download and insert the guest tools" IsVisible="{Binding !Shell.HasGuestTools}" />
+                          </StackPanel>
+                        </Button>
+                        <Button x:Name="ChooseDriversDisc" Classes="tool" Content="Use my own disc image…" ToolTip.Tip="A virtio-win.iso you already have" />
+                      </WrapPanel>
+                      <TextBlock Classes="muted" TextWrapping="Wrap" FontSize="{DynamicResource QFontSmall}" IsVisible="{Binding !Shell.HasGuestTools}"
+                                 Text="{Binding Shell.GuestToolsSize, StringFormat='VM Qontrol downloads the VirtIO driver disc once ({0}, from the virtio-win project, checked before use) and uses it for every machine.'}" />
+                      <!-- The download, while it runs (shared by every page that asked for it). -->
+                      <Grid x:Name="GuestToolsDownload" ColumnDefinitions="*,Auto" ColumnSpacing="12" IsVisible="{Binding Shell.GuestToolsBusy}">
+                        <StackPanel Spacing="6" VerticalAlignment="Center">
+                          <TextBlock Text="{Binding Shell.GuestToolsStatus}" Classes="muted" FontSize="{DynamicResource QFontSmall}" />
+                          <ProgressBar Value="{Binding Shell.GuestToolsPercent}" IsIndeterminate="{Binding !Shell.GuestToolsSizeKnown}" Maximum="100" Height="4" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Classes="tool" Content="Stop" Command="{Binding Shell.CancelGuestToolsCommand}" />
+                      </Grid>
+                    </StackPanel>
                   </StackPanel>
                 </StackPanel>
               </Border>

@@ -219,6 +219,7 @@ public sealed partial class ShellViewModel : ObservableObject
     public async Task StartAsync()
     {
         Ui.Post(() => Scanning = true);
+        _ = FindGuestToolsAsync();
         var host = await HostAsync().ConfigureAwait(false);
         var checks = await Task.Run(() => Doctor.Run(host, Doctor.DetectThisDistro(), Settings.LibraryRoots[0])).ConfigureAwait(false);
         Ui.Post(() => Welcome.Show(checks));

@@ -78,6 +78,8 @@ public sealed partial class NewMachineViewModel : ObservableObject
 
     public bool ForExisting => _existing is not null;
 
+    public string PowerOnAfterText => ForExisting ? "Power the machine on now and let it install" : "Power on the machine when it is created";
+
     public string Step0Title => ForExisting ? "The installer disc" : "How will you install the operating system?";
 
     public string WizardTitle => _existing is { } e ? $"Easy Install for {e.Machine.Name}" : "New virtual machine";
@@ -385,6 +387,50 @@ public sealed partial class NewMachineViewModel : ObservableObject
 
     [ObservableProperty]
     private string? _driversIso;
+
+    /// <summary>
+    /// Windows Easy Install with the VirtIO drivers and guest tools (D31): on by default. Without a disc chosen, the one
+    /// downloaded before is used, or it is downloaded when the machine is made.
+    /// </summary>
+    [ObservableProperty]
+    private bool _installDrivers = true;
+
+    public string GuestToolsSize => GuestToolsDownload.ApproximateSize;
+
+    public string DriversNote => DriversIso is { } own
+        ? $"Using {Path.GetFileName(own)}."
+        : _shell.HasGuestTools
+            ? "The guest tools disc downloaded before is used."
+            : $"VM Qontrol downloads the VirtIO driver disc once ({GuestToolsDownload.ApproximateSize}, from the virtio-win project) when the machine is made.";
+
+    partial void OnDriversIsoChanged(string? value) => OnPropertyChanged(nameof(DriversNote));
+
+    /// <summary>Before making the machine: the driver disc to use (chosen, found or downloaded), or <c>false</c> when the download failed or was stopped.</summary>
+    private async Task<bool> ResolveDriversAsync()
+    {
+        if (!(EasyInstallShown && IsWindows && InstallDrivers) || DriversIso is not null) return true;
+        var progress = new Progress<DownloadProgress>(p => Ui.Post(() =>
+        {
+            ProgressKnown = p.ExpectedBytes is > 0;
+            ProgressValue = p.ExpectedBytes is { } e and > 0 ? Math.Min(100, p.Bytes * 100.0 / e) : 0;
+            ProgressText = p.ExpectedBytes is { } size and > 0 ? $"{p.Status} {Formats.Bytes(p.Bytes)} of {Formats.Bytes(size)}" : p.Status;
+        }));
+        Ui.Post(() => ProgressText = "Getting the guest tools…");
+        var path = await _shell.GetGuestToolsAsync(progress).ConfigureAwait(false);
+        if (path is null)
+        {
+            Ui.Post(() =>
+            {
+                Busy = false;
+                NextCommand.NotifyCanExecuteChanged();
+            });
+            return false;
+        }
+
+        // Set on the UI thread and waited for: BuildRequest reads it on this worker right after.
+        await Ui.InvokeAsync(() => DriversIso = path).ConfigureAwait(false);
+        return true;
+    }
 
     /// <summary>"Lean Windows": on by default, as people who download Windows into a machine rarely want its promotions.</summary>
     [ObservableProperty]
@@ -711,6 +757,8 @@ public sealed partial class NewMachineViewModel : ObservableObject
             return;
         }
 
+        if (!await ResolveDriversAsync().ConfigureAwait(false)) return;
+
         if (_existing is { } existing)
         {
             await AddEasyInstallAsync(existing.Machine, existing.Directory).ConfigureAwait(false);
@@ -857,7 +905,7 @@ public sealed partial class NewMachineViewModel : ObservableObject
         LibraryRoot = LibraryRoot,
         Guest = Guest,
         InstallerIso = Source == SourceKind.Disc ? IsoPath : null,
-        DriversIso = DriversIso,
+        DriversIso = IsWindows && EasyInstallShown && !InstallDrivers ? null : DriversIso,
         DiskGiB = (long)DiskGb,
         MemoryMiB = (long)(MemoryGb * 1024),
         Cores = (int)Cores,
@@ -961,7 +1009,7 @@ public sealed partial class NewMachineViewModel : ObservableObject
                 _ => "None yet (attach one later in Settings)",
             }),
         };
-        if (EasyInstallShown && IsWindows) rows.Add(new("Easy Install", $"{Edition?.DisplayName ?? "Windows"} for {UserName}{(Password.Length == 0 ? " (no password)" : "")}{(DriversIso is null ? "" : ", with VirtIO drivers")}"));
+        if (EasyInstallShown && IsWindows) rows.Add(new("Easy Install", $"{Edition?.DisplayName ?? "Windows"} for {UserName}{(Password.Length == 0 ? " (no password)" : "")}{(InstallDrivers ? ", with the VirtIO drivers and guest tools" : "")}"));
         if (EasyInstallShown && IsLinuxEasy) rows.Add(new("Easy Install", $"For {UserName}, host name {LinuxEasyInstall.HostName(Name)}, time zone {IanaTimeZone}"));
         rows.Add(new("Memory", $"{MemoryGb} GB"));
         rows.Add(new("Processors", $"{Cores}"));

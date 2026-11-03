@@ -268,11 +268,24 @@ public sealed partial class MachineViewModel : ObservableObject
     private void ToggleGuestToolsSteps() => ShowGuestToolsSteps = !ShowGuestToolsSteps;
 
     [RelayCommand]
-    private void OpenDriversDiscPage() => OpenUrl(GuestTools.DriversDiscPage);
+    private void CopyGuestToolsCommand()
+    {
+        if (GuestToolsAdvice.Command is { } command) _shell.CopyToClipboard(command, "The command is on the clipboard. Paste it in the machine's terminal.");
+    }
 
-    /// <summary>The driver disc to offer without asking: the machine's own, else the last one chosen. <c>null</c> = ask for the file.</summary>
-    public string? KnownDriversDisc =>
-        GuestTools.MachineDriversDisc(Machine, Folder) ?? (_shell.Settings.DriversIso is { } d && File.Exists(d) ? d : null);
+    /// <summary>The app, for the guest tools download's progress shown on this page.</summary>
+    public ShellViewModel Shell => _shell;
+
+    /// <summary>The guest tools disc into the machine: the machine's own, the one chosen or downloaded before, or downloaded now.</summary>
+    [RelayCommand]
+    private async Task InsertGuestToolsAsync()
+    {
+        var machine = Machine;
+        var folder = Folder;
+        var path = await Task.Run(() => GuestTools.MachineDriversDisc(machine, folder) is { } own && Core.Downloads.GuestToolsDownload.IsDriverDisc(own) ? own : null).ConfigureAwait(false)
+                   ?? await _shell.GetGuestToolsAsync().ConfigureAwait(false);
+        if (path is not null) await Task.Run(() => InsertDriversDiscAsync(path)).ConfigureAwait(false);
+    }
 
     /// <summary>
     /// Puts the VirtIO driver disc in the machine's drive: at once while it runs, else (or when every drive is in use)
