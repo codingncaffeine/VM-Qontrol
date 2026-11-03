@@ -50,28 +50,34 @@
             <TextBlock Grid.Column="1" Text="Windows, Ubuntu, Fedora and Debian install themselves: Easy Install answers every installer question, and you come back to a finished system."
                        Classes="muted" TextWrapping="Wrap" />
           </Grid>
-          <UniformGrid Columns="4" ColumnSpacing="12" IsVisible="{Binding !ForExisting}">
+          <UniformGrid Columns="5" ColumnSpacing="12" IsVisible="{Binding !ForExisting}">
             <RadioButton x:Name="SourceDisc" Classes="choice" IsChecked="{Binding IsDisc, Mode=OneWay}" Command="{Binding ChooseSourceCommand}" CommandParameter="{x:Static vm:SourceKind.Disc}" GroupName="source">
               <StackPanel Spacing="4">
-                <TextBlock Text="Installer disc image" FontWeight="SemiBold" />
+                <TextBlock Text="Installer disc image" FontWeight="SemiBold" TextWrapping="Wrap" />
                 <TextBlock Text="An .iso file you have downloaded." Classes="muted" TextWrapping="Wrap" />
               </StackPanel>
             </RadioButton>
             <RadioButton x:Name="SourceDownload" Classes="choice" IsChecked="{Binding IsDownload, Mode=OneWay}" Command="{Binding ChooseSourceCommand}" CommandParameter="{x:Static vm:SourceKind.Download}" GroupName="source">
               <StackPanel Spacing="4">
-                <TextBlock Text="Download a system" FontWeight="SemiBold" />
+                <TextBlock Text="Download a system" FontWeight="SemiBold" TextWrapping="Wrap" />
                 <TextBlock Text="Pick from 90+ systems; VM Qontrol downloads and checks it." Classes="muted" TextWrapping="Wrap" />
+              </StackPanel>
+            </RadioButton>
+            <RadioButton x:Name="SourceCloud" Classes="choice" IsChecked="{Binding IsCloud, Mode=OneWay}" Command="{Binding ChooseSourceCommand}" CommandParameter="{x:Static vm:SourceKind.Cloud}" GroupName="source">
+              <StackPanel Spacing="4">
+                <TextBlock Text="Ready-made Linux" FontWeight="SemiBold" TextWrapping="Wrap" />
+                <TextBlock Text="Ubuntu, Debian, Fedora or Alpine, ready in seconds: no installer." Classes="muted" TextWrapping="Wrap" />
               </StackPanel>
             </RadioButton>
             <RadioButton x:Name="SourceLater" Classes="choice" IsChecked="{Binding IsLater, Mode=OneWay}" Command="{Binding ChooseSourceCommand}" CommandParameter="{x:Static vm:SourceKind.Later}" GroupName="source">
               <StackPanel Spacing="4">
-                <TextBlock Text="Install later" FontWeight="SemiBold" />
+                <TextBlock Text="Install later" FontWeight="SemiBold" TextWrapping="Wrap" />
                 <TextBlock Text="Make the machine now with an empty disk." Classes="muted" TextWrapping="Wrap" />
               </StackPanel>
             </RadioButton>
             <RadioButton x:Name="SourceTemplate" Classes="choice" IsChecked="{Binding IsFromTemplate, Mode=OneWay}" IsEnabled="{Binding HasTemplates}" Command="{Binding ChooseSourceCommand}" CommandParameter="{x:Static vm:SourceKind.Template}" GroupName="source">
               <StackPanel Spacing="4">
-                <TextBlock Text="From a template" FontWeight="SemiBold" />
+                <TextBlock Text="From a template" FontWeight="SemiBold" TextWrapping="Wrap" />
                 <TextBlock Text="{Binding TemplateCardText}" Classes="muted" TextWrapping="Wrap" />
               </StackPanel>
             </RadioButton>
@@ -173,6 +179,23 @@
             </StackPanel>
           </Border>
 
+          <Border Classes="card" IsVisible="{Binding IsCloud}">
+            <StackPanel Spacing="10">
+              <ListBox x:Name="CloudImages" ItemsSource="{Binding CloudImageList}" SelectedItem="{Binding CloudImage}" AutomationProperties.Name="Cloud image">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="dl:CloudImage">
+                    <StackPanel Spacing="2" Margin="2,4">
+                      <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
+                      <TextBlock Text="{Binding Summary}" Classes="muted" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+              <TextBlock Classes="muted" TextWrapping="Wrap"
+                         Text="The image comes from the distribution's own server, is checked against the checksum it publishes, and is kept: the next machine from it is made in seconds. The machine gets its own copy, grown to the size you choose." />
+            </StackPanel>
+          </Border>
+
           <Border Classes="card" IsVisible="{Binding IsLater}">
             <TextBlock TextWrapping="Wrap" Classes="muted"
                        Text="The machine is made with an empty disk. Attach an installer disc when you are ready, from the machine's Settings." />
@@ -198,7 +221,7 @@
         <!-- 2 Easy Install -->
         <StackPanel Spacing="14" IsVisible="{Binding Step, Converter={x:Static vm:Text.Is}, ConverterParameter=2}">
           <TextBlock Text="{Binding EasyInstallTitle}" Classes="h1" />
-          <ToggleSwitch x:Name="EasyInstall" AutomationProperties.Name="Easy Install: install with no questions" IsVisible="{Binding !ForExisting}" IsChecked="{Binding EasyInstall}" OnContent="Yes: install it with no questions" OffContent="No: I will answer the installer myself" />
+          <ToggleSwitch x:Name="EasyInstall" AutomationProperties.Name="Easy Install: install with no questions" IsVisible="{Binding ShowEasyInstallSwitch}" IsChecked="{Binding EasyInstall}" OnContent="Yes: install it with no questions" OffContent="No: I will answer the installer myself" />
           <TextBlock Text="{Binding EasyInstallExplain}" Classes="muted" TextWrapping="Wrap" />
           <Border Classes="card" IsVisible="{Binding EasyInstallShown}">
             <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="12">
@@ -215,9 +238,11 @@
                 <TextBox Text="{Binding ProductKey}" AutomationProperties.Name="Product key (optional)" PlaceholderText="Optional: XXXXX-XXXXX-XXXXX-XXXXX-XXXXX" />
                 <TextBlock Text="{Binding KeyNote}" Classes="muted" Classes.warn="{Binding NeedsOwnKey}" TextWrapping="Wrap" FontSize="{DynamicResource QFontSmall}" />
               </StackPanel>
-              <TextBlock Grid.Row="3" Text="Language and region" VerticalAlignment="Center" />
-              <ComboBox Grid.Row="3" Grid.Column="1" AutomationProperties.Name="Language and region" ItemsSource="{Binding Locales}" SelectedItem="{Binding LocaleChoice}" HorizontalAlignment="Stretch" MaxDropDownHeight="360" />
-              <TextBlock Grid.Row="4" Text="Time zone" VerticalAlignment="Center" />
+              <TextBlock Grid.Row="2" Text="SSH key" VerticalAlignment="Center" IsVisible="{Binding IsCloud}" />
+              <TextBlock x:Name="CloudKeys" Grid.Row="2" Grid.Column="1" Text="{Binding CloudKeysText}" TextWrapping="Wrap" VerticalAlignment="Center" IsVisible="{Binding IsCloud}" />
+              <TextBlock Grid.Row="3" Text="Language and region" VerticalAlignment="Center" IsVisible="{Binding !IsCloud}" />
+              <ComboBox Grid.Row="3" Grid.Column="1" IsVisible="{Binding !IsCloud}" AutomationProperties.Name="Language and region" ItemsSource="{Binding Locales}" SelectedItem="{Binding LocaleChoice}" HorizontalAlignment="Stretch" MaxDropDownHeight="360" />
+              <TextBlock Grid.Row="4" Text="Time zone" VerticalAlignment="Center" IsVisible="{Binding !IsCloud}" />
               <ComboBox Grid.Row="4" Grid.Column="1" AutomationProperties.Name="Time zone" ItemsSource="{Binding TimeZones}" SelectedItem="{Binding TimeZoneChoice}" HorizontalAlignment="Stretch" MaxDropDownHeight="360" IsVisible="{Binding IsWindowsEasy}" />
               <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding IanaTimeZone}" VerticalAlignment="Center" IsVisible="{Binding IsLinuxEasy}" />
               <TextBlock Grid.Row="5" Text="Guest tools" VerticalAlignment="Top" Margin="0,6,0,0" IsVisible="{Binding IsWindowsEasy}" />

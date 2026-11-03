@@ -30,6 +30,7 @@ public sealed partial class MediaRow(MediaConfig media) : ObservableObject
         MediaRole.Unattended => "Answer-file disc (Easy Install)",
         MediaRole.Recovery => "macOS recovery image",
         MediaRole.Bootloader => "macOS boot loader",
+        MediaRole.CloudInit => "Cloud-init disc (account and SSH key)",
         _ => "Floppy disk",
     };
 

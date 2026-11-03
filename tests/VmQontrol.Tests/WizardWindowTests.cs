@@ -38,6 +38,70 @@ public sealed class WizardWindowTests
         Ui.Capture(window, batch, "wizard-5-summary");
     }
 
+    /// <summary>
+    /// D39: Ready-made Linux, walked through the window: the card, the image list, the account page (no installer
+    /// questions), name, hardware, summary; the machine has its own grown disk and the cloud-init disc. Uses the kept
+    /// Alpine image from CloudImageTests (scratch/images/cloud) and asks Alpine's server which file is current.
+    /// </summary>
+    [Trait("Tier", "Window")]
+    [Fact]
+    public async Task Ready_made_linux_walks_through_the_wizard_to_a_machine_with_its_own_disk_and_account()
+    {
+        var cache = Path.Combine(TestProfile.ScratchRoot, "images", "cloud");
+        Assert.SkipWhen(!Directory.Exists(cache) || !Directory.EnumerateFiles(cache, "alpine-*.qcow2").Any(), "run CloudImageTests with VMQONTROL_CLOUD_PROOF=alpine first");
+        using var profile = new TestProfile("wizard-cloud");
+        Directory.CreateDirectory(profile.Paths.DefaultLibrary);
+        VmQontrol.Core.Downloads.CloudImages.CacheOverride = cache;
+        try
+        {
+            var seen = await Ui.Run(() =>
+            {
+                var (window, shell) = Open(profile);
+                Ui.PumpUntil(() => shell.Welcome.Checked, "the host check");
+                Ui.Click(window, Named<Button>(window, "NewMachine"));
+                Ui.PumpUntil(() => shell.Wizard is not null, "the wizard");
+                var wizard = shell.Wizard!;
+                Ui.Click(window, Named<RadioButton>(window, "SourceCloud"));
+                Ui.PumpUntil(() => wizard.IsCloud && wizard.CloudImage is not null, "the cloud card");
+                wizard.CloudImage = wizard.CloudImageList.Single(i => i.Id == "alpine");
+                Ui.Pump(0.3);
+                var name = wizard.Name;
+                for (var guard = 0; wizard.Step < 5 && guard < 8; guard++)
+                {
+                    if (wizard.Step == 2) wizard.Password = "pw-for-the-screen";
+                    Ui.Capture(window, "s12", $"cloud-wizard-{wizard.Step}");
+                    Ui.Click(window, Named<Button>(window, "Next"));
+                    Ui.Pump(0.2);
+                }
+
+                Ui.Capture(window, "s12", "cloud-wizard-5");
+                var summary = wizard.Summary.Select(r => $"{r.Label}: {r.Value}").ToList();
+                wizard.PowerOnAfter = false;
+                Ui.Click(window, Named<Button>(window, "Next"));
+                Ui.PumpUntil(() => shell.Wizard is null && shell.Selected is not null, "the new machine", 60);
+                var result = (name, summary, shell.Selected!.Folder);
+                window.Close();
+                return result;
+            });
+
+            Assert.Equal("Alpine Linux", seen.name);
+            Assert.Contains(seen.summary, l => l.StartsWith("Installer: None: Alpine Linux's cloud image", StringComparison.Ordinal));
+            Assert.DoesNotContain(seen.summary, l => l.StartsWith("Easy Install", StringComparison.Ordinal));
+            var machine = MachineStore.Load(Path.Combine(seen.Folder, "vm.json"));
+            Assert.Equal(2048, machine.MemoryMiB);
+            Assert.Equal(20, machine.Disks[0].SizeGiB);
+            Assert.Contains(machine.Media, m => m.File == VmQontrol.Core.Downloads.CloudImages.SeedFile);
+            Assert.True(File.Exists(Path.Combine(seen.Folder, VmQontrol.Core.Downloads.CloudImages.SeedFile)));
+            var info = await VmQontrol.Core.Runtime.QemuImg.InfoAsync(Path.Combine(seen.Folder, "disk0.qcow2"), TestContext.Current.CancellationToken);
+            Assert.Equal(20L << 30, info["virtual-size"]!.GetValue<long>());
+            Assert.Null(info["backing-filename"]); // its own disk: the kept image can go at any time
+        }
+        finally
+        {
+            VmQontrol.Core.Downloads.CloudImages.CacheOverride = null;
+        }
+    }
+
     [Trait("Tier", "Smoke")]
     [Fact]
     public async Task A_linux_disc_walks_through_the_wizard_to_a_new_selected_machine()

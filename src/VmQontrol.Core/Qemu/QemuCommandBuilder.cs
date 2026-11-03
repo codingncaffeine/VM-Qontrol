@@ -453,6 +453,11 @@ public static class QemuCommandBuilder
                 var dev = extra.Bus switch { DiskBus.Sata or DiskBus.Ide => "ide-hd", DiskBus.Nvme => $"nvme,serial=vmqdisk{i}", DiskBus.Pvscsi => "scsi-hd,bus=pvscsi0.0", DiskBus.Scsi => "scsi-hd,bus=vscsi0.0", _ => "virtio-blk-pci" };
                 args.AddRange(["-device", $"{dev},drive=Disk{i}", "-drive", $"id=Disk{i},if=none,format={extra.Format},file={EscapeOption(File(extra.File))},{optimizations}{Throttle(extra)}"]);
             }
+
+            // A cloud image's cloud-init seed (D39) on a read-only VirtIO disk, as Proxmox's cloud-init drive: cloud
+            // kernels (Debian's) leave out SATA, so a CD would never be seen; every one reads VirtIO, its root disk's bus.
+            if (m.Media.FirstOrDefault(x => x.Role == MediaRole.CloudInit && Attached(x)) is { } seed)
+                args.AddRange(["-device", "virtio-blk-pci,drive=CloudInit", "-drive", $"id=CloudInit,if=none,format=raw,readonly=on,file={EscapeOption(File(seed.File))}"]);
         }
 
         // VM Qontrol's own machines always have this controller for devices handed over while running (USB devices, and

@@ -30,7 +30,8 @@ open the app's welcome page, to see what is missing and the command that install
   search, and power a whole folder on or off.
 - **A New machine wizard**: your own ISO, or a download. Windows 10 and 11 come straight from Microsoft's own catalog
   (the one its Media Creation Tool uses, checked against Microsoft's checksums and made into an installer disc);
-  other systems come from the quickget catalog. The system is detected from the media, and **Easy Install** sets up
+  other systems come from the quickget catalog; **Ready-made Linux** makes an Ubuntu, Debian, Fedora or Alpine machine
+  from its cloud image in seconds, with your account and SSH key. The system is detected from the media, and **Easy Install** sets up
   Windows and the major Linux distributions unattended. "Lean Windows" leaves out the bundled promotions, games and
   ads while installing Microsoft's own, untouched Windows.
 - **Settings that explain themselves**: memory, processors, disks, CD/DVD, network, USB, sound, display, TPM,

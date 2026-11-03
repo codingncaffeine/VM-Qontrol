@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using VmQontrol.Core.Media;
 
 namespace VmQontrol.Core.Downloads;
@@ -83,54 +82,9 @@ public static class GuestToolsDownload
             throw new DownloadFailedException([$"The guest tools could not be reached ({ex.Message}). Check the connection and try again."]);
         }
 
-        long? size = null;
-        for (var attempt = 1; ; attempt++)
-        {
-            var have = File.Exists(partial) ? new FileInfo(partial).Length : 0;
-            try
-            {
-                using var request = new HttpRequestMessage(HttpMethod.Get, source);
-                if (have > 0) request.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(have, null);
-                using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
-                if (response.StatusCode == System.Net.HttpStatusCode.RequestedRangeNotSatisfiable) { File.Delete(partial); continue; }
-                response.EnsureSuccessStatusCode();
-                if (have > 0 && response.StatusCode != System.Net.HttpStatusCode.PartialContent) have = 0;
-                size = response.Content.Headers.ContentRange?.Length ?? (response.Content.Headers.ContentLength is { } len ? len + have : null);
-                await using (var body = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false))
-                await using (var output = DownloadWrite.Open(partial, append: have > 0))
-                {
-                    var buffer = new byte[1 << 20];
-                    var last = Stopwatch.StartNew();
-                    int read;
-                    while ((read = await body.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
-                    {
-                        await DownloadWrite.WriteAsync(output, buffer.AsMemory(0, read), ct).ConfigureAwait(false);
-                        have += read;
-                        if (last.ElapsedMilliseconds >= 250)
-                        {
-                            progress.Report(new DownloadProgress(have, size, "Downloading the guest tools…"));
-                            last.Restart();
-                        }
-                    }
-                }
-
-                break;
-            }
-            catch (Exception ex) when (ex is HttpRequestException or IOException && attempt < 4 && !ct.IsCancellationRequested)
-            {
-                progress.Report(new DownloadProgress(have, size, $"The connection dropped; resuming ({attempt} of 3)…"));
-                await Task.Delay(TimeSpan.FromSeconds(3 * attempt), ct).ConfigureAwait(false);
-            }
-            catch (HttpRequestException ex)
-            {
-                throw new DownloadFailedException([$"The guest tools did not download ({ex.Message}). Try again; what arrived is kept and the download carries on from there."]);
-            }
-        }
-
+        var size = await ResumableDownload.ToPartialAsync(Http, source, partial, progress, "Downloading the guest tools…", "The guest tools", ct).ConfigureAwait(false);
         progress.Report(new DownloadProgress(size ?? 0, size, "Checking the disc…"));
         var got = new FileInfo(partial).Length;
-        if (size is { } expected && got != expected)
-            throw new DownloadFailedException([$"The download stopped short ({got} of {expected} bytes). Try again; it carries on from there."]);
         if (!IsDriverDisc(partial))
         {
             File.Delete(partial);

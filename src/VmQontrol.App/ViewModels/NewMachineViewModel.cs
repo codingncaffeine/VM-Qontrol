@@ -17,6 +17,9 @@ public enum SourceKind
     Download,
     Later,
     Template,
+
+    /// <summary>A distribution's cloud image: a ready machine in seconds, no installer (D39).</summary>
+    Cloud,
 }
 
 /// <summary>A guest system the person can pick by hand when nothing was detected (or to correct a detection).</summary>
@@ -134,28 +137,69 @@ public sealed partial class NewMachineViewModel : ObservableObject
 
     public bool IsLast => Step == StepTitles.Length - 1;
 
-    public string NextText => IsLast && ForExisting ? "Set up Easy Install" : IsLast ? (Source == SourceKind.Download ? "Download and create" : "Create machine") : "Continue";
+    public string NextText => IsLast && ForExisting ? "Set up Easy Install" : IsLast ? (Source is SourceKind.Download or SourceKind.Cloud ? "Download and create" : "Create machine") : "Continue";
 
     /// <summary>A machine made from a template takes its system and hardware from it: only the name and the kind of copy are asked.</summary>
     private bool Skipped(int step) => step switch
     {
         1 or 3 or 4 when ForExisting => true,
-        1 or 4 => IsFromTemplate,
+        1 => IsFromTemplate || IsCloud,
+        4 => IsFromTemplate,
         2 => !EasyInstallPossible,
         _ => false,
     };
 
     /// <summary>The step rail: each step's title and whether it is the current one.</summary>
-    public IReadOnlyList<StepItem> Steps => StepTitles.Select((t, i) => (Item: new StepItem(t, i == Step, i < Step), Index: i))
+    public IReadOnlyList<StepItem> Steps => StepTitles.Select((t, i) => (Item: new StepItem(IsCloud && i == 2 ? "Account" : t, i == Step, i < Step), Index: i))
         .Where(s => !ForExisting || !Skipped(s.Index)).Select(s => s.Item).ToList();
 
     partial void OnStepChanged(int value) => OnPropertyChanged(nameof(Steps));
 
     // ── Installer
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsDisc), nameof(IsDownload), nameof(IsLater), nameof(IsFromTemplate), nameof(NextText))]
+    [NotifyPropertyChangedFor(nameof(IsDisc), nameof(IsDownload), nameof(IsLater), nameof(IsFromTemplate), nameof(IsCloud), nameof(ShowEasyInstallSwitch), nameof(Steps), nameof(NextText), nameof(EasyInstallPossible),
+        nameof(EasyInstallShown), nameof(PasswordRequired), nameof(PasswordNote), nameof(EasyInstallTitle), nameof(EasyInstallExplain))]
     [NotifyCanExecuteChangedFor(nameof(NextCommand))]
     private SourceKind _source = SourceKind.Disc;
+
+    public bool IsCloud => Source == SourceKind.Cloud;
+
+    /// <summary>The Easy Install switch: a cloud image has no installer to answer, so it has none.</summary>
+    public bool ShowEasyInstallSwitch => !ForExisting && !IsCloud;
+
+    public IReadOnlyList<CloudImage> CloudImageList { get; } = CloudImages.All;
+
+    /// <summary>The cloud image picked; picking one sets the system and the hardware a server machine needs.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(NextCommand))]
+    private CloudImage? _cloudImage;
+
+    /// <summary>The public keys in ~/.ssh, read on a worker when the cloud card opens; they sign in to the new machine.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PasswordRequired), nameof(PasswordNote), nameof(CloudKeysText))]
+    [NotifyCanExecuteChangedFor(nameof(NextCommand))]
+    private IReadOnlyList<string> _cloudKeys = [];
+
+    public string CloudKeysText => CloudKeys.Count switch
+    {
+        0 => "None found in ~/.ssh: you sign in with the password.",
+        1 => $"Your key from ~/.ssh ({KeyComment(CloudKeys[0])}) signs in, with no password asked.",
+        var n => $"Your {n} keys from ~/.ssh sign in, with no password asked.",
+    };
+
+    private static string KeyComment(string key) => key.Split(' ', 3) is [_, _, var comment] ? comment : key.Split(' ')[0];
+
+    partial void OnCloudImageChanged(CloudImage? value)
+    {
+        if (value is null) return;
+        Detected(new GuestConfig { Os = "linux", OsInfoId = value.OsInfoId }, $"{value.DisplayName}, from its cloud image.");
+        // A server image needs far less than a desktop installer: what multipass and Proxmox start with.
+        MemoryGb = 2;
+        Cores = Math.Min(2, CoresMaximum);
+        DiskGb = 20;
+        DiskMinimumGb = Math.Min(DiskMinimumGb, 10);
+        if (Name == "New machine" || Name.Length == 0 || CloudImageList.Any(i => Name == i.DisplayName)) Name = value.DisplayName;
+    }
 
     public bool IsDisc => Source == SourceKind.Disc;
 
@@ -290,9 +334,9 @@ public sealed partial class NewMachineViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(EasyInstallShown))]
     private bool _easyInstall = true;
 
-    public bool EasyInstallShown => EasyInstallPossible && EasyInstall;
+    public bool EasyInstallShown => EasyInstallPossible && (EasyInstall || IsCloud);
 
-    public bool EasyInstallPossible => (Source == SourceKind.Disc && IsoPath is not null && (IsWindows || LinuxInstallerFound != LinuxInstaller.None))
+    public bool EasyInstallPossible => IsCloud || (Source == SourceKind.Disc && IsoPath is not null && (IsWindows || LinuxInstallerFound != LinuxInstaller.None))
                                        || (IsMicrosoftWindows && Editions.Count > 0);
 
     /// <summary>The Linux installer on the disc, when Easy Install knows it.</summary>
@@ -306,9 +350,11 @@ public sealed partial class NewMachineViewModel : ObservableObject
 
     public bool IsWindowsEasy => IsWindows;
 
-    public string EasyInstallTitle => IsWindows ? "Install Windows for you?" : "Install it for you?";
+    public string EasyInstallTitle => IsCloud ? "Your account in the machine" : IsWindows ? "Install Windows for you?" : "Install it for you?";
 
-    public string EasyInstallExplain => IsWindows
+    public string EasyInstallExplain => IsCloud
+        ? "There is no installer: the machine starts ready, with this account, SSH, and the guest tools added on first start."
+        : IsWindows
         ? "Windows Setup normally asks a dozen questions. VM Qontrol answers them from what you enter here, then you come back to a desktop."
         : LinuxInstallerFound switch
         {
@@ -319,9 +365,13 @@ public sealed partial class NewMachineViewModel : ObservableObject
         };
 
     /// <summary>Linux needs a password: its installers make no account without one.</summary>
-    public bool PasswordRequired => IsLinuxEasy && EasyInstall;
+    public bool PasswordRequired => IsLinuxEasy && EasyInstall || IsCloud && CloudKeys.Count == 0;
 
-    public string PasswordNote => PasswordRequired
+    public string PasswordNote => IsCloud
+        ? CloudKeys.Count > 0
+            ? "Optional with your SSH key. With one, you can also sign in at the machine's screen, and sudo asks for it; without, sudo asks for nothing."
+            : "Required: no SSH key was found, so the password is how you sign in. It is stored hashed in the machine's cloud-init disc."
+        : PasswordRequired
         ? "Required: Linux installers make no account without a password. It is stored hashed in the machine's answer file."
         : "May be left empty. It is stored in the machine's answer file; use one you do not use elsewhere.";
 
@@ -487,7 +537,7 @@ public sealed partial class NewMachineViewModel : ObservableObject
     private bool CanNext() => !Busy && Step switch
     {
         0 when ForExisting => IsoPath is not null && !IsoProblem && !Detecting && EasyInstallPossible,
-        0 => Source switch { SourceKind.Disc => IsoPath is not null && !IsoProblem, SourceKind.Download => Entry is not null && (!Entry.FromMicrosoft || Editions.Count > 0), SourceKind.Template => Template is not null, _ => true },
+        0 => Source switch { SourceKind.Disc => IsoPath is not null && !IsoProblem, SourceKind.Download => Entry is not null && (!Entry.FromMicrosoft || Editions.Count > 0), SourceKind.Template => Template is not null, SourceKind.Cloud => CloudImage is not null, _ => true },
         2 => !EasyInstallShown || (UserName.Trim().Length > 0 && !NeedsOwnKey && (!PasswordRequired || Password.Length > 0)),
         3 => Name.Trim().Length > 0,
         _ => true,
@@ -538,6 +588,15 @@ public sealed partial class NewMachineViewModel : ObservableObject
         OnPropertyChanged(nameof(IsMicrosoftWindows));
         if (kind == SourceKind.Later) Detected(new GuestConfig { Os = "linux" }, "Choose the system you will install on the next page.");
         if (kind == SourceKind.Template && Template is null && Templates.Count == 1) Template = Templates[0];
+        if (kind == SourceKind.Cloud)
+        {
+            CloudImage ??= CloudImageList[0];
+            _ = Task.Run(() =>
+            {
+                var keys = CloudImages.LocalPublicKeys();
+                Ui.Post(() => CloudKeys = keys);
+            });
+        }
         NextCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(EasyInstallPossible));
         OnPropertyChanged(nameof(EasyInstallShown));
@@ -827,6 +886,24 @@ public sealed partial class NewMachineViewModel : ObservableObject
                 Ui.Post(() => ProgressText = "Creating the machine…");
                 dir = (await Task.Run(() => MachineFactory.Create(request)).ConfigureAwait(false)).Directory;
             }
+            else if (Source == SourceKind.Cloud && CloudImage is { } cloud)
+            {
+                _download = new CancellationTokenSource();
+                var token = _download.Token;
+                var choices = new CloudChoices
+                {
+                    Name = request.Name, UserName = UserName.Trim(), Password = Password, SshKeys = CloudKeys,
+                    DiskGiB = request.DiskGiB, MemoryMiB = request.MemoryMiB ?? 2048, Cores = request.Cores ?? 2,
+                };
+                var root = LibraryRoot;
+                dir = await Task.Run(async () =>
+                {
+                    var resolved = await CloudImages.ResolveAsync(cloud, token).ConfigureAwait(false);
+                    var file = await CloudImages.GetAsync(_shell.Paths, resolved, progress, token).ConfigureAwait(false);
+                    Ui.Post(() => ProgressText = "Making the machine from the image…");
+                    return (await CloudImages.CreateAsync(root, cloud, file, choices, token).ConfigureAwait(false)).Directory;
+                }).ConfigureAwait(false);
+            }
             else if (Source == SourceKind.Download && Entry is { } entry)
             {
                 _download = new CancellationTokenSource();
@@ -1025,7 +1102,7 @@ public sealed partial class NewMachineViewModel : ObservableObject
                 new("Name", Name),
                 new("Folder", FolderPreview),
                 new("Template", t.Name),
-                new("System", GuestLabel),
+                new("System", IsCloud && CloudImage is { } img ? img.DisplayName : GuestLabel),
                 new("Copy", LinkedClone
                     ? $"Linked: ready in seconds, shares {t.Name}'s disks read-only and keeps its own changes"
                     : $"Full: its own copy of {t.Name}'s disks, firmware settings and TPM"),
@@ -1042,10 +1119,12 @@ public sealed partial class NewMachineViewModel : ObservableObject
             {
                 SourceKind.Disc => Path.GetFileName(IsoPath) ?? "",
                 SourceKind.Download => Entry is { } e ? $"Download {e.DisplayName} {e.Label}" : "",
+                SourceKind.Cloud => CloudImage is { } ci ? $"None: {ci.DisplayName}'s cloud image, downloaded and checked" : "",
                 _ => "None yet (attach one later in Settings)",
             }),
         };
         if (EasyInstallShown && IsWindows) rows.Add(new("Easy Install", $"{Edition?.DisplayName ?? "Windows"} for {UserName}{(Password.Length == 0 ? " (no password)" : "")}{(InstallDrivers ? ", with the VirtIO drivers and guest tools" : "")}"));
+        if (IsCloud) rows.Add(new("Account", $"{LinuxEasyInstall.AccountName(UserName)}{(CloudKeys.Count > 0 ? ", signs in with your SSH key" : "")}{(Password.Length > 0 ? ", with a password" : "")}; the guest tools are added on first start"));
         if (EasyInstallShown && IsLinuxEasy) rows.Add(new("Easy Install", $"For {UserName}, host name {LinuxEasyInstall.HostName(Name)}, time zone {IanaTimeZone}"));
         rows.Add(new("Memory", $"{MemoryGb} GB"));
         rows.Add(new("Processors", $"{Cores}"));

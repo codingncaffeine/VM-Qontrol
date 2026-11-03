@@ -277,6 +277,9 @@ public enum MediaRole
     Bootloader,
 
     Floppy,
+
+    /// <summary>A cloud image's cloud-init seed (account, keys), on a read-only VirtIO disk (D39).</summary>
+    CloudInit,
 }
 
 public enum Connect

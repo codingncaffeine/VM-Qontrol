@@ -30,6 +30,11 @@ internal static class Commands
                               --password-file reads the account's password from FILE, or from standard input with "-";
                               --password P still works, but every user of this computer can read it in the process list.
                               --lean (Windows) removes the bundled promotions, games and ads while installing.
+          create NAME --cloud IMAGE [--user NAME] [--password-file FILE|-] [--ssh-key FILE.pub] [--disk-gib N] [--memory-mib N] [--cores N]
+                              A ready machine from a distribution's cloud image in seconds, no installer: the account
+                              (your ~/.ssh keys unless --ssh-key; a password too with --password-file), guest tools,
+                              SSH. 'vmq cloud-images' lists the images.
+          cloud-images        List the cloud images 'create --cloud' can use.
           template MACHINE [--undo]
                               Make a machine that is off into a template (never started, only cloned), or back.
           clone MACHINE NEW [--linked]
@@ -120,6 +125,11 @@ internal static class Commands
                     return Inspect(args[1], paths, host(), output, error);
                 case "detect" when args.Length > 1:
                     return Detect(args[1], output, error);
+                case "cloud-images":
+                    foreach (var image in Core.Downloads.CloudImages.All) output.WriteLine($"{image.Id,-14} {image.DisplayName,-18} {image.Summary}");
+                    return 0;
+                case "create" when args.Length > 1 && args.Contains("--cloud"):
+                    return CreateFromCloud(args[1..], paths, output, error);
                 case "create" when args.Length > 1:
                     return Create(args[1..], paths, host, output, error);
                 case "template" when args.Length > 1:
@@ -657,6 +667,68 @@ internal static class Commands
     /// The Easy Install password: from --password-file (a file, or standard input with "-"; one trailing line break is
     /// dropped), else --password, which stays for scripts but is readable by anyone in the process list while vmq runs.
     /// </summary>
+    private static int CreateFromCloud(string[] args, QontrolPaths paths, TextWriter output, TextWriter error)
+    {
+        var name = args[0];
+        string? Option(string flag) => Array.IndexOf(args, flag) is var i and >= 0 && i + 1 < args.Length ? args[i + 1] : null;
+        long? Number(string flag) => long.TryParse(Option(flag), NumberStyles.None, CultureInfo.InvariantCulture, out var v) ? v : null;
+        if (Core.Downloads.CloudImages.All.FirstOrDefault(i => i.Id == Option("--cloud")) is not { } image)
+        {
+            error.WriteLine($"vmq create: no cloud image '{Option("--cloud")}'. 'vmq cloud-images' lists them.");
+            return 2;
+        }
+
+        if (!ReadPassword(Option, Console.In, error, out var password)) return 2;
+        IReadOnlyList<string> keys;
+        try
+        {
+            keys = Option("--ssh-key") is { } keyFile ? [File.ReadAllText(keyFile).Trim()] : Core.Downloads.CloudImages.LocalPublicKeys();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            error.WriteLine($"vmq create: the key could not be read ({ex.Message}).");
+            return 1;
+        }
+
+        if (keys.Count == 0 && string.IsNullOrEmpty(password))
+        {
+            error.WriteLine("vmq create: give --password-file or --ssh-key (no public key was found in ~/.ssh), or nobody could sign in.");
+            return 2;
+        }
+
+        var choices = new Core.Downloads.CloudChoices
+        {
+            Name = name,
+            UserName = Option("--user") ?? Environment.UserName,
+            Password = password ?? "",
+            SshKeys = keys,
+            DiskGiB = Number("--disk-gib") ?? 20,
+            MemoryMiB = Number("--memory-mib") ?? 2048,
+            Cores = (int)(Number("--cores") ?? 2),
+        };
+        var progress = new Progress<Core.Downloads.DownloadProgress>(p =>
+        {
+            if (p.ExpectedBytes is > 0 and var total) output.Write($"\r{p.Status} {100 * p.Bytes / total}%   ");
+            else output.Write($"\r{p.Status}   ");
+        });
+        try
+        {
+            var resolved = Core.Downloads.CloudImages.ResolveAsync(image).GetAwaiter().GetResult();
+            var file = Core.Downloads.CloudImages.GetAsync(paths, resolved, progress).GetAwaiter().GetResult();
+            var (m, dir) = Core.Downloads.CloudImages.CreateAsync(paths.DefaultLibrary, image, file, choices).GetAwaiter().GetResult();
+            output.WriteLine();
+            output.WriteLine($"Created {m.Name} from {resolved.FileName} in {dir}.");
+            output.WriteLine($"Account {m.Guest.Account}{(keys.Count > 0 ? $" with {keys.Count} SSH key(s)" : "")}{(string.IsNullOrEmpty(password) ? "" : " and a password")}. 'vmq start {Quote(m.Name)}' then 'vmq status' gives the SSH command.");
+            return 0;
+        }
+        catch (Core.Downloads.DownloadFailedException ex)
+        {
+            output.WriteLine();
+            error.WriteLine($"vmq create: {ex.Message}");
+            return 1;
+        }
+    }
+
     internal static bool ReadPassword(Func<string, string?> option, TextReader stdin, TextWriter error, out string? password)
     {
         password = option("--password");

@@ -43,6 +43,7 @@ public static class MachineChecks
         MediaRole.Recovery => "recovery image",
         MediaRole.Bootloader => "boot loader",
         MediaRole.Floppy => "floppy image",
+        MediaRole.CloudInit => "cloud-init disc",
         _ => "file",
     };
 }
