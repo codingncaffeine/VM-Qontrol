@@ -352,6 +352,13 @@ public sealed partial class NewMachineViewModel : ObservableObject
     [ObservableProperty]
     private string? _driversIso;
 
+    /// <summary>"Lean Windows": on by default, as people who download Windows into a machine rarely want its promotions.</summary>
+    [ObservableProperty]
+    private bool _leanWindows = true;
+
+    public string LeanNote { get; } = "Leaves out Xbox, news, weather, Teams, Outlook, Clipchamp, Copilot, Solitaire, ads and suggested apps. "
+        + "Store, Edge and the everyday apps stay; anything removed is one click away in the Store.";
+
     // ── Name and location
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(FolderPreview))]
@@ -702,6 +709,7 @@ public sealed partial class NewMachineViewModel : ObservableObject
                     ProductKey = ProductKey.Trim(),
                     Locale = Locale,
                     TimeZone = TimeZone,
+                    Lean = LeanWindows,
                 }
                 : null,
         };

@@ -15,7 +15,8 @@ what it does and what the recommended value is. No daemon, no root, and one port
 - A New Virtual Machine wizard: your own ISO, or a download: Windows 10 and 11 straight from Microsoft's own catalogue
   (the one its Media Creation Tool uses, checked against Microsoft's checksums and made into an installer disc), other
   systems from the quickget catalogue. The operating system is detected from the media, with unattended installation
-  for Windows and the major Linux distributions.
+  for Windows and the major Linux distributions. "Lean Windows" leaves out the bundled promotions, games and ads while
+  installing Microsoft's own, untouched Windows.
 - A settings dialog covering the whole machine: memory, processors, disks, CD/DVD, network, USB, sound, display,
   TPM, firmware and boot options. Each setting shows when it takes effect.
 - Snapshots taken while a machine runs, full and linked clones, templates, suspend and resume.

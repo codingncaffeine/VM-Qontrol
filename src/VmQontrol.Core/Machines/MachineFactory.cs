@@ -69,7 +69,9 @@ public static class MachineFactory
         if (r.WindowsEasyInstall is { } choices && windows)
         {
             var xml = WindowsAnswerFile.Build(choices with { VirtioDrivers = drivers, Uefi = r.Firmware == FirmwareKind.Uefi }, r.Guest.Release);
-            IsoWriter.Write(Path.Combine(dir, "unattended.iso"), "UNATTEND", new Dictionary<string, byte[]> { ["autounattend.xml"] = Encoding.UTF8.GetBytes(xml) });
+            var files = new Dictionary<string, byte[]> { ["autounattend.xml"] = Encoding.UTF8.GetBytes(xml) };
+            if (choices.Lean) files[WindowsLean.ScriptName] = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(WindowsLean.Script().ReplaceLineEndings("\r\n"))).ToArray();
+            IsoWriter.Write(Path.Combine(dir, "unattended.iso"), "UNATTEND", files);
             media.Add(new MediaConfig { Role = MediaRole.Unattended, File = "unattended.iso", Connect = Connect.UntilInstalled });
         }
 

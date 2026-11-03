@@ -23,10 +23,11 @@ internal static class Commands
                               MACHINE is a quickemu .conf, a vm.json, a machine folder, or a name in the library.
           detect FILE.iso     Name the operating system on an installer disc.
           create NAME [--iso FILE] [--os OS] [--disk-gib N] [--memory-mib N] [--cores N] [--bios] [--tpm] [--[no-]secure-boot]
-                 [--easy-install --user NAME [--password P] [--edition N] [--key KEY] [--drivers virtio-win.iso] [--first-logon CMD]]
+                 [--easy-install --user NAME [--password P] [--edition N] [--key KEY] [--lean] [--drivers virtio-win.iso] [--first-logon CMD]]
                               Make a new machine in the library (the system is detected from --iso when --os is left out).
                               --easy-install installs Windows, Ubuntu, Fedora/RHEL or Debian with no questions
                               (Linux needs --password; --power-off-when-done stops the machine after installing).
+                              --lean (Windows) removes the bundled promotions, games and ads while installing.
           template MACHINE [--undo]
                               Make a machine that is off into a template (never started, only cloned), or back.
           clone MACHINE NEW [--linked]
@@ -328,6 +329,7 @@ internal static class Commands
                 ConsumerDisc = iso is null || WindowsMedia.Inspect(iso)?.ConsumerDisc != false,
                 ProductKey = Option("--key") ?? "",
                 FirstLogonCommands = Option("--first-logon") is { } cmd ? [cmd] : [],
+                Lean = args.Contains("--lean"),
             };
         }
 

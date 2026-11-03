@@ -187,3 +187,64 @@ public sealed class WindowsDownloadIntegrationTests
         public void Report(DownloadProgress value) => report(value);
     }
 }
+
+/// <summary>"Lean Windows": the answer file runs the script from the answer disc in the specialize pass.</summary>
+public sealed class WindowsLeanTests
+{
+    [Fact]
+    public void Lean_runs_the_script_once_while_windows_sets_itself_up_and_off_leaves_no_trace()
+    {
+        var choices = new WindowsInstallChoices { UserName = "A", ComputerName = "PC", EditionName = "Windows 11 Pro", Lean = true };
+        var xml = System.Xml.Linq.XDocument.Parse(WindowsAnswerFile.Build(choices, "11"));
+        System.Xml.Linq.XNamespace u = "urn:schemas-microsoft-com:unattend";
+        var specialize = xml.Root!.Elements(u + "settings").Single(s => (string?)s.Attribute("pass") == "specialize");
+        var commands = specialize.Descendants(u + "RunSynchronousCommand").ToList();
+        Assert.Equal(["1", "2"], commands.Select(c => c.Element(u + "Order")!.Value));
+        var path = commands[1].Element(u + "Path")!.Value;
+        Assert.Equal(WindowsLean.Command, path);
+        Assert.Contains(@"%d:\VMQLEAN.PS1", path);
+        Assert.True(path.Length < 260, "RunSynchronous paths are limited to 259 characters");
+
+        var plain = WindowsAnswerFile.Build(choices with { Lean = false }, "11");
+        Assert.DoesNotContain("VMQLEAN", plain);
+    }
+
+    [Fact]
+    public void The_script_keeps_what_people_use_and_cleans_up_after_itself()
+    {
+        var script = WindowsLean.Script();
+        foreach (var kept in new[] { "Microsoft.WindowsStore", "Microsoft.WindowsCalculator", "Microsoft.Windows.Photos", "Microsoft.WindowsNotepad", "Microsoft.Paint", "Microsoft.WindowsTerminal", "Microsoft.SecHealthUI", "Microsoft.MicrosoftEdge" })
+            Assert.DoesNotContain($"'{kept}'", script);
+        Assert.Contains("'Microsoft.BingNews'", script);
+        Assert.Contains("reg.exe unload 'HKU\\VmqDefault'", script); // the default profile is never left loaded
+        Assert.Equal(WindowsLean.RemovedApps.Count, WindowsLean.RemovedApps.Distinct().Count());
+    }
+
+    [Fact]
+    public void The_answer_disc_carries_the_script_only_when_lean()
+    {
+        using var profile = new TestProfile("lean-disc");
+        foreach (var lean in new[] { true, false })
+        {
+            var (_, dir) = VmQontrol.Core.Machines.MachineFactory.Create(new VmQontrol.Core.Machines.NewMachineRequest
+            {
+                Name = $"lean-{lean}",
+                LibraryRoot = profile.Paths.DefaultLibrary,
+                Guest = new VmQontrol.Core.Machines.GuestConfig { Os = "windows", Release = "11" },
+                WindowsEasyInstall = new WindowsInstallChoices { UserName = "A", ComputerName = "PC", EditionName = "Windows 11 Pro", Lean = lean },
+            });
+            using var disc = IsoFiles.Open(Path.Combine(dir, "unattended.iso"))!;
+            Assert.True(disc.Exists("autounattend.xml"));
+            var script = disc.Read(WindowsLean.ScriptName);
+            if (!lean)
+            {
+                Assert.Null(script);
+                continue;
+            }
+
+            Assert.NotNull(script);
+            Assert.Equal(Encoding.UTF8.GetPreamble(), script[..3]); // Windows PowerShell 5.1 reads UTF-8 only with the mark
+            Assert.Contains("\r\n", Encoding.UTF8.GetString(script));
+        }
+    }
+}

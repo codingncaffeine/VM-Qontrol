@@ -221,6 +221,11 @@
                 <TextBlock Classes="muted" TextWrapping="Wrap" FontSize="{DynamicResource QFontSmall}"
                            Text="With the VirtIO driver disc, Windows gets the fast disk and network and the guest tools (shared clipboard, the machine's address). Without it, Windows installs on standard hardware it already knows, and works the same, a little slower." />
               </StackPanel>
+              <TextBlock Grid.Row="6" Text="Lean Windows" VerticalAlignment="Top" Margin="0,6,0,0" IsVisible="{Binding IsWindowsEasy}" />
+              <StackPanel Grid.Row="6" Grid.Column="1" Spacing="4" IsVisible="{Binding IsWindowsEasy}">
+                <ToggleSwitch x:Name="LeanWindows" IsChecked="{Binding LeanWindows}" OnContent="Recommended: without the extras" OffContent="Everything Windows comes with" />
+                <TextBlock Text="{Binding LeanNote}" Classes="muted" TextWrapping="Wrap" FontSize="{DynamicResource QFontSmall}" />
+              </StackPanel>
             </Grid>
           </Border>
         </StackPanel>

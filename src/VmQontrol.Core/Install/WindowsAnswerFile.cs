@@ -47,6 +47,9 @@ public sealed record WindowsInstallChoices
     /// <summary>Windows 11 on a machine without a TPM or Secure Boot: tell Setup not to check for them.</summary>
     public bool BypassWindows11Checks { get; init; }
 
+    /// <summary>"Lean Windows" (<see cref="WindowsLean"/>): the answer disc carries the script and the specialize pass runs it.</summary>
+    public bool Lean { get; init; }
+
     /// <summary>Commands to run at the end of the first logon (tests use one to power the machine off).</summary>
     public IReadOnlyList<string> FirstLogonCommands { get; init; } = [];
 }
@@ -162,7 +165,8 @@ public static class WindowsAnswerFile
                     Component("Microsoft-Windows-Shell-Setup", E("ComputerName", c.ComputerName), E("TimeZone", c.TimeZone)),
                     // No "Do you want to allow your PC to be discoverable?" question at the first sign-in.
                     Component("Microsoft-Windows-Deployment", E("RunSynchronous",
-                        Added("RunSynchronousCommand", 1, E("Path", @"reg add HKLM\SYSTEM\CurrentControlSet\Control\Network\NewNetworkWindowOff /f"))))),
+                        Added("RunSynchronousCommand", 1, E("Path", @"reg add HKLM\SYSTEM\CurrentControlSet\Control\Network\NewNetworkWindowOff /f")),
+                        c.Lean ? [Added("RunSynchronousCommand", 2, E("Path", WindowsLean.Command), E("Description", "VM Qontrol: Lean Windows"))] : Array.Empty<object>()))),
                 E("settings", new XAttribute("pass", "oobeSystem"),
                     Component("Microsoft-Windows-International-Core", E("InputLocale", input), E("SystemLocale", locale), E("UILanguage", ui), E("UserLocale", locale)),
                     Component("Microsoft-Windows-Shell-Setup", shellOobe))));
