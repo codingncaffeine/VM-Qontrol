@@ -185,7 +185,11 @@ public sealed class MemoryHeadroomTests
         var dir = Path.Combine(profile.Paths.DefaultLibrary, "Too big");
         Directory.CreateDirectory(dir);
         // Far more than any computer running these tests has: the check must stop it.
-        MachineStore.Save(new MachineConfig { Name = "Too big", MemoryMiB = 4L * 1024 * 1024, Guest = new GuestConfig { Os = "linux" }, Disks = [new DiskConfig { File = "disk0.qcow2", SizeGiB = 1 }] }, Path.Combine(dir, MachineStore.FileName));
+        // An installer disc, so the machine passes "can it start at all" (asked before memory since s9) and reaches the question.
+        var iso = Path.Combine(dir, "installer.iso");
+        VmQontrol.Core.Media.IsoWriter.Write(iso, "INSTALL", new Dictionary<string, byte[]> { ["readme.txt"] = "x"u8.ToArray() });
+        MachineStore.Save(new MachineConfig { Name = "Too big", MemoryMiB = 4L * 1024 * 1024, Guest = new GuestConfig { Os = "linux" }, Disks = [new DiskConfig { File = "disk0.qcow2", SizeGiB = 1 }],
+            Media = [new MediaConfig { Role = MediaRole.Installer, File = "installer.iso", Connect = Connect.UntilInstalled }] }, Path.Combine(dir, MachineStore.FileName));
         var seen = await Ui.Run(() =>
         {
             var shell = new ShellViewModel(profile.Paths, AppSettings.Load(profile.Paths)) { WatchUsb = false };

@@ -114,11 +114,12 @@ public sealed record AppSettings
     public long KeepFreeMiB(long totalMiB) => KeepFreeGB is { } gb ? gb * 1024L : Hosts.MemoryHeadroom.AutomaticKeepFreeMiB(totalMiB);
 
     /// <summary>Why the settings file could not be read at the last Load (its copy is kept beside it); <c>null</c> = it was fine.</summary>
-    public static string? LoadProblem { get; private set; }
+    [JsonIgnore]
+    public string? LoadProblem { get; init; }
 
     public static AppSettings Load(QontrolPaths paths)
     {
-        LoadProblem = null;
+        string problem;
         try
         {
             if (File.Exists(paths.SettingsFile))
@@ -142,8 +143,9 @@ public sealed record AppSettings
                 kept = "(it could not be copied)";
             }
 
-            LoadProblem = $"The settings file could not be read ({ex.Message}). It was kept as {kept}; VM Qontrol started with its defaults, so library folders, favorites and folders may need adding again.";
-            Log.Warn(LoadProblem);
+            problem = $"The settings file could not be read ({ex.Message}). It was kept as {kept}; VM Qontrol started with its defaults, so library folders, favorites and folders may need adding again.";
+            Log.Warn(problem);
+            return new AppSettings { LibraryRoots = [paths.DefaultLibrary], LoadProblem = problem };
         }
 
         return new AppSettings { LibraryRoots = [paths.DefaultLibrary] };

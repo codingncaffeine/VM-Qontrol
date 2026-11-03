@@ -23,7 +23,7 @@ public sealed class HardeningTests
         Directory.CreateDirectory(profile.Paths.Config);
         File.WriteAllText(profile.Paths.SettingsFile, """{ "libraryRoots": ["/x/lib"], "favorites": [""" );
         var loaded = AppSettings.Load(profile.Paths);
-        Assert.NotNull(AppSettings.LoadProblem);
+        Assert.NotNull(loaded.LoadProblem);
         Assert.Equal([profile.Paths.DefaultLibrary], loaded.LibraryRoots);
         var kept = Directory.GetFiles(profile.Paths.Config, "settings.json.bad-*");
         Assert.Single(kept);
@@ -32,7 +32,7 @@ public sealed class HardeningTests
         // null where lists belong: the start goes on with empty ones (it threw NullReferenceException before).
         File.WriteAllText(profile.Paths.SettingsFile, """{ "libraryRoots": null, "groupOf": null, "favorites": null, "groups": [null, "Work"] }""");
         var nulls = AppSettings.Load(profile.Paths);
-        Assert.Null(AppSettings.LoadProblem);
+        Assert.Null(nulls.LoadProblem);
         Assert.Equal([profile.Paths.DefaultLibrary], nulls.LibraryRoots);
         Assert.Equal(["Work"], nulls.OrderedGroups());
         // Control: a good file loads as written.
@@ -46,8 +46,9 @@ public sealed class HardeningTests
         using var profile = new TestProfile("hard-save");
         var settings = AppSettings.Load(profile.Paths);
         Parallel.For(0, 40, i => (settings with { Theme = i.ToString(System.Globalization.CultureInfo.InvariantCulture) }).Save(profile.Paths));
-        Assert.NotNull(AppSettings.Load(profile.Paths).Theme);
-        Assert.Null(AppSettings.LoadProblem);
+        var after = AppSettings.Load(profile.Paths);
+        Assert.NotNull(after.Theme);
+        Assert.Null(after.LoadProblem);
         Assert.Empty(Directory.GetFiles(profile.Paths.Config, "*.new"));
     }
 

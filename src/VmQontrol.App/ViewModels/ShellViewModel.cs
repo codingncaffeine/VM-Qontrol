@@ -333,7 +333,7 @@ public sealed partial class ShellViewModel : ObservableObject
     /// <summary>The first look: probe the host, run the host check and read the library, all off the UI thread.</summary>
     public async Task StartAsync()
     {
-        if (AppSettings.LoadProblem is { } problem)
+        if (Settings.LoadProblem is { } problem)
             Ui.Post(() => Show(new NoticeViewModel("Your settings could not be read", [problem], isError: true)));
         Ui.Post(() => Scanning = true);
         _ = FindGuestToolsAsync();

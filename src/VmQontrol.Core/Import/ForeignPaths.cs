@@ -19,6 +19,7 @@ public static class ForeignPaths
         try
         {
             full = Path.GetFullPath(path);
+            if (!File.Exists(full) && !Directory.Exists(full) && new FileInfo(full).LinkTarget is null) return $"{path} is not a file (it is not there).";
             // A link is judged by where it leads.
             if (File.ResolveLinkTarget(full, returnFinalTarget: true) is { } target) full = target.FullName;
         }
