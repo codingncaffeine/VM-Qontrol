@@ -25,7 +25,7 @@ public sealed class DownloadJob(CatalogueEntry entry, string libraryRoot, string
 
     public async Task<(MachineConfig Machine, string Directory)> RunAsync(IProgress<DownloadProgress> progress, CancellationToken ct)
     {
-        var staging = Path.Combine(libraryRoot, ".downloads", $"{Entry.Os}-{Entry.Release}-{Entry.Option}-{Guid.NewGuid():N}"[..48].TrimEnd('-'));
+        var staging = Path.Combine(libraryRoot, ".downloads", StagingName(Entry));
         Directory.CreateDirectory(staging);
         try
         {
@@ -76,6 +76,13 @@ public sealed class DownloadJob(CatalogueEntry entry, string libraryRoot, string
             {
             }
         }
+    }
+
+    /// <summary>The staging folder's name: the entry, then a unique tail, at most 48 characters (a short entry is not padded).</summary>
+    internal static string StagingName(CatalogueEntry entry)
+    {
+        var name = $"{entry.Os}-{entry.Release}-{entry.Option}-{Guid.NewGuid():N}";
+        return name[..Math.Min(name.Length, 48)].TrimEnd('-');
     }
 
     /// <summary>Moves a downloaded quickemu machine's folder into the library as a VM Qontrol machine with relative paths.</summary>

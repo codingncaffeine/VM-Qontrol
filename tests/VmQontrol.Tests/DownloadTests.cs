@@ -53,4 +53,16 @@ public sealed class DownloadTests
         Assert.False(Directory.Exists(Path.Combine(profile.Paths.DefaultLibrary, ".downloads")));
         Assert.Contains(reports, r => r.ExpectedBytes is > 10_000_000);
     }
+
+    [Fact]
+    public void A_short_catalogue_entry_gets_a_staging_folder_too()
+    {
+        // macOS, Alpine and every entry without an edition made a name under 48 characters, and cutting it threw.
+        var shortName = DownloadJob.StagingName(new CatalogueEntry("macOS", "macos", "sonoma", "", ""));
+        Assert.StartsWith("macos-sonoma-", shortName, StringComparison.Ordinal);
+        Assert.NotEqual(shortName, DownloadJob.StagingName(new CatalogueEntry("macOS", "macos", "sonoma", "", "")));
+        var longName = DownloadJob.StagingName(new CatalogueEntry("Windows", "windows", "11", "English International", ""));
+        Assert.True(longName.Length <= 48, longName);
+        Assert.False(longName.EndsWith('-'));
+    }
 }
