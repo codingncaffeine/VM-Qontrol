@@ -94,6 +94,7 @@ public sealed partial class PaletteViewModel(ShellViewModel shell) : ObservableO
             With(new("Refresh the library", "Library", () => _ = shell.RefreshAsync()), "Look for machines again"),
             new("Show the host check", "Welcome", () => shell.Selected = null),
             new("Virtual networks", "Networking", shell.OpenNetwork),
+            new("Disks and discs", "Every disk and disc, its size, unused ones", shell.OpenMedia),
             With(new("New folder", "Library: sort machines into groups", shell.NewGroup), "New folder"),
             With(new("Keyboard shortcuts", "Help", () => shell.ShowShortcuts = true), "Keyboard shortcuts"),
         };

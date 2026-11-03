@@ -716,6 +716,21 @@ public sealed partial class ShellViewModel : ObservableObject
         else Ui.Post(Apply);
     }
 
+    /// <summary>Disks and discs while it is open.</summary>
+    [ObservableProperty]
+    private MediaViewModel? _media;
+
+    [RelayCommand]
+    public void OpenMedia()
+    {
+        var page = new MediaViewModel(this);
+        page.Closed += () => Ui.Post(() =>
+        {
+            if (Media == page) Media = null;
+        });
+        Media = page;
+    }
+
     /// <summary>The virtual network editor while it is open.</summary>
     [ObservableProperty]
     private NetworksViewModel? _networks;

@@ -412,6 +412,67 @@
     </Panel>
 
     <!-- The virtual network editor. -->
+    <!-- Disks and discs: every image of the library, its sizes and users; unused ones can be deleted. -->
+    <Panel x:Name="MediaLayer" IsVisible="{Binding Media, Converter={x:Static ObjectConverters.IsNotNull}}" Background="{DynamicResource QScrim}">
+      <Border Classes="card" Width="940" MaxHeight="780" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="24,20"
+              DataContext="{Binding Media}" x:DataType="vm:MediaViewModel" BoxShadow="0 12 40 0 #60000000">
+        <DockPanel>
+          <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,14">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+              <TextBlock Text="Disks and discs" Classes="h1" VerticalAlignment="Center" />
+              <ComboBox x:Name="MediaFilter" Grid.Column="1" ItemsSource="{x:Static vm:MediaViewModel.FilterOptions}" SelectedItem="{Binding Filter}" Width="160"
+                        AutomationProperties.Name="Show" ToolTip.Tip="Show only one kind" />
+              <Button Grid.Column="2" Classes="icononly" Command="{Binding RefreshCommand}" ToolTip.Tip="Look again" AutomationProperties.Name="Look again">
+                <Path Classes="icon" Data="{StaticResource IconRefresh}" />
+              </Button>
+            </Grid>
+            <TextBlock x:Name="MediaSummary" Text="{Binding Summary}" Classes="muted" TextWrapping="Wrap" />
+          </StackPanel>
+          <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource QBorder}" BorderThickness="0,1,0,0" Padding="0,14,0,0" Margin="0,14,0,0">
+            <Button x:Name="MediaClose" Classes="secondary" Content="Close" Command="{Binding CloseCommand}" HorizontalAlignment="Right" />
+          </Border>
+          <Panel>
+            <TextBlock Text="Nothing to show here." Classes="muted" IsVisible="{Binding Empty}" HorizontalAlignment="Center" Margin="0,24" />
+            <ScrollViewer>
+              <ItemsControl x:Name="MediaList" ItemsSource="{Binding Shown}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:LibraryMediaRow">
+                    <Border Padding="4,10" BorderBrush="{DynamicResource QBorder}" BorderThickness="0,0,0,1">
+                      <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="12">
+                        <Border Background="{DynamicResource QAccentSoft}" CornerRadius="8" Width="34" Height="34" VerticalAlignment="Top">
+                          <Panel>
+                            <Path Classes="icon" Data="{StaticResource IconDisk}" Stroke="{DynamicResource QAccent}" IsVisible="{Binding !IsDisc}" />
+                            <Path Classes="icon" Data="{StaticResource IconDisc}" Stroke="{DynamicResource QAccent}" IsVisible="{Binding IsDisc}" />
+                          </Panel>
+                        </Border>
+                        <StackPanel Grid.Column="1" Spacing="2">
+                          <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Item.Path}" />
+                          <TextBlock Text="{Binding KindText}" Classes="muted" FontSize="{DynamicResource QFontSmall}" />
+                          <TextBlock Text="{Binding UsedByText}" Classes="muted" FontSize="{DynamicResource QFontSmall}" TextTrimming="CharacterEllipsis" />
+                          <TextBlock Text="{Binding Folder}" Classes="muted" FontSize="{DynamicResource QFontSmall}" FontFamily="monospace" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Spacing="4" HorizontalAlignment="Right" VerticalAlignment="Top">
+                          <Border Classes="pill" Classes.ok="{Binding IsInUse}" Classes.warn="{Binding IsUnused}" Classes.bad="{Binding IsMissing}" HorizontalAlignment="Right">
+                            <TextBlock Text="{Binding StatusText}" />
+                          </Border>
+                          <TextBlock Text="{Binding SizeText}" Classes="muted" FontSize="{DynamicResource QFontSmall}" HorizontalAlignment="Right" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6" VerticalAlignment="Top">
+                          <Button Classes="tool" Content="Show" ToolTip.Tip="Open its folder in the file manager" IsVisible="{Binding !IsMissing}"
+                                  Command="{Binding $parent[ItemsControl].((vm:MediaViewModel)DataContext).ShowInFolderCommand}" CommandParameter="{Binding}" />
+                          <Button Classes="tool danger" Content="Delete…" ToolTip.Tip="No machine uses it: delete it to free the drive (asks first)" IsVisible="{Binding IsUnused}"
+                                  Command="{Binding $parent[ItemsControl].((vm:MediaViewModel)DataContext).DeleteCommand}" CommandParameter="{Binding}" />
+                        </StackPanel>
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </Panel>
+        </DockPanel>
+      </Border>
+    </Panel>
     <Panel x:Name="NetworksLayer" IsVisible="{Binding Networks, Converter={x:Static ObjectConverters.IsNotNull}}" Background="{DynamicResource QScrim}">
       <Border Classes="card" Width="900" MaxHeight="780" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="24,20"
               DataContext="{Binding Networks}" x:DataType="vm:NetworksViewModel" BoxShadow="0 12 40 0 #60000000">

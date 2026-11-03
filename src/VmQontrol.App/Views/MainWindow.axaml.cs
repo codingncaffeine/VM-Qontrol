@@ -166,6 +166,11 @@ public partial class MainWindow : Window
                 open.CancelCommand.Execute(null);
                 e.Handled = true;
             }
+            else if (e.Key == Key.Escape && DataContext is ShellViewModel { Media: { } media })
+            {
+                media.CloseCommand.Execute(null);
+                e.Handled = true;
+            }
             else if (e.Key == Key.Escape && DataContext is ShellViewModel { Networks: { } networks })
             {
                 networks.CloseCommand.Execute(null);
