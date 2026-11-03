@@ -78,6 +78,8 @@ public static class LibvirtReader
         var disks = new List<ForeignDisk>();
         var discs = new List<string>();
         var windows = osId?.Contains("microsoft", StringComparison.Ordinal) == true;
+        // A SCSI disk on virt-manager's VirtIO SCSI controller stays on VirtIO SCSI (a Windows guest has vioscsi for it).
+        var virtioScsi = devices?.Elements().Any(e => e.Name.LocalName == "controller" && Attr(e, "type") == "scsi" && Attr(e, "model") == "virtio-scsi") == true;
         foreach (var disk in devices?.Elements().Where(e => e.Name.LocalName == "disk") ?? [])
         {
             var file = Attr(disk.Elements().FirstOrDefault(e => e.Name.LocalName == "source"), "file") ?? Attr(disk.Elements().FirstOrDefault(e => e.Name.LocalName == "source"), "dev");
@@ -89,6 +91,7 @@ public static class LibvirtReader
             {
                 "virtio" => DiskBus.Virtio,
                 "nvme" => DiskBus.Nvme,
+                "scsi" when virtioScsi => DiskBus.Scsi,
                 "scsi" when !windows => DiskBus.Virtio,
                 _ => DiskBus.Sata,
             };

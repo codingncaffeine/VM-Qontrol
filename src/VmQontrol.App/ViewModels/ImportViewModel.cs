@@ -119,6 +119,7 @@ public sealed partial class ImportViewModel : ObservableObject
         DiskBus.Nvme => "NVMe",
         DiskBus.Pvscsi => "VMware paravirtual SCSI",
         DiskBus.Virtio => "VirtIO",
+        DiskBus.Scsi => "VirtIO SCSI",
         DiskBus.Sata or DiskBus.Ide => "SATA",
         _ => "the fastest the system supports",
     };

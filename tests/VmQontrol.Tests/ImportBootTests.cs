@@ -95,4 +95,32 @@ public sealed class ImportBootTests
             """;
         await BootsAndPowersOff(LibvirtReader.Read(xml, "test"), profile);
     }
+
+    [Fact]
+    public async Task A_libvirt_machine_on_virtio_scsi_imports_and_boots_from_it()
+    {
+        var image = Image();
+        Assert.SkipWhen(image is null, "Run tools/fetch-test-image.sh first.");
+        using var profile = new TestProfile("import-boot-vscsi");
+        var disk = Path.Combine(profile.Root, "alpine.qcow2");
+        File.Copy(image!, disk);
+        var seed = Path.Combine(profile.Root, "seed.iso");
+        Seed(seed);
+        var xml = $"""
+            <domain type="kvm">
+              <name>alpine</name>
+              <memory unit="MiB">512</memory>
+              <vcpu>1</vcpu>
+              <os><type arch="x86_64" machine="q35">hvm</type></os>
+              <devices>
+                <controller type="scsi" index="0" model="virtio-scsi"/>
+                <disk type="file" device="disk"><driver name="qemu" type="qcow2"/><source file="{disk}"/><target dev="sda" bus="scsi"/></disk>
+                <disk type="file" device="cdrom"><source file="{seed}"/><target dev="sdb" bus="sata"/></disk>
+              </devices>
+            </domain>
+            """;
+        var f = LibvirtReader.Read(xml, "test");
+        Assert.Equal(DiskBus.Scsi, f.Disks[0].Bus);
+        await BootsAndPowersOff(f, profile);
+    }
 }

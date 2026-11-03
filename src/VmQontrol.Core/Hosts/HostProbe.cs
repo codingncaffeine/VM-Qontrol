@@ -14,6 +14,7 @@ public static partial class HostProbe
         var flags = (FirstField(cpuinfo, "flags") ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.Ordinal);
         var sockets = Math.Max(1, cpuinfo.Split('\n').Where(l => l.StartsWith("physical id", StringComparison.Ordinal)).Distinct().Count());
         var smt = ReadOr("/sys/devices/system/cpu/smt/control").Trim() == "on";
+        var nestedModule = vendor == "AuthenticAMD" ? "kvm_amd" : vendor == "GenuineIntel" ? "kvm_intel" : null;
 
         return new HostCapabilities
         {
@@ -26,6 +27,7 @@ public static partial class HostProbe
             QemuVersion = ParseQemuVersion(Run(qemu, "--version")),
             QemuDevices = ParseDeviceNames(Run(qemu, "-device", "help")),
             KvmUsable = CanOpenReadWrite("/dev/kvm"),
+            NestedKvm = NestedVirt.Read(nestedModule),
             RenderNode = File.Exists("/dev/dri/renderD128") ? "/dev/dri/renderD128" : null,
             FirmwareFiles = FirmwareLocator.Candidates().Where(File.Exists).ToHashSet(StringComparer.Ordinal),
         };

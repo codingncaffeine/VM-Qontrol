@@ -93,6 +93,20 @@ public static class QemuCommandBuilder
 
         if (host.IsAmd && os != "macos") cpu.Add("topoext");
 
+        // Nested virtualization: off hides the processor's virtualization flag; on adds it to a named model (host
+        // passthrough has it already) and says so when this computer's KVM keeps it from working.
+        if (m.Cpu.Nested is { } nested && (host.IsAmd || host.IsIntel))
+        {
+            var flag = host.IsAmd ? "svm" : "vmx";
+            if (!nested) cpu.Add("-" + flag);
+            else
+            {
+                if (!cpu.ToString().StartsWith("host", StringComparison.Ordinal)) cpu.Add("+" + flag);
+                if (kvm && host.NestedKvm == false)
+                    warnings.Add("Nested virtualization is off in this computer's KVM, so virtual machines inside this one will run without acceleration. Settings → Processors → Turn on for this computer.");
+            }
+        }
+
         var cores = m.Cpu.Cores ?? host.LogicalCpus switch { >= 32 => 16, >= 16 => 8, >= 8 => 4, >= 4 => 2, _ => 1 };
         if (os == "windows" && release == "11" && cores < 2)
         {
@@ -398,9 +412,11 @@ public static class QemuCommandBuilder
         {
             var disk = m.Disks[0];
             var diskPath = File(disk.File);
-            var device0 = disk.Bus switch { DiskBus.Virtio => "virtio-blk-pci", DiskBus.Sata or DiskBus.Ide => "ide-hd", DiskBus.Nvme => "nvme,serial=vmqdisk0", DiskBus.Pvscsi => "scsi-hd,bus=pvscsi0.0", _ => null };
+            var device0 = disk.Bus switch { DiskBus.Virtio => "virtio-blk-pci", DiskBus.Sata or DiskBus.Ide => "ide-hd", DiskBus.Nvme => "nvme,serial=vmqdisk0", DiskBus.Pvscsi => "scsi-hd,bus=pvscsi0.0", DiskBus.Scsi => "scsi-hd,bus=vscsi0.0", _ => null };
             // VMware's paravirtual SCSI controller, for machines imported with it (D30): their system has its driver.
             if (m.Disks.Any(x => x.Bus == DiskBus.Pvscsi)) args.AddRange(["-device", "pvscsi,id=pvscsi0"]);
+            // VirtIO SCSI: one controller carries every disk on it.
+            if (m.Disks.Any(x => x.Bus == DiskBus.Scsi)) args.AddRange(["-device", "virtio-scsi-pci,id=vscsi0"]);
             if (os == "macos")
             {
                 var loader = m.Media.FirstOrDefault(x => x.Role == MediaRole.Bootloader);
@@ -423,7 +439,7 @@ public static class QemuCommandBuilder
             for (var i = 1; i < m.Disks.Count; i++)
             {
                 var extra = m.Disks[i];
-                var dev = extra.Bus switch { DiskBus.Sata or DiskBus.Ide => "ide-hd", DiskBus.Nvme => $"nvme,serial=vmqdisk{i}", DiskBus.Pvscsi => "scsi-hd,bus=pvscsi0.0", _ => "virtio-blk-pci" };
+                var dev = extra.Bus switch { DiskBus.Sata or DiskBus.Ide => "ide-hd", DiskBus.Nvme => $"nvme,serial=vmqdisk{i}", DiskBus.Pvscsi => "scsi-hd,bus=pvscsi0.0", DiskBus.Scsi => "scsi-hd,bus=vscsi0.0", _ => "virtio-blk-pci" };
                 args.AddRange(["-device", $"{dev},drive=Disk{i}", "-drive", $"id=Disk{i},if=none,format={extra.Format},file={File(extra.File)},{optimisations}"]);
             }
         }
@@ -464,6 +480,11 @@ public static class QemuCommandBuilder
         if (boot.Count > 0) args.AddRange(["-boot", string.Join(',', boot)]);
         if (m.Devices.Watchdog is { } watchdogAction) args.AddRange(["-device", "i6300esb", "-action", $"watchdog={watchdogAction}"]);
         if (m.Devices.CrashReporting) args.AddRange(["-device", "pvpanic"]);
+        if (m.Devices.Vsock)
+        {
+            if (ctx.FileExists("/dev/vhost-vsock")) args.AddRange(["-device", $"vhost-vsock-pci,guest-cid={VsockCid(m.Id)}"]);
+            else warnings.Add("This computer has no /dev/vhost-vsock (the vhost_vsock kernel module), so the machine starts without its VirtIO socket.");
+        }
 
         if (m.KernelBoot is { } kb && kb.Connect switch { Connect.Never => false, Connect.UntilInstalled => !ctx.SystemDiskUsed, _ => true })
         {
@@ -549,7 +570,7 @@ public static class QemuCommandBuilder
     /// <summary>The shared-memory file Looking Glass reads the guest's screen from (its client's default).</summary>
     public static string LookingGlassFile { get; internal set; } = "/dev/shm/looking-glass";
 
-    /// <summary>I/O threads for VirtIO disks, Looking Glass's shared memory and PCI devices (pinning is applied after start).</summary>
+    /// <summary>I/O threads for VirtIO disks and the VirtIO SCSI controller, Looking Glass's shared memory and PCI devices (pinning is applied after start).</summary>
     private static void AddPerformance(MachineConfig m, List<string> args)
     {
         var p = m.Performance;
@@ -558,7 +579,7 @@ public static class QemuCommandBuilder
             var n = 0;
             for (var i = 0; i + 1 < args.Count; i++)
             {
-                if (args[i] != "-device" || !args[i + 1].StartsWith("virtio-blk-pci,", StringComparison.Ordinal)) continue;
+                if (args[i] != "-device" || !(args[i + 1].StartsWith("virtio-blk-pci,", StringComparison.Ordinal) || args[i + 1].StartsWith("virtio-scsi-pci,", StringComparison.Ordinal))) continue;
                 args[i + 1] += $",iothread=io{n}";
                 args.InsertRange(i, ["-object", $"iothread,id=io{n}"]);
                 i += 2;
@@ -575,6 +596,10 @@ public static class QemuCommandBuilder
 
     /// <summary>The UDP port of a segment's multicast group on this computer (230.0.0.1, loopback only).</summary>
     public static int SegmentPort(string segment) => 20000 + (int)(Fnv(segment) % 20000);
+
+    /// <summary>The guest's vsock address, stable for the machine: 3 and up (0-2 are the hypervisor and this computer),
+    /// below 2^31 so every tool reads it as a positive number.</summary>
+    public static uint VsockCid(string machineId) => 3 + (uint)(Fnv(machineId) % 0x7FFF_FFF0);
 
     public static string MacFor(string machineId)
     {

@@ -275,6 +275,19 @@
                   <NumericUpDown x:Name="MaxCores" Grid.Column="1" Value="{Binding MaxCores}" Minimum="1" Maximum="{Binding HostCores}" Increment="1" FormatString="0" Width="150" />
                 </Grid>
               </Border>
+              <Border Classes="row">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Nested virtualization" Classes="label" />
+                    <TextBlock Text="Lets the guest run virtual machines of its own (WSL 2, Hyper-V, Docker Desktop, Android emulators, a VM manager inside). Off hides the processor's virtualization feature from the guest. Recommended: as this computer allows." Classes="help" />
+                    <TextBlock x:Name="HostNestedNote" Text="{Binding HostNestedNote}" Classes="help" Margin="0,4,0,0" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center">
+                    <ComboBox x:Name="Nested" ItemsSource="{Binding NestedChoices}" SelectedItem="{Binding Nested}" HorizontalAlignment="Right" />
+                    <Button x:Name="EnableHostNested" Classes="tool" Content="Turn on for this computer" Command="{Binding EnableHostNestedCommand}" IsVisible="{Binding HostNestedOff}" HorizontalAlignment="Right" />
+                  </StackPanel>
+                </Grid>
+              </Border>
             </StackPanel>
           </Border>
           <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding LiveCpusShown}" Margin="0,8,0,0">
@@ -357,6 +370,20 @@
                           <TextBlock Text="Changing the system disk's bus can stop the system starting until it has the driver." Classes="help" />
                         </StackPanel>
                         <ComboBox Grid.Column="1" ItemsSource="{x:Static vm:SettingsViewModel.BusOptions}" SelectedItem="{Binding Bus}" />
+                      </Grid>
+                    </Border>
+                    <Border Classes="row">
+                      <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                          <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="Compact" Classes="label" VerticalAlignment="Center" />
+                            <Border Classes="badge-now" VerticalAlignment="Center"><TextBlock Text="Applies now" /></Border>
+                          </StackPanel>
+                          <TextBlock Text="Gives this computer back the space the system no longer uses. Only while the machine is off; a disk with snapshots cannot be compacted (they would be lost). For the most back, let the system free its unused space first (Windows does it by itself; on Linux, sudo fstrim -av)." Classes="help" />
+                          <TextBlock Text="{Binding CompactStatus}" Classes="help" Margin="0,4,0,0" IsVisible="{Binding CompactStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Classes="tool" Content="Compact" VerticalAlignment="Center" IsEnabled="{Binding !Compacting}"
+                                Command="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).CompactDiskCommand}" CommandParameter="{Binding}" />
                       </Grid>
                     </Border>
                   </StackPanel>
@@ -1072,6 +1099,16 @@
                     <TextBlock Text="The system says when it crashes, so the machine shows Crashed at once instead of looking frozen. Linux supports it; Windows needs the VirtIO drivers." Classes="help" />
                   </StackPanel>
                   <ToggleSwitch Grid.Column="1" IsChecked="{Binding CrashReporting}" />
+                </Grid>
+              </Border>
+              <Border x:Name="VsockRow" Classes="row">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="VirtIO socket (vsock)" Classes="label" />
+                    <TextBlock Text="A direct line between this computer and the guest that needs no network: SSH and developer tools reach the guest even with networking off. Linux guests support it; Windows needs the VirtIO drivers." Classes="help" />
+                    <TextBlock Text="{Binding VsockNote}" Classes="help" Margin="0,4,0,0" IsVisible="{Binding Vsock}" />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="1" IsChecked="{Binding Vsock}" />
                 </Grid>
               </Border>
             </StackPanel>

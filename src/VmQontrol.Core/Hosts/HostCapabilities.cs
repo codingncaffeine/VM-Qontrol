@@ -27,6 +27,9 @@ public sealed record HostCapabilities
 
     public bool KvmUsable { get; init; }
 
+    /// <summary>Whether this computer's KVM lets guests run virtual machines of their own; <c>null</c> = no KVM module loaded.</summary>
+    public bool? NestedKvm { get; init; }
+
     /// <summary>The GPU render node for VirGL (/dev/dri/renderD128), or <c>null</c> when there is none.</summary>
     public string? RenderNode { get; init; }
 

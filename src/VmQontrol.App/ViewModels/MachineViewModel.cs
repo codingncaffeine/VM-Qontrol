@@ -749,7 +749,9 @@ public sealed partial class MachineViewModel : ObservableObject
             _watcher = watcher;
             Ui.Post(() =>
             {
-                SshCommand = running.SshPort is { } p ? Machine.Guest.SshCommand(p) : null;
+                SshCommand = running.SshPort is { } p ? Machine.Guest.SshCommand(p)
+                    : Machine.Devices.Vsock && System.IO.File.Exists("/etc/ssh/ssh_config.d/20-systemd-ssh-proxy.conf") ? Machine.Guest.SshVsockCommand(QemuCommandBuilder.VsockCid(Machine.Id))
+                    : null;
                 OnState(watcher.State);
             });
             _ = watcher.Exited.ContinueWith(_ => Ui.Post(OnExited), TaskScheduler.Default);

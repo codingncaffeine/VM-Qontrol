@@ -71,6 +71,9 @@ public sealed partial class DiskRow(DiskConfig disk, string machineDirectory) : 
 
     public string Used => System.IO.File.Exists(FullPath) ? $"{Formats.Bytes(new FileInfo(FullPath).Length)} used on this computer" : "Made at the next power on";
 
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(Used))] private string _compactStatus = "";
+    [ObservableProperty] private bool _compacting;
+
     public DiskConfig ToConfig() => Original with { SizeGiB = (long)SizeGb, Bus = Enum.Parse<DiskBus>(Bus.Value!) };
 }
 
@@ -173,6 +176,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         new(nameof(DiskBus.Sata), "SATA (works everywhere)"),
         new(nameof(DiskBus.Ide), "IDE (very old systems)"),
         new(nameof(DiskBus.Nvme), "NVMe (Windows 10 and 11 have its driver; VMware's default)"),
+        new(nameof(DiskBus.Scsi), "VirtIO SCSI (many disks on one controller; needs drivers on Windows)"),
         new(nameof(DiskBus.Pvscsi), "VMware paravirtual SCSI (machines brought over from VMware)"),
     ];
 
@@ -282,6 +286,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         CpuModel = m.Cpu.Model ?? "";
         HotPlugCpus = m.Cpu.MaxCores is not null;
         MaxCores = m.Cpu.MaxCores ?? Math.Min(HostCores, Math.Max(Cores * 2, 2));
+        Nested = NestedOptions.First(o => o.Value == m.Cpu.Nested switch { true => "on", false => "off", _ => null });
+        ShowHostNested();
         Uefi = m.Firmware.Kind == FirmwareKind.Uefi;
         SecureBoot = m.Firmware.SecureBoot;
         Tpm = m.Tpm;
@@ -330,6 +336,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         BalloonAuto = m.Devices.Balloon is null;
         Watchdog = WatchdogOptions.FirstOrDefault(o => o.Value == m.Devices.Watchdog) ?? WatchdogOptions[0];
         CrashReporting = m.Devices.CrashReporting;
+        Vsock = m.Devices.Vsock;
         BootOrder = BootOrders.FirstOrDefault(o => o.Value == m.Devices.BootOrder) ?? BootOrders[0];
         BootMenu = m.Devices.BootMenu;
         AutoProtectOn = m.AutoProtect.Enabled;
@@ -516,6 +523,45 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public string CoresNote => $"Recommended: {RecommendedCores()} of this computer's {HostCores} processors.";
 
+    // Nested virtualization
+    public static IReadOnlyList<Option> NestedOptions { get; } =
+    [
+        new(null, "As this computer allows (recommended)"),
+        new("on", "On"),
+        new("off", "Off"),
+    ];
+
+    public IReadOnlyList<Option> NestedChoices => NestedOptions;
+
+    [ObservableProperty] private Option _nested = NestedOptions[0];
+    [ObservableProperty] private string _hostNestedNote = "";
+    [ObservableProperty] private bool _hostNestedOff;
+
+    private void ShowHostNested()
+    {
+        var state = _host?.NestedKvm;
+        HostNestedOff = state == false && _host?.KvmUsable == true;
+        HostNestedNote = state switch
+        {
+            true => "This computer's KVM allows it.",
+            false => "This computer's KVM has it turned off, so machines inside this one would run without acceleration.",
+            _ => "KVM is not loaded on this computer, so it cannot be offered.",
+        };
+    }
+
+    [RelayCommand]
+    private async Task EnableHostNestedAsync()
+    {
+        if (_host is not { } host) return;
+        var (on, message) = await Task.Run(() => NestedVirt.EnableAsync(host)).ConfigureAwait(false);
+        VmQontrol.Core.Log.Info($"Nested virtualization for this computer: {message}");
+        Ui.Post(() =>
+        {
+            HostNestedNote = message;
+            if (on) HostNestedOff = false;
+        });
+    }
+
     // Firmware
     [ObservableProperty] private bool _uefi;
     [ObservableProperty] private bool _secureBoot;
@@ -668,6 +714,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private Option _autoProtectInterval;
     [ObservableProperty] private decimal _autoProtectKeep = 3;
     [ObservableProperty] private bool _crashReporting;
+    [ObservableProperty] private bool _vsock;
+
+    public string VsockNote => $"This machine's address: {QemuCommandBuilder.VsockCid(_machine.Machine.Id)}. Sign in with ssh {_machine.Machine.Guest.Account ?? "user"}@vsock/{QemuCommandBuilder.VsockCid(_machine.Machine.Id)} (a Linux guest with systemd 256 or newer and SSH installed listens there by itself).";
     [ObservableProperty] private Option _bootOrder;
     [ObservableProperty] private bool _bootMenu;
 
@@ -715,6 +764,7 @@ public sealed partial class SettingsViewModel : ObservableObject
                 Cores = CoresAuto ? null : (int)Cores,
                 Model = CpuModel.Trim().Length > 0 ? CpuModel.Trim() : null,
                 MaxCores = HotPlugCpus ? (int)Math.Max(MaxCores, CoresAuto ? RecommendedCores() : Cores) : null,
+                Nested = Nested.Value switch { "on" => true, "off" => false, _ => null },
             },
             Firmware = o.Firmware with { Kind = Uefi ? FirmwareKind.Uefi : FirmwareKind.Bios, SecureBoot = Uefi && SecureBoot },
             Tpm = Tpm,
@@ -753,6 +803,7 @@ public sealed partial class SettingsViewModel : ObservableObject
                 Balloon = BalloonAuto ? null : Balloon,
                 Watchdog = Watchdog.Value,
                 CrashReporting = CrashReporting,
+                Vsock = Vsock,
                 BootOrder = BootOrder.Value,
                 BootMenu = BootMenu,
             },
@@ -841,6 +892,47 @@ public sealed partial class SettingsViewModel : ObservableObject
         string Name(int i) => $"disk{i}.qcow2";
         while (Disks.Any(d => d.File == Name(index))) index++;
         Disks.Add(new DiskRow(new DiskConfig { File = Name(index), SizeGiB = (long)NewDiskGb }, _machine.Folder));
+    }
+
+    /// <summary>Workstation's Compact: rewrites the disk with only what the system still uses (machine off, no snapshots).</summary>
+    [RelayCommand]
+    private async Task CompactDiskAsync(DiskRow row)
+    {
+        if (row.Compacting) return;
+        if (_machine.IsActive)
+        {
+            row.CompactStatus = "Shut the machine down first: a disk is compacted only while the machine is off.";
+            return;
+        }
+
+        if (!File.Exists(row.FullPath))
+        {
+            row.CompactStatus = "This disk has not been made yet.";
+            return;
+        }
+
+        row.Compacting = true;
+        row.CompactStatus = "Compacting… keep the machine off until this finishes.";
+        string status;
+        try
+        {
+            var r = await Task.Run(() => DiskCompact.CompactAsync(row.FullPath)).ConfigureAwait(false);
+            status = r.Saved > 0
+                ? $"Compacted: {Formats.Bytes(r.BytesBefore)} → {Formats.Bytes(r.BytesAfter)}, {Formats.Bytes(r.Saved)} given back."
+                : $"Compacted: nothing to give back ({Formats.Bytes(r.BytesAfter)} is all in use).";
+            VmQontrol.Core.Log.Info($"{_machine.Name}: {row.FileName} {status}");
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException)
+        {
+            status = $"Not compacted: {ex.Message}";
+            VmQontrol.Core.Log.Warn($"{_machine.Name}: {row.FileName} {status}");
+        }
+
+        Ui.Post(() =>
+        {
+            row.CompactStatus = status;
+            row.Compacting = false;
+        });
     }
 
     [RelayCommand]

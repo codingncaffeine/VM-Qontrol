@@ -155,4 +155,21 @@ public sealed class CommandBuilderTests
         // A quickemu machine keeps quickemu's command line.
         Assert.DoesNotContain("mac=", Nic(Bridged("cccc") with { ImportedFrom = new ImportSource("quickemu", "/x.conf") }), StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void VirtIO_SCSI_disks_share_one_controller_which_takes_the_io_thread()
+    {
+        var m = Linux with
+        {
+            Disks = [new DiskConfig { File = "disk0.qcow2", Bus = DiskBus.Scsi }, new DiskConfig { File = "disk1.qcow2", Bus = DiskBus.Scsi }],
+            Performance = new PerformanceConfig { IoThreads = true },
+        };
+        var args = Build(m).Args.ToList();
+        Assert.Single(args, a => a.StartsWith("virtio-scsi-pci,", StringComparison.Ordinal));
+        Assert.Contains("virtio-scsi-pci,id=vscsi0,iothread=io0", args);
+        Assert.Contains("scsi-hd,bus=vscsi0.0,drive=SystemDisk", args);
+        Assert.Contains("scsi-hd,bus=vscsi0.0,drive=Disk1", args);
+        // The control: a VirtIO disk has no SCSI controller.
+        Assert.DoesNotContain(Build(Linux).Args, a => a.StartsWith("virtio-scsi-pci", StringComparison.Ordinal));
+    }
 }

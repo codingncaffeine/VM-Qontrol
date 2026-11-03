@@ -34,6 +34,7 @@ public static class SettingsHistory
         Diff("Processors", before.Cpu.Cores, after.Cpu.Cores);
         Diff("Processor model", before.Cpu.Model, after.Cpu.Model, v => v?.ToString() ?? "automatic");
         Diff("Processors added while running, up to", before.Cpu.MaxCores, after.Cpu.MaxCores, v => v?.ToString() ?? "off");
+        Diff("Nested virtualization", before.Cpu.Nested, after.Cpu.Nested, v => v switch { true => "on", false => "off", _ => "as this computer allows" });
         Diff("Firmware", before.Firmware.Kind, after.Firmware.Kind);
         Diff("Secure Boot", before.Firmware.SecureBoot, after.Firmware.SecureBoot, v => (bool?)v == true ? "on" : "off");
         Diff("TPM", before.Tpm, after.Tpm, v => (bool?)v == true ? "on" : "off");
@@ -58,6 +59,7 @@ public static class SettingsHistory
         Diff("Memory ballooning", before.Devices.Balloon, after.Devices.Balloon, v => v is bool b ? (b ? "on" : "off") : "automatic");
         Diff("Watchdog", before.Devices.Watchdog, after.Devices.Watchdog, v => v?.ToString() ?? "none");
         Diff("Crash reporting", before.Devices.CrashReporting, after.Devices.CrashReporting, v => (bool?)v == true ? "on" : "off");
+        Diff("VirtIO socket (vsock)", before.Devices.Vsock, after.Devices.Vsock, v => (bool?)v == true ? "on" : "off");
         Diff("Boot order", before.Devices.BootOrder, after.Devices.BootOrder, v => v?.ToString() ?? "automatic");
         Diff("Boot menu", before.Devices.BootMenu, after.Devices.BootMenu, v => (bool?)v == true ? "on" : "off");
         Diff("Host drives", string.Join(", ", before.HostDrives.Select(d => $"{d.Name}{(d.Writable ? " (writable)" : "")}")), string.Join(", ", after.HostDrives.Select(d => $"{d.Name}{(d.Writable ? " (writable)" : "")}")), v => (v as string) is { Length: > 0 } t ? t : "none");

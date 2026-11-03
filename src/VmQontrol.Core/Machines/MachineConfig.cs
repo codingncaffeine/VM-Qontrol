@@ -1,5 +1,7 @@
 using System.Text.Json.Serialization;
 
+using VmQontrol.Core.Qemu;
+
 namespace VmQontrol.Core.Machines;
 
 /// <summary>
@@ -118,6 +120,9 @@ public sealed record GuestConfig
 
     /// <summary>The command that opens a shell in the guest through the forwarded SSH port.</summary>
     public string SshCommand(int port) => $"ssh -p {port} {Account ?? "user"}@localhost";
+
+    /// <summary>SSH over vsock (systemd's ssh proxy on this computer; a guest with systemd 256 or newer listens there).</summary>
+    public string SshVsockCommand(uint cid) => $"ssh {Account ?? "user"}@vsock/{cid}";
 }
 
 public enum FirmwareKind
@@ -149,6 +154,10 @@ public sealed record CpuConfig
 
     /// <summary>Processors can be added while the machine runs, up to this many; <c>null</c> = not (quickemu's command line).</summary>
     public int? MaxCores { get; set; }
+
+    /// <summary>Nested virtualization: the guest can run virtual machines of its own. <c>null</c> = as this computer's KVM
+    /// allows (quickemu's line: host passthrough carries vmx/svm whenever KVM's nested option is on); false = hidden.</summary>
+    public bool? Nested { get; set; }
 }
 
 /// <summary>A folder of this computer the machine sees; <see cref="Tag"/> is the name the guest mounts it by.</summary>
@@ -181,6 +190,10 @@ public sealed record DevicesConfig
 
     /// <summary>Show the firmware's boot menu for a few seconds at every power on.</summary>
     public bool BootMenu { get; set; }
+
+    /// <summary>A VirtIO socket (vsock) between this computer and the guest, at the guest's own address
+    /// (<see cref="QemuCommandBuilder.VsockCid"/>): SSH and tools reach it with no network at all.</summary>
+    public bool Vsock { get; set; }
 }
 
 /// <summary>A kernel, initrd and kernel command line to boot instead of the firmware's boot order.</summary>
@@ -208,6 +221,10 @@ public enum DiskBus
 
     /// <summary>VMware's paravirtual SCSI controller, for machines imported from VMware whose system has its driver.</summary>
     Pvscsi,
+
+    /// <summary>VirtIO SCSI (virt-manager's choice for many disks): one controller for all of them, TRIM as SCSI UNMAP,
+    /// disks plugged in while running; Windows needs the vioscsi driver (on the VirtIO driver disc).</summary>
+    Scsi,
 }
 
 public sealed record DiskConfig
