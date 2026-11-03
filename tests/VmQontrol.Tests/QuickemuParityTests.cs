@@ -45,6 +45,9 @@ public sealed class QuickemuParityTests
             // The monitor differs on purpose: quickemu opens a human monitor socket, VM Qontrol turns it off and uses QMP.
             if (a is "-monitor" or "-qmp") { i++; continue; }
             if (a == "-serial" && args[i + 1] != "none") { result.AddRange(["-serial", "<SERIAL>"]); i++; continue; }
+            // On purpose too: quickemu makes the firmware flash "secure" even with SMM off, where it refuses every NVRAM
+            // write (a macOS install then falls back to Recovery); VM Qontrol sets it only with SMM on.
+            if (a == "-global" && args[i + 1] == "driver=cfi.pflash01,property=secure,value=on" && args.Any(x => x.Contains("smm=off", StringComparison.Ordinal))) { i++; continue; }
             a = a.Replace($"{name}/{name}.pid", "<PID>", StringComparison.Ordinal).Replace("<RUN>/qemu.pid", "<PID>", StringComparison.Ordinal)
                 .Replace($"{name}/{name}.sock", "<SPICE>", StringComparison.Ordinal).Replace("<RUN>/spice.sock", "<SPICE>", StringComparison.Ordinal)
                 .Replace($"{name}/{name}-agent.sock", "<AGENT>", StringComparison.Ordinal).Replace("<RUN>/agent.sock", "<AGENT>", StringComparison.Ordinal)

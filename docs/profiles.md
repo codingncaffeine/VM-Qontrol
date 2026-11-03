@@ -22,6 +22,7 @@ configurations (every guest family and the main options) with a stand-in QEMU th
 | Windows 11 Secure Boot | Off (`secureboot="off"`) | On for new Windows 11 machines when the host has a Secure Boot firmware build | Setup on current Windows 11 discs (build 26300) stops with "The PC must support Secure Boot"; the LabConfig bypass no longer gets past it. Imported machines keep their setting. |
 | USB devices at power on | `usb-host` with no id | The same device with `id=usbauto-VENDOR-PRODUCT` | The id lets the USB panel see the rule in the running machine and take it out live. |
 | Controller for handed-over USB devices | Only when `usb_devices` is set | Always on VM Qontrol's own machines (`qemu-xhci,id=hostpass`) | Devices connected while running go on it: a USB 2 (EHCI) bus refuses the full-speed mice, keyboards and receivers most people pass, and QEMU then resets them over and over. Imported quickemu machines keep quickemu's line. |
+| Firmware flash "secure" | `-global driver=cfi.pflash01,property=secure,value=on` on every UEFI machine | Only when SMM is on (Windows, FreeDOS, Linux with Secure Boot) | A secure flash takes writes only from SMM. With SMM off (macOS, Linux and BSD without Secure Boot) it refused every NVRAM write: the startup disk and the macOS installer's own state were lost at each restart, so an install fell back to Recovery, and Linux boot entries vanished. Measured: the variables file never changed with it, and changed at once without it. |
 
 ## Known quickemu behaviour kept for parity
 

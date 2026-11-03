@@ -172,4 +172,23 @@ public sealed class CommandBuilderTests
         // The control: a VirtIO disk has no SCSI controller.
         Assert.DoesNotContain(Build(Linux).Args, a => a.StartsWith("virtio-scsi-pci", StringComparison.Ordinal));
     }
+
+    [Fact]
+    public void The_firmware_flash_is_secure_only_with_SMM_so_NVRAM_writes_land()
+    {
+        const string Secure = "driver=cfi.pflash01,property=secure,value=on";
+        MachineConfig Uefi(string os, bool secureBoot = false) => new()
+        {
+            Name = "T",
+            Guest = new GuestConfig { Os = os, Release = os == "windows" ? "11" : "" },
+            Firmware = new FirmwareConfig { Kind = FirmwareKind.Uefi, SecureBoot = secureBoot, CodeFile = "code.fd", VarsFile = "vars.fd" },
+            Disks = [new DiskConfig { File = "disk0.qcow2" }],
+            Media = os == "macos" ? [new MediaConfig { Role = MediaRole.Bootloader, File = "OpenCore.qcow2" }] : [],
+        };
+        bool HasSecure(MachineConfig m) => Build(m).Args.Contains(Secure);
+        Assert.True(HasSecure(Uefi("windows")), "Windows runs with SMM on: its flash stays secure");
+        Assert.True(HasSecure(Uefi("linux", secureBoot: true)));
+        Assert.False(HasSecure(Uefi("linux")), "SMM off: a secure flash would refuse every NVRAM write");
+        Assert.False(HasSecure(Uefi("macos")), "SMM off: the macOS installer's NVRAM state would be lost at each restart");
+    }
 }

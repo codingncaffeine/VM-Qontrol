@@ -376,7 +376,11 @@ public static class QemuCommandBuilder
 
         if (uefi && efiCode is not null)
         {
-            args.AddRange(["-global", "driver=cfi.pflash01,property=secure,value=on",
+            // A "secure" flash takes writes only from SMM. With SMM off (macOS, Linux and BSD without Secure Boot) it
+            // refused every NVRAM write: the startup disk, boot entries and the macOS installer's own state were lost at
+            // each restart, so a macOS install fell back to Recovery. quickemu sets it always; set only when SMM is on.
+            if (smm == "on") args.AddRange(["-global", "driver=cfi.pflash01,property=secure,value=on"]);
+            args.AddRange([
                 "-drive", $"if=pflash,format={ctx.FirmwareFormat(efiCode)},unit=0,file={efiCode},readonly=on",
                 "-drive", $"if=pflash,format={(varsToCreate is { } v ? ctx.FirmwareFormat(v.Item1) : ctx.FirmwareFormat(efiVars))},unit=1,file={efiVars}"]);
         }
