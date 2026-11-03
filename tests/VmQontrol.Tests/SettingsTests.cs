@@ -260,4 +260,67 @@ public sealed class SettingsTests
         Assert.Equal(MachineKind.Quickemu, again.Kind);
         Assert.Equal(hash, Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(conf))));
     }
+
+    /// <summary>
+    /// The user's report (s7): "I can't eject either ISO". Once installed, a machine's installer and answer disc stay
+    /// out of the drive, yet Settings listed them as if in it and Eject did nothing. Now each disc says where it is,
+    /// and Eject always says what it did (here: it was not in the drive; it is set to stay out).
+    /// </summary>
+    [Trait("Tier", "Window")]
+    [Fact]
+    public async Task Each_disc_says_where_it_is_and_eject_always_answers()
+    {
+        using var profile = new TestProfile("settings-eject");
+        var dir = Path.Combine(profile.Paths.DefaultLibrary, "Installed");
+        Directory.CreateDirectory(dir);
+        await VmQontrol.Core.Runtime.QemuImg.RunAsync(TestContext.Current.CancellationToken, "create", "-q", "-f", "qcow2", "-o", "preallocation=metadata", Path.Combine(dir, "disk0.qcow2"), "1G");
+        File.WriteAllBytes(Path.Combine(dir, "win.iso"), [0]);
+        File.WriteAllBytes(Path.Combine(dir, "unattended.iso"), [0]);
+        MachineStore.Save(new MachineConfig
+        {
+            Name = "Installed",
+            Guest = new GuestConfig { Os = "windows", Release = "10" },
+            Disks = [new DiskConfig { File = "disk0.qcow2", SizeGiB = 1 }],
+            Media = [new MediaConfig { Role = MediaRole.Installer, File = "win.iso", Connect = Connect.UntilInstalled },
+                     new MediaConfig { Role = MediaRole.Unattended, File = "unattended.iso", Connect = Connect.UntilInstalled }],
+        }, Path.Combine(dir, "vm.json"));
+
+        var seen = await Ui.Run(() =>
+        {
+            var shell = new ShellViewModel(profile.Paths, AppSettings.Load(profile.Paths)) { WatchUsb = false };
+            var window = new MainWindow { DataContext = shell, Width = 1320, Height = 900 };
+            Avalonia.Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
+            window.Show();
+            _ = shell.StartAsync();
+            Ui.PumpUntil(() => shell.Machines.Count == 1, "the library");
+            Ui.Click(window, Named<ListBox>(window, "Library").GetVisualDescendants().OfType<ListBoxItem>().First());
+            Ui.PumpUntil(() => shell.Selected is not null, "the machine page");
+            Ui.Pump(0.3);
+            Ui.Click(window, Named<Button>(window.GetVisualDescendants().OfType<MachineView>().Single(), "OpenSettings"));
+            Ui.PumpUntil(() => shell.SettingsPage is not null, "the settings", 15);
+            var settings = shell.SettingsPage!;
+            var view = window.GetVisualDescendants().OfType<SettingsView>().Single();
+            Ui.Click(window, Named<ListBox>(view, "Sections").GetVisualDescendants().OfType<ListBoxItem>().First(i => (i.DataContext as SettingsSection)?.Key == "media"));
+            Ui.PumpUntil(() => settings.Media.All(m => m.Status.Length > 0), "where each disc is");
+            Ui.Pump(0.3);
+            var drawn = view.GetLogicalDescendants().OfType<StackPanel>().Where(p => p.Name == "MediaStatus" && p.IsEffectivelyVisible)
+                .Select(p => p.Children.OfType<TextBlock>().Single().Text).ToList();
+            Ui.Capture(window, "s7", "settings-media-status-dark");
+            Avalonia.Application.Current!.RequestedThemeVariant = ThemeVariant.Light;
+            Ui.Pump(0.3);
+            Ui.Capture(window, "s7", "settings-media-status-light");
+            Avalonia.Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
+            var eject = view.GetLogicalDescendants().OfType<Button>().First(b => b.Content as string == "Eject" && b.IsEffectivelyVisible);
+            Ui.Click(window, eject);
+            Ui.PumpUntil(() => settings.SaveNote.Length > 0, "Eject to answer");
+            var result = (drawn, Note: settings.SaveNote, First: settings.Media[0].Connect.Value);
+            window.Close();
+            return result;
+        });
+
+        Assert.Equal(2, seen.drawn.Count);
+        Assert.All(seen.drawn, t => Assert.StartsWith("Out of the drive: the system is installed", t, StringComparison.Ordinal));
+        Assert.Contains("was not in the drive", seen.Note, StringComparison.Ordinal);
+        Assert.Equal(nameof(Connect.Never), seen.First);
+    }
 }

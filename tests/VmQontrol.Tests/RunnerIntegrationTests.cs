@@ -151,4 +151,45 @@ public sealed class RunnerIntegrationTests
         Assert.Equal([PowerState.Paused, PowerState.Running], seen.Take(2));
         Assert.Equal(PowerState.Off, seen.Last());
     }
+
+    /// <summary>
+    /// The user's report (s7, "can't eject"): once the system is installed its installer stays out. The machine still
+    /// has an empty drive (QEMU's default one when no disc is given), so a disc goes in and comes out while it runs.
+    /// </summary>
+    [Fact]
+    public async Task An_installed_machine_keeps_an_empty_drive_a_disc_goes_in_and_comes_out_while_it_runs()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var (profile, m, dir) = await NewMachineAsync("drive", x => x with
+        {
+            Media = [new MediaConfig { Role = MediaRole.Installer, File = "installer.iso", Connect = Connect.UntilInstalled }],
+        });
+        using var _ = profile;
+        VmQontrol.Core.Media.IsoWriter.Write(Path.Combine(dir, "installer.iso"), "INSTALLER", new Dictionary<string, byte[]> { ["a.txt"] = "a"u8.ToArray() });
+        var disc = Path.Combine(dir, "tools.iso");
+        VmQontrol.Core.Media.IsoWriter.Write(disc, "TOOLS", new Dictionary<string, byte[]> { ["t.txt"] = "t"u8.ToArray() });
+        // "Installed": the system disk holds more than an empty one does.
+        File.Delete(Path.Combine(dir, "disk0.qcow2"));
+        await QemuImg.RunAsync(ct, "create", "-q", "-f", "qcow2", "-o", "preallocation=metadata", Path.Combine(dir, "disk0.qcow2"), "1G");
+        Assert.True(DiskState.IsUsed(Path.Combine(dir, "disk0.qcow2")), "the control: the disk must count as installed");
+
+        var running = await MachineRunner.StartAsync(m, dir, profile.Paths, Host, new StartOptions { Headless = true }, ct);
+        await using var watcher = await MachineWatcher.AttachAsync(running, ct);
+        try
+        {
+            var cmdline = await File.ReadAllTextAsync($"/proc/{running.Pid}/cmdline", ct);
+            Assert.DoesNotContain("installer.iso", cmdline, StringComparison.Ordinal);
+            var drives = await LiveMedia.DrivesAsync(watcher, ct);
+            Assert.Contains(drives, d => d.File is null);
+
+            await LiveMedia.ChangeAsync(watcher, null, disc, ct);
+            Assert.Contains(await LiveMedia.DrivesAsync(watcher, ct), d => d.File == disc);
+            await LiveMedia.EjectAsync(watcher, disc, ct);
+            Assert.DoesNotContain(await LiveMedia.DrivesAsync(watcher, ct), d => d.File == disc);
+        }
+        finally
+        {
+            await MachineRunner.PowerOffAsync(running, CancellationToken.None);
+        }
+    }
 }

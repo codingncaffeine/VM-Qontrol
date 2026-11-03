@@ -38,6 +38,18 @@ public sealed partial class MediaRow(MediaConfig media) : ObservableObject
     partial void OnFileChanged(string value) => OnPropertyChanged(nameof(FileName));
 
     public MediaConfig ToConfig() => new() { Role = Role, File = File, Connect = Enum.Parse<Connect>(Connect.Value!) };
+
+    /// <summary>Where the disc is now, in words: in the drive, out because the system is installed, or at the next power on.</summary>
+    [ObservableProperty]
+    private string _status = "";
+
+    /// <summary>The disc is in the running machine's drive: Eject takes it out now.</summary>
+    [ObservableProperty]
+    private bool _inDrive;
+
+    public string EjectTip => InDrive ? "Take the disc out now, and keep it out from the next power on (after Save)" : "Keep this disc out of the drive from the next power on (after Save)";
+
+    partial void OnInDriveChanged(bool value) => OnPropertyChanged(nameof(EjectTip));
 }
 
 /// <summary>A disk in the settings: its file, size and bus; the size only grows, and only while the machine is off.</summary>
@@ -273,6 +285,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         Tpm = m.Tpm;
         foreach (var d in m.Disks) Disks.Add(new DiskRow(d, machine.Folder));
         foreach (var x in m.Media) Media.Add(new MediaRow(x));
+        _ = RefreshMediaStatusAsync();
         var nic = m.Nics.FirstOrDefault() ?? new NicConfig { Mode = VmQontrol.Core.Machines.NetMode.None };
         NetMode = NetModes.First(o => o.Value == nic.Mode.ToString());
         NicModel = NicModels.FirstOrDefault(o => o.Value == nic.Model) ?? new Option(nic.Model, nic.Model ?? "Automatic");
@@ -699,6 +712,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     {
         var old = row.File;
         row.File = file;
+        // A disc chosen by hand is meant to be in the drive, also once the system is installed.
+        if (row.Connect.Value != nameof(Connect.Always)) row.Connect = ConnectOptions.First(o => o.Value == nameof(Connect.Always));
         if (_machine.Watcher is { } watcher)
         {
             try
@@ -712,21 +727,82 @@ public sealed partial class SettingsViewModel : ObservableObject
                 Ui.Post(() => SaveNote = $"The disc could not be changed now ({ex.Message}); it will be at the next power on once saved.");
             }
         }
+
+        await RefreshMediaStatusAsync().ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Each disc's place, from QEMU's own drive list while the machine runs, else from its settings: an installer marked
+    /// "until installed" stays out once the system disk is used. Reads on a worker.
+    /// </summary>
+    private async Task RefreshMediaStatusAsync()
+    {
+        var rows = Media.ToList();
+        var folder = _machine.Folder;
+        var watcher = _machine.Watcher;
+        var disk = _machine.Machine.Disks.FirstOrDefault()?.File;
+        string Full(string f) => Path.IsPathRooted(f) ? f : Path.Combine(folder, f);
+        var (inDrive, installed) = await Task.Run<(HashSet<string>? Live, bool Installed)>(async () =>
+        {
+            HashSet<string>? live = null;
+            if (watcher is not null)
+            {
+                try
+                {
+                    live = (await LiveMedia.DrivesAsync(watcher).ConfigureAwait(false)).Where(d => d.File is not null).Select(d => d.File!).ToHashSet(StringComparer.Ordinal);
+                }
+                catch (Exception ex) when (ex is QmpException or IOException)
+                {
+                    Core.Log.Warn($"{_machine.Name}: could not list the disc drives ({ex.Message}).");
+                }
+            }
+
+            return (live, disk is not null && DiskState.IsUsed(Full(disk)));
+        }).ConfigureAwait(false);
+        Ui.Post(() =>
+        {
+            foreach (var row in rows)
+            {
+                var connect = Enum.Parse<Connect>(row.Connect.Value!);
+                row.InDrive = inDrive?.Contains(Full(row.File)) == true;
+                row.Status = row.File.Length == 0 ? "Empty"
+                    : row.InDrive ? "In the drive now"
+                    : connect == Connect.Never ? "Kept out of the drive"
+                    : connect == Connect.UntilInstalled && installed ? "Out of the drive: the system is installed, so this disc no longer goes in"
+                    : inDrive is not null ? "Not in the drive now; it goes in at the next power on"
+                    : "Goes in the drive at power on";
+            }
+        });
+    }
+
+    /// <summary>
+    /// Takes the disc out: now, if it is in the running machine's drive, and from the next power on (Disconnected, kept
+    /// once saved). Always says what happened.
+    /// </summary>
     [RelayCommand]
     private async Task EjectAsync(MediaRow row)
     {
-        if (_machine.Watcher is not { } watcher || row.File.Length == 0) return;
-        try
+        if (row.File.Length == 0) return;
+        var wasIn = row.InDrive;
+        row.Connect = ConnectOptions.First(o => o.Value == nameof(Connect.Never));
+        if (wasIn && _machine.Watcher is { } watcher)
         {
-            await LiveMedia.EjectAsync(watcher, Path.IsPathRooted(row.File) ? row.File : Path.Combine(_machine.Folder, row.File)).ConfigureAwait(false);
-            Ui.Post(() => SaveNote = "Ejected. Set the drive to Disconnected and save to keep it empty at the next power on.");
+            try
+            {
+                await LiveMedia.EjectAsync(watcher, Path.IsPathRooted(row.File) ? row.File : Path.Combine(_machine.Folder, row.File)).ConfigureAwait(false);
+                Ui.Post(() => SaveNote = $"{row.FileName} is out of the drive. Save to keep it out from the next power on.");
+            }
+            catch (Exception ex) when (ex is QmpException or IOException)
+            {
+                Ui.Post(() => SaveNote = $"The guest held on to {row.FileName} ({ex.Message}); eject it inside the machine first. It stays out from the next power on once saved.");
+            }
         }
-        catch (Exception ex) when (ex is QmpException or IOException)
+        else
         {
-            Ui.Post(() => SaveNote = $"The disc could not be ejected ({ex.Message}).");
+            Ui.Post(() => SaveNote = $"{row.FileName} was not in the drive; it is set to stay out. Save to keep that.");
         }
+
+        await RefreshMediaStatusAsync().ConfigureAwait(false);
     }
 
     /// <summary>Adds a folder chosen by the person (the view picks it).</summary>
