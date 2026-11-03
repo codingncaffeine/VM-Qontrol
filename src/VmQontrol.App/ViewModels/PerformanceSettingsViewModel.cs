@@ -239,6 +239,40 @@ public sealed partial class PerformanceSettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(PciSummary));
     }
 
+    // ── The guided gaming / passthrough profile
+
+    /// <summary>What a gaming machine with a passed-through graphics card needs here, each with whether this computer has it.</summary>
+    public ObservableCollection<CheckRow> GamingChecks { get; } = [];
+
+    public bool HasGamingChecks => GamingChecks.Count > 0;
+
+    /// <summary>
+    /// Sets the profile: pinned to the recommended cores, an I/O thread per disk, 2 MB huge pages and Looking Glass's
+    /// memory; the graphics card is the one choice left to the person (ticked in the list below). Then shows what this
+    /// computer still lacks.
+    /// </summary>
+    [RelayCommand]
+    private void ApplyGaming()
+    {
+        if (PinChoices.FirstOrDefault(c => c.Title.StartsWith("Recommended", StringComparison.Ordinal)) is { } recommended) Pin = recommended;
+        IoThreads = true;
+        HugePages = HugeChoices.First(c => c.Value == "2M");
+        LookingGlass = true;
+        GamingChecks.Clear();
+        var memory = _memoryMiB();
+        var two = _pool.FirstOrDefault(p => p.Label == "2M");
+        var gpus = _allPci.Where(d => d.Kind == "Graphics" && d.Blocked is null && d.Group is not null).ToList();
+        void Add(string title, bool ok, string detail) =>
+            GamingChecks.Add(new CheckRow(title, detail, null, ok ? CheckStatus.Ok : CheckStatus.Warning));
+        Add("IOMMU", !NoIommu, NoIommu ? "Off: no device can be handed over. Turn on AMD-Vi or VT-d in the firmware, and amd_iommu=on or intel_iommu=on in the kernel's options." : "On: devices can be handed over by group.");
+        Add("A graphics card to hand over", gpus.Count > 0, gpus.Count > 0 ? $"{string.Join(", ", gpus.Select(g => g.Name))}: tick it under PCI devices." : "None that this computer is not using for its own screen. A second card (or the processor's own graphics, for this computer's screen) is needed.");
+        Add("Huge pages", two is { } t && t.Free >= t.PagesFor(memory), two is null ? "This computer has no 2 MB pool." : $"{two.Free} of the {two.PagesFor(memory)} pages needed are free; Reserve does the rest until a restart.");
+        var limit = Core.Hosts.Vfio.MemlockLimit();
+        Add("Memory-lock limit", limit >= (ulong)(memory + 256) * 1024 * 1024, limit == ulong.MaxValue ? "Unlimited." : $"{limit / (1024 * 1024)} MB now; it is raised for VM Qontrol at power on, with the same password prompt as the devices.");
+        Add("Looking Glass client", FindOnPath("looking-glass-client") is not null, FindOnPath("looking-glass-client") is not null ? "Installed: run looking-glass-client once the guest's Looking Glass host program runs." : "Not installed here; without it, use a monitor plugged into the passed-through card.");
+        OnPropertyChanged(nameof(HasGamingChecks));
+    }
+
     public PerformanceConfig ToConfig()
     {
         List<int> pinned = Pin is null ? [.. _original.PinnedCpus] : Pin.Custom ? CpuTopology.ParseList(CustomCpus) : [.. Pin.Cpus ?? []];

@@ -134,6 +134,24 @@ public static class MachineRunner
         var launch = QemuCommandBuilder.Build(m, context);
         if (launch.Errors.Count > 0) throw new StartRefusedException(launch.Errors);
         foreach (var w in launch.Warnings) Log.Warn($"{m.Name}: {w}");
+        // Memory from huge pages: the pool must have room now, or QEMU fails with an allocation error.
+        var memoryMiB = MemoryOf(launch.Args);
+        if (m.Performance.HugePages is { } hugeSize && Hosts.HugePagePool.Sizes().FirstOrDefault(s => s.Label == hugeSize) is { } pool && pool.Free < pool.PagesFor(memoryMiB))
+            throw new StartRefusedException([$"{m.Name} takes its memory from {hugeSize} huge pages: it needs {pool.PagesFor(memoryMiB)}, and {pool.Free} are free. Reserve them in Settings, Performance, or turn huge pages off."]);
+
+        // PCI devices: what cannot be fixed refuses the start; the rest is done with one password prompt (D27).
+        if (m.Performance.PciDevices.Count > 0)
+        {
+            var pci = Hosts.PciHost.List();
+            if (Hosts.Vfio.Blocking(m.Performance.PciDevices, pci) is { Count: > 0 } blocking) throw new StartRefusedException(blocking);
+            if (Hosts.Vfio.Missing(m.Performance.PciDevices, memoryMiB, pci).Count > 0)
+            {
+                if (await Hosts.Vfio.PrepareAsync(m.Performance.PciDevices, runtime.Pid, ct).ConfigureAwait(false) is { } why)
+                    throw new StartRefusedException([$"The PCI devices were not handed over: {why}."]);
+                if (Hosts.Vfio.Missing(m.Performance.PciDevices, memoryMiB, Hosts.PciHost.List()) is { Count: > 0 } still) throw new StartRefusedException(still);
+            }
+        }
+
         if (launch.VarsToCreate is { } vars)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(vars.Destination)!);
@@ -352,6 +370,16 @@ public static class MachineRunner
         args.Select(a => SshForward.Replace(a, port is { } p ? $",hostfwd=tcp::{p}-:22" : "", 1)).ToList();
 
     private static readonly System.Text.RegularExpressions.Regex SshForward = new(@",hostfwd=tcp::\d+-:22(?=,|$)", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>The memory a built command line gives the machine, in MiB (its -m argument: "16G" or "4096M").</summary>
+    internal static long MemoryOf(IReadOnlyList<string> args)
+    {
+        var i = args.ToList().IndexOf("-m");
+        if (i < 0 || i + 1 >= args.Count) return 0;
+        var v = args[i + 1];
+        var n = long.TryParse(v.TrimEnd('G', 'M'), System.Globalization.CultureInfo.InvariantCulture, out var x) ? x : 0;
+        return v.EndsWith('G') ? n * 1024 : n;
+    }
 
     /// <summary>The machine if it is running now; a runtime folder left by a machine that has stopped is cleared.</summary>
     public static RunningMachine? Find(MachineConfig m, QontrolPaths paths)

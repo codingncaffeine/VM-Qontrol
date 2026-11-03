@@ -42,9 +42,15 @@ public sealed class PerformanceSettingsTests
             Ui.PumpUntil(() => settings.Perf.PinChoices.Count > 1, "the host's topology");
             Ui.Pump(0.4);
             var recommended = settings.Perf.PinChoices.FirstOrDefault(c => c.Title.StartsWith("Recommended", StringComparison.Ordinal));
-            if (recommended is not null) settings.Perf.Pin = recommended;
-            Ui.Pump(0.2);
+            Ui.Click(window, window.GetVisualDescendants().OfType<Button>().First(b => b.Name == "ApplyGaming"));
+            Ui.PumpUntil(() => settings.Perf.HasGamingChecks, "the gaming checklist");
+            Ui.Pump(0.3);
+            var checks = settings.Perf.GamingChecks.Select(c => c.Title).ToList();
             Ui.Capture(window, "phase10", "performance-dark");
+            Avalonia.Application.Current!.RequestedThemeVariant = ThemeVariant.Light;
+            Ui.Pump(0.3);
+            Ui.Capture(window, "phase10", "performance-light");
+            Avalonia.Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
             var pci = window.GetVisualDescendants().OfType<ItemsControl>().First(i => i.Name == "PciRows");
             pci.BringIntoView();
             Ui.Pump(0.4);
@@ -58,7 +64,7 @@ public sealed class PerformanceSettingsTests
             settings.SaveCommand.Execute(null);
             Ui.PumpUntil(() => shell.SettingsPage is null || shell.Selected!.Machine.Performance.PinnedCpus.Count > 0, "the save", 10);
             window.Close();
-            return (recommended?.Title, marked);
+            return (recommended?.Title, marked, checks);
         });
 
         if (expected is not null)
@@ -69,6 +75,13 @@ public sealed class PerformanceSettingsTests
             Assert.NotEmpty(saved.Performance.EmulatorCpus);
             Assert.DoesNotContain(saved.Performance.EmulatorCpus, saved.Performance.PinnedCpus.Contains);
         }
+
+        Assert.Equal(["IOMMU", "A graphics card to hand over", "Huge pages", "Memory-lock limit", "Looking Glass client"], seen.checks);
+        var gaming = MachineStore.Load(Path.Combine(dir, "vm.json")).Performance;
+        Assert.True(gaming.IoThreads);
+        Assert.Equal("2M", gaming.HugePages);
+        Assert.Equal(32, gaming.LookingGlassMiB); // 1920 × 1080: Looking Glass's own formula
+        Assert.Empty(gaming.PciDevices); // the card stays the person's choice
 
         if (seen.marked.CanChoose is not null)
         {

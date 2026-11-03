@@ -824,6 +824,35 @@
           </Grid>
           <TextBlock Classes="help" Margin="0,0,0,4" TextWrapping="Wrap"
                      Text="For games, audio work and big workloads. Everyday machines need none of this: every setting here is off until you choose it." />
+          <Border Classes="group">
+            <StackPanel>
+              <Border Classes="row first">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Gaming and graphics card passthrough" Classes="label" />
+                    <TextBlock Text="Sets everything below the way a gaming machine wants it (pinned cores in the largest cache, I/O threads, huge pages, Looking Glass) and says what this computer still needs. The graphics card to hand over stays your choice." Classes="help" TextWrapping="Wrap" />
+                  </StackPanel>
+                  <Button x:Name="ApplyGaming" Grid.Column="1" Classes="tool" Content="Set up for gaming" Command="{Binding ApplyGamingCommand}" VerticalAlignment="Center" />
+                </Grid>
+              </Border>
+              <ItemsControl ItemsSource="{Binding GamingChecks}" IsVisible="{Binding HasGamingChecks}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:CheckRow">
+                    <Border Classes="row">
+                      <Grid ColumnDefinitions="96,230,*" ColumnSpacing="12">
+                        <Border Classes="pill" Classes.ok="{Binding IsOk}" Classes.warn="{Binding !IsOk}" VerticalAlignment="Top" HorizontalAlignment="Left">
+                          <TextBlock Text="{Binding Badge}" />
+                        </Border>
+                        <TextBlock Grid.Column="1" Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Top" TextWrapping="Wrap" />
+                        <TextBlock Grid.Column="2" Text="{Binding Detail}" Classes="help" TextWrapping="Wrap" />
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </Border>
+
           <TextBlock Text="PROCESSORS AND MEMORY" Classes="grouptitle" />
           <Border Classes="group">
             <StackPanel>
