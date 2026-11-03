@@ -136,7 +136,13 @@ public sealed class NewMachineButtonTests
             window.Show();
             _ = shell.StartAsync();
             Ui.PumpUntil(() => shell.Welcome.Checked, "the host check");
-            Assert.True(Named<Button>(window, "AddLibraryFolder").IsEffectivelyVisible);
+            var add = Named<Button>(window, "AddLibraryFolder");
+            Assert.True(add.IsEffectivelyVisible);
+            var pressed = false;
+            add.Click += (_, _) => pressed = true;
+            Ui.Click(window, add);
+            Ui.Pump(0.5);
+            Assert.True(pressed, "a click on the button does not reach it");
             Assert.DoesNotContain(shell.Machines, m => m.Name == "Found");
             _ = shell.AddLibraryFolderAsync(Path.Combine(elsewhere, "Found")); // what the folder picker gives
             Ui.PumpUntil(() => shell.Machines.Any(m => m.Name == "Found"), "the machine listed", 15);

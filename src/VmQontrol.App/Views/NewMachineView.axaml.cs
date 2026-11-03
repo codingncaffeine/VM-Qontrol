@@ -22,9 +22,15 @@ public partial class NewMachineView : UserControl
         };
         this.FindControl<Button>("ChooseLibrary")!.Click += async (_, _) =>
         {
-            if (TopLevel.GetTopLevel(this)?.StorageProvider is not { } storage || DataContext is not NewMachineViewModel vm) return;
-            var folders = await storage.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = "Where should this machine's files be kept?" });
-            if (folders.Count > 0 && folders[0].TryGetLocalPath() is { } path) vm.LibraryRoot = path;
+            if (DataContext is not NewMachineViewModel vm) return;
+            try
+            {
+                if (await Pickers.FolderAsync(this, "Where should this machine's files be kept?") is { } path) vm.LibraryRoot = path;
+            }
+            catch (PickerFailedException)
+            {
+                // Logged; the location stays as it was.
+            }
         };
         var drop = this.FindControl<Border>("DropZone")!;
         drop.AddHandler(DragDrop.DragOverEvent, (_, e) => e.DragEffects = e.DataTransfer.TryGetFiles() is { Length: > 0 } ? DragDropEffects.Copy : DragDropEffects.None);
