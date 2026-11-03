@@ -189,6 +189,12 @@
                   <TextBlock Text="Save running machines" Classes="label" />
                   <TextBlock Text="Suspends each running machine before this computer shuts down or restarts, so it carries on where it was at the next power on. Machines using a drive of this computer are asked to shut down instead." Classes="help" />
                   <TextBlock Text="{Binding ShutdownTimeText}" Classes="help" />
+                  <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,8,0,0">
+                    <Button x:Name="ChangeShutdownTime" Classes="tool" Content="{Binding ShutdownTimeButtonText}" Command="{Binding ChangeShutdownTimeCommand}"
+                            IsEnabled="{Binding !ChangingShutdownTime}"
+                            ToolTip.Tip="Asks for your password once and sets how long this computer waits for programs at shutdown (logind's InhibitDelayMaxSec). Shutdown waits only while machines are being saved." />
+                    <TextBlock Text="{Binding ShutdownTimeNote}" Classes="help" VerticalAlignment="Center" TextWrapping="Wrap" IsVisible="{Binding ShutdownTimeNote, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                  </StackPanel>
                 </StackPanel>
                 <ToggleSwitch x:Name="SaveAtHostShutdown" Grid.Column="1" IsChecked="{Binding SaveAtHostShutdown}" />
               </Grid>

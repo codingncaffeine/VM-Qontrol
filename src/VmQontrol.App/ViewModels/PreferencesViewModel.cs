@@ -170,9 +170,37 @@ public sealed partial class PreferencesViewModel : ObservableObject
         Ui.Post(() => ShutdownTimeText = text);
     });
 
-    internal static string ShutdownTime(TimeSpan budget) =>
-        $"This computer gives programs {budget.TotalSeconds:0.#} s to get ready when it shuts down. Small machines on a fast disk save in that time; "
-        + "a machine's Log tab says whether it was saved, and one that was not turns off as at a power cut.";
+    internal static string ShutdownTime(TimeSpan budget) => budget.TotalSeconds >= 60
+        ? $"Machines get up to {budget.TotalMinutes:0.#} minutes to save when this computer shuts down; it waits only as long as saving takes. "
+          + "Each machine's Log tab says whether it was saved."
+        : $"This computer gives programs {budget.TotalSeconds:0.#} s to get ready when it shuts down. Small machines on a fast disk save in that time; "
+          + "larger ones need more. A machine's Log tab says whether it was saved, and one that was not turns off as at a power cut.";
+
+    [ObservableProperty] private bool _shutdownTimeRaised = Core.Hosts.ShutdownTime.IsRaised;
+    [ObservableProperty] private bool _changingShutdownTime;
+    [ObservableProperty] private string? _shutdownTimeNote;
+
+    public string ShutdownTimeButtonText => ShutdownTimeRaised ? "Back to the system's own time…" : $"Give machines up to {Core.Hosts.ShutdownTime.RaisedSeconds / 60} minutes…";
+
+    partial void OnShutdownTimeRaisedChanged(bool value) => OnPropertyChanged(nameof(ShutdownTimeButtonText));
+
+    /// <summary>Raises or puts back logind's time (one password prompt), off the UI thread, then shows what logind says now.</summary>
+    [RelayCommand]
+    private async Task ChangeShutdownTimeAsync()
+    {
+        if (ChangingShutdownTime) return;
+        ChangingShutdownTime = true;
+        var raise = !ShutdownTimeRaised;
+        var (_, message) = await Task.Run(() => Core.Hosts.ShutdownTime.SetAsync(raise)).ConfigureAwait(false);
+        var raised = Core.Hosts.ShutdownTime.IsRaised;
+        Ui.Post(() =>
+        {
+            ShutdownTimeRaised = raised;
+            ShutdownTimeNote = message;
+            ChangingShutdownTime = false;
+            LoadShutdownTime();
+        });
+    }
 
     private void Save(Func<AppSettings, AppSettings> change)
     {
