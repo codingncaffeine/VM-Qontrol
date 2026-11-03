@@ -35,6 +35,9 @@ jobs:
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'global.json') }}
           restore-keys: nuget-${{ runner.os }}-
 
+      - name: qemu-img (the import and export tests make disks with it)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq qemu-utils > /dev/null
+
       - name: Build (warnings are errors)
         run: dotnet build VmQontrol.slnx -c Release -warnaserror
 

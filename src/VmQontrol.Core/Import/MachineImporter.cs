@@ -150,7 +150,17 @@ public static class MachineImporter
         start.RedirectStandardOutput = true;
         start.RedirectStandardError = true;
         start.UseShellExecute = false;
-        using var process = Process.Start(start) ?? throw new IOException("qemu-img could not be started.");
+        Process process;
+        try
+        {
+            process = Process.Start(start) ?? throw new IOException("qemu-img could not be started.");
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            throw new IOException($"{start.FileName} is not installed, so the disk could not be copied. vmq doctor (or the welcome page) names the package.");
+        }
+
+        using var owned = process;
         using var kill = ct.Register(() => { try { process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { } });
         var error = process.StandardError.ReadToEndAsync(CancellationToken.None);
         // "-p" writes "    (12.34/100%)\r" as it goes.

@@ -26,7 +26,17 @@ public static class QemuImg
     {
         var start = new ProcessStartInfo(Program) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
         foreach (var a in args) start.ArgumentList.Add(a);
-        using var process = Process.Start(start) ?? throw new IOException("qemu-img could not be started.");
+        Process process;
+        try
+        {
+            process = Process.Start(start) ?? throw new IOException("qemu-img could not be started.");
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            throw new IOException("qemu-img is not installed. vmq doctor (or the welcome page) names the package that has it.");
+        }
+
+        using var owned = process;
         var output = process.StandardOutput.ReadToEndAsync(ct);
         var error = process.StandardError.ReadToEndAsync(ct);
         await process.WaitForExitAsync(ct).ConfigureAwait(false);
