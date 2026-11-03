@@ -510,7 +510,12 @@ public static class MachineRunner
             await process.WaitForExitAsync(ct).ConfigureAwait(false);
             var text = ((await output.ConfigureAwait(false)) + (await error.ConfigureAwait(false))).Trim();
             if (process.ExitCode != 0)
-                throw new StartRefusedException([$"{what} refused to start: {(text.Length > 0 ? text : $"exit code {process.ExitCode}")}"]);
+            {
+                // A disk another process holds: say who, before QEMU's own words.
+                List<string> reasons = FileHolders.Explain(text) is { } who ? [who] : [];
+                reasons.Add($"{what} refused to start: {(text.Length > 0 ? text : $"exit code {process.ExitCode}")}");
+                throw new StartRefusedException(reasons);
+            }
             return text;
         }
     }
