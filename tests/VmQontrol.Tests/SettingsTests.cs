@@ -126,7 +126,9 @@ public sealed class SettingsTests
         Assert.True(described.shown);
         var saved = MachineStore.Load(Path.Combine(dir, "vm.json")).Cpu;
         Assert.Equal(2, saved.Cores);
-        Assert.Equal(4, saved.MaxCores);
+        // The offered ceiling is twice the cores, capped at this computer's processors (Environment.ProcessorCount follows
+        // the CPU affinity: the gate runs on two, a desktop on many).
+        Assert.Equal(Math.Min(Environment.ProcessorCount, 4), saved.MaxCores);
     }
 
     [Trait("Tier", "Window")]
