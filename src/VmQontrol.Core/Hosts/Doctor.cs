@@ -173,6 +173,25 @@ public static class Doctor
         return checks;
     }
 
+    /// <summary>This system's own name from os-release (PRETTY_NAME, else NAME), e.g. "Ubuntu 24.04.3 LTS"; <c>null</c> if unknown.</summary>
+    public static string? ThisSystemName()
+    {
+        try
+        {
+            return SystemName(File.ReadAllText("/etc/os-release"));
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+    }
+
+    public static string? SystemName(string osRelease)
+    {
+        var fields = osRelease.Split('\n').Select(l => l.Split('=', 2)).Where(p => p.Length == 2).GroupBy(p => p[0]).ToDictionary(g => g.Key, g => g.First()[1].Trim('"', '\''));
+        return fields.GetValueOrDefault("PRETTY_NAME") is { Length: > 0 } pretty ? pretty : fields.GetValueOrDefault("NAME") is { Length: > 0 } name ? name : null;
+    }
+
     public static DistroFamily DetectThisDistro()
     {
         try

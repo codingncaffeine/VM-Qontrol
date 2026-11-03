@@ -506,13 +506,14 @@ internal static class Commands
         var checks = Core.Hosts.Doctor.Run(host, distro, AppSettings.Load(paths).LibraryRoots[0]);
         foreach (var c in checks.OrderByDescending(c => c.Status))
         {
-            var badge = c.Status switch { CheckStatus.Ok => "ok      ", CheckStatus.Optional => "optional", CheckStatus.Warning => "attention", _ => "MISSING " };
+            var badge = c.Status switch { CheckStatus.Ok => "ok       ", CheckStatus.Optional => "optional ", CheckStatus.Warning => "attention", _ => "MISSING  " };
             output.WriteLine($"{badge}  {c.Title}: {c.Detail}");
-            if (c.Fix is { } fix && c.Status != CheckStatus.Ok) output.WriteLine($"          {fix}");
+            if (c.Fix is { } fix && c.Status != CheckStatus.Ok) output.WriteLine($"           {fix}");
         }
 
         var missing = checks.Count(c => c.Status == CheckStatus.Missing);
-        output.WriteLine(missing == 0 ? $"Ready ({distro})." : $"{missing} missing ({distro}).");
+        var system = Core.Hosts.Doctor.ThisSystemName() ?? distro.ToString();
+        output.WriteLine(missing == 0 ? $"Ready ({system})." : $"{missing} missing ({system}).");
         return missing == 0 ? 0 : 1;
     }
 

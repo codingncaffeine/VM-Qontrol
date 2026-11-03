@@ -47,4 +47,12 @@ public sealed class DoctorTests
     [Fact]
     public void A_complete_host_has_nothing_missing() =>
         Assert.DoesNotContain(Run(RecordedHost.Load(), DistroFamily.Arch, "qemu-img", "swtpm", "remote-viewer", "passt", "virtiofsd", "quickget"), c => c.Status == CheckStatus.Missing);
+
+    [Fact]
+    public void The_summary_names_the_system_itself_not_its_family()
+    {
+        Assert.Equal("Ubuntu 24.04.3 LTS", Doctor.SystemName("NAME=\"Ubuntu\"\nPRETTY_NAME=\"Ubuntu 24.04.3 LTS\"\nID=ubuntu\nID_LIKE=debian\n"));
+        Assert.Equal("Alpine Linux", Doctor.SystemName("NAME=\"Alpine Linux\"\nID=alpine\n"));
+        Assert.Null(Doctor.SystemName(""));
+    }
 }
