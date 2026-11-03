@@ -238,13 +238,13 @@ public static class WindowsDownload
                     response.EnsureSuccessStatusCode();
                     if (have > 0 && response.StatusCode != System.Net.HttpStatusCode.PartialContent) have = 0; // the server sent it all again
                     await using var body = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-                    await using var output = new FileStream(partial, have > 0 ? FileMode.Append : FileMode.Create, FileAccess.Write, FileShare.None, 1 << 20);
+                    await using var output = DownloadWrite.Open(partial, append: have > 0);
                     var buffer = new byte[1 << 20];
                     var last = Stopwatch.StartNew();
                     int read;
                     while ((read = await body.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
                     {
-                        await output.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
+                        await DownloadWrite.WriteAsync(output, buffer.AsMemory(0, read), ct).ConfigureAwait(false);
                         have += read;
                         if (last.ElapsedMilliseconds >= 250)
                         {
