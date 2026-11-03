@@ -582,6 +582,9 @@ public static class MachineRunner
         await qmp.ExecuteAsync(command, ct: ct).ConfigureAwait(false);
     }
 
+    /// <summary>QEMU for this running machine is still alive.</summary>
+    public static bool IsRunning(RunningMachine running) => IsOurQemu(running.Pid, running.RuntimeDirectory);
+
     /// <summary>The process is QEMU started for this runtime folder (a reused process id is not mistaken for it).</summary>
     private static bool IsOurQemu(int pid, string runtimeDirectory)
     {

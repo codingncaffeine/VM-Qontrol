@@ -91,17 +91,27 @@ public static class MachineSuspend
             var cmdline = (await File.ReadAllTextAsync($"/proc/{running.Pid}/cmdline", ct).ConfigureAwait(false)).Split('\0', StringSplitOptions.None);
             var args = HardwareArgs(cmdline.Skip(1).Take(cmdline.Length - 2));
             await File.WriteAllTextAsync(Path.Combine(running.MachineDirectory, CommandFile), new JsonArray(args.Select(a => (JsonNode)a).ToArray()).ToJsonString(), ct).ConfigureAwait(false);
-            File.Move(partial, file, overwrite: true);
+
+            // The state takes its final name only once QEMU has gone: a state file beside a guest that is still running
+            // would be resumed later onto disks that moved on from it.
+            await qmp.ExecuteExpectingExitAsync("quit", ct).ConfigureAwait(false);
+            if (!await MachineRunner.WaitForExitAsync(running, TimeSpan.FromSeconds(30), ct).ConfigureAwait(false))
+                throw new QmpException("quit", "StillRunning", "The machine's state was saved, but QEMU did not turn off; the state was thrown away and the machine carries on.");
         }
         catch
         {
             File.Delete(partial);
-            if (wasRunning) await qmp.ExecuteAsync("cont", ct: CancellationToken.None).ConfigureAwait(false);
+            File.Delete(Path.Combine(running.MachineDirectory, CommandFile));
+            if (wasRunning && MachineRunner.IsRunning(running))
+            {
+                try { await qmp.ExecuteAsync("cont", ct: CancellationToken.None).ConfigureAwait(false); }
+                catch (Exception ex) when (ex is IOException or QmpException or ObjectDisposedException) { Log.Warn($"{running.Name}: could not carry on after a failed suspend ({ex.Message})"); }
+            }
+
             throw;
         }
 
-        await qmp.ExecuteExpectingExitAsync("quit", ct).ConfigureAwait(false);
-        await MachineRunner.WaitForExitAsync(running, TimeSpan.FromSeconds(30), ct).ConfigureAwait(false);
+        File.Move(partial, file, overwrite: true);
         Log.Info($"{running.Name}: suspended to {file}");
     }
 
