@@ -18,6 +18,15 @@ internal static class Program
             return Core.Runtime.SegmentServer.Main(segmentPaths, args);
         }
 
+        if (args.Length > 0 && args[0] == Core.Runtime.ShutdownGuard.Argument)
+        {
+            // Saves the running machines if this computer shuts down; started with the first machine, no window.
+            var guardPaths = QontrolPaths.ForCurrentUser();
+            guardPaths.EnsureCreated();
+            Log.Initialize("vmq-guard", guardPaths.Logs);
+            return Core.Runtime.ShutdownGuard.Main(guardPaths);
+        }
+
         if (args.Any(a => a is "--version" or "-V"))
         {
             Console.WriteLine($"VM Qontrol {BuildInfo.Stamp}");

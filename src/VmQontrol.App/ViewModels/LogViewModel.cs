@@ -26,7 +26,7 @@ public sealed partial class LogViewModel(QontrolPaths paths, MachineConfig machi
             }
 
             var dir = MachineRunner.LogDirectory(paths, machine);
-            foreach (var (file, title) in new[] { ("qemu.log", "QEMU"), ("swtpm.log", "TPM emulator") })
+            foreach (var (file, title) in new[] { ("shutdown.log", "When this computer shut down or slept"), ("qemu.log", "QEMU"), ("swtpm.log", "TPM emulator") })
             {
                 var path = Path.Combine(dir, file);
                 if (File.Exists(path)) parts.Add($"── {title} ({path})\n" + string.Join('\n', File.ReadAllLines(path).TakeLast(200)));

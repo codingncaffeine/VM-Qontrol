@@ -330,6 +330,7 @@ public static class MachineRunner
             ["sshPort"] = ssh,
         }, LockJson), CancellationToken.None).ConfigureAwait(false);
         File.Move(lockTemp, runtime.Lock, overwrite: true);
+        ShutdownGuard.EnsureRunning(paths);
         Log.Info($"{m.Name}: started (process {pid}){(ssh is { } port ? $", SSH on host port {port}" : "")}{(resuming ? ", resuming" : "")}");
         if (resuming)
         {
@@ -493,6 +494,35 @@ public static class MachineRunner
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Every machine running on this computer for this account, from the runtime folders alone (no library needed):
+    /// what a helper outliving the app (the shutdown guard) works from. Folders of stopped machines are left as they are.
+    /// </summary>
+    public static IReadOnlyList<RunningMachine> ListRunning(QontrolPaths paths)
+    {
+        var list = new List<RunningMachine>();
+        if (!Directory.Exists(paths.Runtime)) return list;
+        foreach (var dir in Directory.EnumerateDirectories(paths.Runtime))
+        {
+            var runtime = new RuntimePaths(dir);
+            try
+            {
+                if (!File.Exists(runtime.Lock)) continue;
+                var info = JsonNode.Parse(File.ReadAllText(runtime.Lock))!;
+                var pid = info["pid"]!.GetValue<int>();
+                if (!IsOurQemu(pid, runtime.Directory)) continue;
+                list.Add(new RunningMachine(info["id"]!.GetValue<string>(), info["name"]?.GetValue<string>() ?? "A machine", pid, runtime.Directory,
+                    info["machineDirectory"]!.GetValue<string>(),
+                    DateTimeOffset.Parse(info["started"]!.GetValue<string>(), System.Globalization.CultureInfo.InvariantCulture), info["sshPort"]?.GetValue<int>()));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or NullReferenceException or InvalidOperationException or FormatException)
+            {
+            }
+        }
+
+        return list;
     }
 
     /// <summary>Signs a machine has been powered on before: firmware variables, a TPM, snapshots or an install signal in its folder.</summary>

@@ -85,6 +85,12 @@ internal static class Commands
                     Log.Minimum = LogLevel.Info; // a server of its own: its log is all there is to read
                     Log.Initialize("vmq-segment", paths.Logs);
                     return Core.Runtime.SegmentServer.Main(paths, args);
+                case Core.Runtime.ShutdownGuard.Argument:
+                    // Saves the running machines if this computer shuts down, started with the first (never typed by hand).
+                    paths.EnsureCreated();
+                    Log.Minimum = LogLevel.Info;
+                    Log.Initialize("vmq-guard", paths.Logs);
+                    return Core.Runtime.ShutdownGuard.Main(paths);
                 case "version" or "--version" or "-V":
                     output.WriteLine($"vmq {BuildInfo.Stamp}");
                     output.WriteLine(BuildInfo.License);

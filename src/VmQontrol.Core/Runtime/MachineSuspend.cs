@@ -105,6 +105,13 @@ public static class MachineSuspend
         {
             File.Delete(partial);
             File.Delete(Path.Combine(running.MachineDirectory, CommandFile));
+            if (MachineRunner.IsRunning(running))
+            {
+                // A save cut short (its deadline passed) is still writing: stopped first, so the file it deletes stays deleted.
+                try { await qmp.ExecuteAsync("migrate_cancel", ct: CancellationToken.None).ConfigureAwait(false); }
+                catch (Exception ex) when (ex is IOException or QmpException or ObjectDisposedException) { Log.Debug($"{running.Name}: migrate_cancel ({ex.Message})"); }
+            }
+
             if (wasRunning && MachineRunner.IsRunning(running))
             {
                 try { await qmp.ExecuteAsync("cont", ct: CancellationToken.None).ConfigureAwait(false); }

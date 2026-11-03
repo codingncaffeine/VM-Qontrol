@@ -1,7 +1,5 @@
-using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
-using System.Reflection;
 using System.Text;
 using VmQontrol.Core.Qemu;
 
@@ -60,34 +58,14 @@ public static class SegmentServer
     public static void EnsureRunning(QontrolPaths paths, string segment, SegmentConfig? config)
     {
         if (config is { Dhcp: false } || IsRunning(paths, segment)) return;
-        var program = Environment.ProcessPath ?? "";
-        var entry = Assembly.GetEntryAssembly()?.Location ?? "";
-        var ours = Path.GetFileName(program) is "vmq" or "vmqontrol" || Path.GetFileNameWithoutExtension(entry) is "vmq" or "VmQontrol.App" or "vmqontrol";
-        if (!ours)
+        if (!Detached.CanStartSelf)
         {
             _ = Task.Run(() => RunAsync(paths, segment, SubnetFor(config, segment), CancellationToken.None));
             return;
         }
 
-        // A session of its own, its output to /dev/null: it outlives the program that started it, and that program's
-        // terminal or pipe closing must not end it (its log file is where it writes).
-        var start = new ProcessStartInfo("setsid") { UseShellExecute = false };
-        start.ArgumentList.Add("sh");
-        start.ArgumentList.Add("-c");
-        start.ArgumentList.Add("exec \"$0\" \"$@\" < /dev/null > /dev/null 2>&1");
-        start.ArgumentList.Add(program);
-        if (Path.GetFileName(program) is "dotnet") start.ArgumentList.Add(entry);
-        start.ArgumentList.Add(Argument);
-        start.ArgumentList.Add(segment);
-        start.ArgumentList.Add(SubnetFor(config, segment).ToString());
-        try
-        {
-            using var _ = Process.Start(start);
-        }
-        catch (System.ComponentModel.Win32Exception ex)
-        {
-            Log.Warn($"The segment {segment}'s address server could not start ({ex.Message}); its machines get no address.");
-        }
+        if (!Detached.StartSelf([Argument, segment, SubnetFor(config, segment).ToString()], out var failure))
+            Log.Warn($"The segment {segment}'s address server could not start ({failure}); its machines get no address.");
     }
 
     /// <summary>The entry point for <see cref="Argument"/>: <c>--segment-serve NAME SUBNET</c>.</summary>

@@ -3,6 +3,7 @@ using Avalonia.Styling;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VmQontrol.Core;
+using VmQontrol.Core.Runtime;
 using VmQontrol.Core.Downloads;
 using VmQontrol.Core.Hosts;
 
@@ -35,6 +36,8 @@ public sealed partial class PreferencesViewModel : ObservableObject
         ConfirmReset = s.ConfirmReset;
         StartMinimized = s.StartMinimized;
         TrayIcon = s.TrayIcon;
+        WarnAtHostShutdown = s.WarnAtHostShutdown;
+        SaveAtHostShutdown = s.SaveAtHostShutdown;
         Size = SizeOptions.FirstOrDefault(o => o.Value == s.NewMachineSize) ?? SizeOptions[1];
         NewPowerOn = s.NewMachinePowerOn;
         NewLean = s.NewMachineLean;
@@ -102,6 +105,9 @@ public sealed partial class PreferencesViewModel : ObservableObject
     [ObservableProperty] private bool _startAtSignIn;
     [ObservableProperty] private bool _startMinimized;
     [ObservableProperty] private bool _trayIcon;
+    [ObservableProperty] private bool _warnAtHostShutdown;
+    [ObservableProperty] private bool _saveAtHostShutdown;
+    [ObservableProperty] private string _shutdownTimeText = "Looking…";
     [ObservableProperty] private string _guestToolsText = "Looking…";
     [ObservableProperty] private bool _guestToolsHere;
 
@@ -118,6 +124,7 @@ public sealed partial class PreferencesViewModel : ObservableObject
             Roots.Add(new LibraryRootRow(roots[i], i == 0, _shell.Machines.Count(m => string.Equals(Path.GetDirectoryName(m.Folder), root, StringComparison.Ordinal))));
         }
 
+        LoadShutdownTime();
         var paths = _shell.Paths;
         var home = AutostartHome;
         var settings = _shell.Settings;
@@ -145,6 +152,27 @@ public sealed partial class PreferencesViewModel : ObservableObject
             });
         });
     }
+
+    /// <summary>The time logind gives at shutdown, read on a worker (the system bus may be slow or missing).</summary>
+    private void LoadShutdownTime() => _ = Task.Run(async () =>
+    {
+        string text;
+        try
+        {
+            var budget = await Logind.ForThisComputer().DelayBudgetAsync().WaitAsync(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
+            text = ShutdownTime(budget);
+        }
+        catch (Exception ex) when (ex is TimeoutException or Tmds.DBus.Protocol.DBusConnectionException or Tmds.DBus.Protocol.DBusErrorReplyException or InvalidOperationException)
+        {
+            text = "This computer has no logind (systemd or elogind), so VM Qontrol cannot hear it shutting down: suspend or shut machines down first.";
+        }
+
+        Ui.Post(() => ShutdownTimeText = text);
+    });
+
+    internal static string ShutdownTime(TimeSpan budget) =>
+        $"This computer gives programs {budget.TotalSeconds:0.#} s to get ready when it shuts down. Small machines on a fast disk save in that time; "
+        + "a machine's Log tab says whether it was saved, and one that was not turns off as at a power cut.";
 
     private void Save(Func<AppSettings, AppSettings> change)
     {
@@ -176,6 +204,10 @@ public sealed partial class PreferencesViewModel : ObservableObject
     partial void OnStartMinimizedChanged(bool value) => Save(s => s with { StartMinimized = value });
 
     partial void OnTrayIconChanged(bool value) => Save(s => s with { TrayIcon = value });
+
+    partial void OnWarnAtHostShutdownChanged(bool value) => Save(s => s with { WarnAtHostShutdown = value });
+
+    partial void OnSaveAtHostShutdownChanged(bool value) => Save(s => s with { SaveAtHostShutdown = value });
 
     partial void OnSizeChanged(Option value)
     {

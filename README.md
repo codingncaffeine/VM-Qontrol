@@ -42,6 +42,8 @@ open the app's welcome page, to see what is missing and the command that install
   them) and puts the driver disc in for you.
 - **Snapshots** taken while a machine runs, full and linked clones, templates, suspend and resume, and machines that
   throw their changes away at power off.
+- **Safe host shutdown**: when this computer shuts down, running machines are suspended in the time it allows, and the
+  shut-down dialog names them; after sleep, the guests' clocks are set right. No root and no system service.
 - **Devices**: USB passthrough from a toolbar menu (no password), host drives (a disk, a partition or a CD/DVD drive,
   read-only unless you allow writing), host serial ports, shared folders, PCI passthrough with CPU pinning and huge
   pages for gaming and GPU work.

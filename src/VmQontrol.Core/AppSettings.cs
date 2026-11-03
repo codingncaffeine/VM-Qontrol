@@ -79,6 +79,12 @@ public sealed record AppSettings
     /// <summary>Open the app minimized when it starts at sign-in.</summary>
     public bool StartMinimized { get; set; }
 
+    /// <summary>While machines run, the desktop's shut-down dialog names them (a warning; this user's own shutdown still goes ahead).</summary>
+    public bool WarnAtHostShutdown { get; set; } = true;
+
+    /// <summary>When this computer shuts down with machines running, suspend each in the time logind allows.</summary>
+    public bool SaveAtHostShutdown { get; set; } = true;
+
     /// <summary>An icon in the desktop's tray with the machines; the window's close button then keeps VM Qontrol there.</summary>
     public bool TrayIcon { get; set; }
 

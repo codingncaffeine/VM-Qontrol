@@ -180,6 +180,34 @@
           </StackPanel>
         </Border>
 
+        <TextBlock Text="WHEN THIS COMPUTER SHUTS DOWN" Classes="section" Margin="2,14,0,0" />
+        <Border Classes="group">
+          <StackPanel>
+            <Border Classes="row first">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel>
+                  <TextBlock Text="Save running machines" Classes="label" />
+                  <TextBlock Text="Suspends each running machine before this computer shuts down or restarts, so it carries on where it was at the next power on. Machines using a drive of this computer are asked to shut down instead." Classes="help" />
+                  <TextBlock Text="{Binding ShutdownTimeText}" Classes="help" />
+                </StackPanel>
+                <ToggleSwitch x:Name="SaveAtHostShutdown" Grid.Column="1" IsChecked="{Binding SaveAtHostShutdown}" />
+              </Grid>
+            </Border>
+            <Border Classes="row">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel>
+                  <TextBlock Text="Name them in the shut-down dialog" Classes="label" />
+                  <TextBlock Text="While machines run, the desktop's shut-down dialog (GNOME) and systemctl say which ones. It is a reminder: your shutdown still goes ahead." Classes="help" />
+                </StackPanel>
+                <ToggleSwitch x:Name="WarnAtHostShutdown" Grid.Column="1" IsChecked="{Binding WarnAtHostShutdown}" />
+              </Grid>
+            </Border>
+            <Border Classes="row">
+              <TextBlock x:Name="ShutdownSleepNote" Text="After this computer sleeps, the clocks of machines with guest tools are set to the right time." Classes="help" />
+            </Border>
+          </StackPanel>
+        </Border>
+
         <TextBlock Text="STARTUP" Classes="section" Margin="2,14,0,0" />
         <Border Classes="group">
           <StackPanel>

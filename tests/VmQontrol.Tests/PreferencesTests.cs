@@ -79,6 +79,56 @@ public sealed class PreferencesTests
         Assert.Equal(realBefore, File.Exists(realEntry));
     }
 
+    /// <summary>When this computer shuts down: both switches on by default, the time logind gives is read and shown, and
+    /// switching them off is kept (the guard reads the settings on its next look).</summary>
+    [Trait("Tier", "Window")]
+    [Fact]
+    public async Task The_shutdown_section_shows_the_time_and_keeps_its_switches()
+    {
+        using var profile = new TestProfile("prefs-shutdown");
+        var (before, text) = await Ui.Run(() =>
+        {
+            var shell = new ShellViewModel(profile.Paths, AppSettings.Load(profile.Paths)) { WatchUsb = false };
+            var window = new MainWindow { DataContext = shell, Width = 1320, Height = 900 };
+            Avalonia.Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
+            window.Show();
+            _ = shell.StartAsync();
+            Ui.Pump(0.4);
+            Ui.Click(window, window.GetLogicalDescendants().OfType<Button>().First(b => b.Name == "OpenPreferences"));
+            Ui.PumpUntil(() => shell.ShowPreferences, "the preferences page");
+            var view = window.GetVisualDescendants().OfType<PreferencesView>().Single();
+            var prefs = shell.PreferencesPage!;
+            Ui.PumpUntil(() => prefs.ShutdownTimeText != "Looking…", "the time logind gives");
+            ToggleSwitch Switch(string name) => view.GetLogicalDescendants().OfType<ToggleSwitch>().First(t => t.Name == name);
+            var before = (Switch("SaveAtHostShutdown").IsChecked, Switch("WarnAtHostShutdown").IsChecked);
+            view.GetLogicalDescendants().OfType<TextBlock>().First(t => t.Name == "ShutdownSleepNote").BringIntoView();
+            Ui.Pump(0.4);
+            Ui.Capture(window, "s12", "preferences-shutdown-dark");
+            Avalonia.Application.Current!.RequestedThemeVariant = ThemeVariant.Light;
+            Ui.Pump(0.4);
+            Ui.Capture(window, "s12", "preferences-shutdown-light");
+            Avalonia.Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
+            foreach (var name in new[] { "SaveAtHostShutdown", "WarnAtHostShutdown" })
+            {
+                Switch(name).BringIntoView();
+                Ui.Pump(0.3);
+                Ui.Click(window, Switch(name));
+            }
+
+            Ui.PumpUntil(() => !shell.Settings.SaveAtHostShutdown && !shell.Settings.WarnAtHostShutdown, "both switches off");
+            var text = prefs.ShutdownTimeText;
+            window.Close();
+            return (before, text);
+        });
+
+        Assert.Equal((true, true), before);
+        Assert.True(text.StartsWith("This computer gives programs", StringComparison.Ordinal) || text.StartsWith("This computer has no logind", StringComparison.Ordinal), text);
+        AppSettings? saved = null;
+        for (var i = 0; i < 50 && (saved = AppSettings.Load(profile.Paths)).SaveAtHostShutdown; i++) await Task.Delay(100, TestContext.Current.CancellationToken);
+        Assert.False(saved!.SaveAtHostShutdown);
+        Assert.False(saved.WarnAtHostShutdown);
+    }
+
     [Trait("Tier", "Window")]
     [Fact]
     public async Task The_host_check_runs_again_from_its_button()
