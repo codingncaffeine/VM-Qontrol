@@ -280,6 +280,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         CoresAuto = m.Cpu.Cores is null;
         Cores = m.Cpu.Cores ?? RecommendedCores();
         CpuModel = m.Cpu.Model ?? "";
+        HotPlugCpus = m.Cpu.MaxCores is not null;
+        MaxCores = m.Cpu.MaxCores ?? Math.Min(HostCores, Math.Max(Cores * 2, 2));
         Uefi = m.Firmware.Kind == FirmwareKind.Uefi;
         SecureBoot = m.Firmware.SecureBoot;
         Tpm = m.Tpm;
@@ -287,6 +289,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         foreach (var x in m.Media) Media.Add(new MediaRow(x));
         _ = RefreshMediaStatusAsync();
         _ = Task.Run(RefreshLiveMemoryAsync);
+        _ = Task.Run(RefreshLiveCpusAsync);
         var nic = m.Nics.FirstOrDefault() ?? new NicConfig { Mode = VmQontrol.Core.Machines.NetMode.None };
         NetMode = NetModes.First(o => o.Value == nic.Mode.ToString());
         NicModel = NicModels.FirstOrDefault(o => o.Value == nic.Model) ?? new Option(nic.Model, nic.Model ?? "Automatic");
@@ -428,6 +431,84 @@ public sealed partial class SettingsViewModel : ObservableObject
 
         await RefreshLiveMemoryAsync().ConfigureAwait(false);
     }
+
+    // ── Processors while it runs (CPU hot-plug)
+    /// <summary>Started with room for more processors: they can be added now.</summary>
+    [ObservableProperty]
+    private bool _liveCpusShown;
+
+    [ObservableProperty]
+    private decimal _liveCpus;
+
+    [ObservableProperty]
+    private decimal _liveCpusMost;
+
+    [ObservableProperty]
+    private string _liveCpusStatus = "";
+
+    private ProcessorSlots? _slots;
+
+    /// <summary>Reads the running machine's processors and empty slots (on a worker).</summary>
+    private async Task RefreshLiveCpusAsync()
+    {
+        var slots = _machine.Watcher is { } watcher ? await LiveProcessors.SlotsAsync(watcher).ConfigureAwait(false) : null;
+        Ui.Post(() =>
+        {
+            _slots = slots;
+            LiveCpusShown = slots is { Most: > 0 } s && s.Most > s.PerSlot && (s.CanAdd || _machine.Machine.Cpu.MaxCores is not null);
+            if (slots is not { } now) return;
+            LiveCpusMost = now.Most;
+            if (LiveCpus < now.Now) LiveCpus = now.Now;
+            LiveCpusStatus = now.CanAdd
+                ? $"The machine has {now.Now} processor{(now.Now == 1 ? "" : "s")} now and room for {now.Most}{(now.PerSlot > 1 ? $", added {now.PerSlot} at a time (a core with its threads)" : "")}."
+                : $"The machine has all {now.Most} processors it has room for.";
+        });
+    }
+
+    [RelayCommand]
+    private async Task ApplyLiveCpusAsync()
+    {
+        if (_machine.Watcher is not { } watcher || _slots is not { } slots) return;
+        var target = (int)Math.Min(LiveCpus, slots.Most);
+        if (target <= slots.Now)
+        {
+            LiveCpusStatus = $"The machine already has {slots.Now}. Processors can be added while it runs, not taken away; fewer apply at next power on.";
+            return;
+        }
+
+        try
+        {
+            var now = await LiveProcessors.AddAsync(watcher, target).ConfigureAwait(false);
+            VmQontrol.Core.Log.Info($"{_machine.Name}: processors added while running, now {now}.");
+        }
+        catch (QmpException ex)
+        {
+            Ui.Post(() => LiveCpusStatus = $"The machine did not take the processors ({ex.Description}).");
+            return;
+        }
+
+        await RefreshLiveCpusAsync().ConfigureAwait(false);
+        string guest;
+        if (_machine.Machine.Guest.Os == "windows")
+        {
+            guest = " Windows desktop editions do not use processors added while running; they count after a restart.";
+        }
+        else
+        {
+            // Linux keeps added processors offline unless a rule switches them on: the guest agent does it here.
+            var online = await new GuestAgentClient(watcher.Machine.Paths.Agent).OnlineAllProcessorsAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            guest = online is { } n ? $" The guest has {n} working now." : " Without the guest agent, the guest may keep them switched off until it restarts.";
+        }
+
+        Ui.Post(() => LiveCpusStatus += guest);
+    }
+
+    /// <summary>"Processors can be added while it runs": the most it may have, never fewer than it starts with.</summary>
+    [ObservableProperty]
+    private bool _hotPlugCpus;
+
+    [ObservableProperty]
+    private decimal _maxCores;
 
     public decimal HostCores => _host?.LogicalCpus ?? 1;
 
@@ -629,7 +710,12 @@ public sealed partial class SettingsViewModel : ObservableObject
             Notes = Notes,
             Guest = Guest is { } g ? o.Guest with { Os = g.Os, Release = g.Release } : o.Guest,
             MemoryMiB = MemoryAuto ? null : (long)(MemoryGb * 1024),
-            Cpu = new CpuConfig { Cores = CoresAuto ? null : (int)Cores, Model = CpuModel.Trim().Length > 0 ? CpuModel.Trim() : null },
+            Cpu = new CpuConfig
+            {
+                Cores = CoresAuto ? null : (int)Cores,
+                Model = CpuModel.Trim().Length > 0 ? CpuModel.Trim() : null,
+                MaxCores = HotPlugCpus ? (int)Math.Max(MaxCores, CoresAuto ? RecommendedCores() : Cores) : null,
+            },
             Firmware = o.Firmware with { Kind = Uefi ? FirmwareKind.Uefi : FirmwareKind.Bios, SecureBoot = Uefi && SecureBoot },
             Tpm = Tpm,
             Disks = Disks.Select(d => d.ToConfig()).ToList(),

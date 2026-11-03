@@ -109,9 +109,19 @@ public static class QemuCommandBuilder
 
         var threads = cores >= 2 && host.SmtOn ? 2 : 1;
         var smp = $"cores={cores / threads},threads={threads},sockets={host.Sockets}";
+        // Processors added while it runs (opt-in, so a machine without it keeps quickemu's exact line): QEMU starts the
+        // machine with what it has now and keeps empty slots up to the most it may have, one core (its threads) per slot.
+        if (m.Cpu.MaxCores is { } most && os != "macos")
+        {
+            var perCore = threads * Math.Max(1, host.Sockets);
+            var now = cores / threads * threads * Math.Max(1, host.Sockets);
+            var slots = (Math.Max(most, now) + perCore - 1) / perCore;
+            var max = slots * perCore;
+            if (max > now) smp = $"cpus={now},maxcpus={max},cores={slots},threads={threads},sockets={host.Sockets}";
+        }
 
         // ── configure_ram
-        var memory = m.MemoryMiB ?? 1024L * host.MemoryGB switch { >= 128 => 32, >= 64 => 16, >= 16 => 8, >= 8 => 4, _ => 2 };
+        var memory = m.MemoryMiB ?? Recommendations.QuickemuMemoryMiB(host.MemoryGB);
         var minimumGiB = isWindows ? 4 : os == "macos" ? 8 : 0;
         if (minimumGiB > 0 && memory / 1024 < minimumGiB)
         {

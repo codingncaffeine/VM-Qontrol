@@ -33,6 +33,7 @@ public static class SettingsHistory
         Diff("Memory", before.MemoryMiB, after.MemoryMiB, Mib);
         Diff("Processors", before.Cpu.Cores, after.Cpu.Cores);
         Diff("Processor model", before.Cpu.Model, after.Cpu.Model, v => v?.ToString() ?? "automatic");
+        Diff("Processors added while running, up to", before.Cpu.MaxCores, after.Cpu.MaxCores, v => v?.ToString() ?? "off");
         Diff("Firmware", before.Firmware.Kind, after.Firmware.Kind);
         Diff("Secure Boot", before.Firmware.SecureBoot, after.Firmware.SecureBoot, v => (bool?)v == true ? "on" : "off");
         Diff("TPM", before.Tpm, after.Tpm, v => (bool?)v == true ? "on" : "off");

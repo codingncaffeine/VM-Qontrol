@@ -257,6 +257,45 @@
                   <NumericUpDown Grid.Column="1" Value="{Binding Cores}" Minimum="1" Maximum="{Binding HostCores}" Increment="1" FormatString="0" Width="150" />
                 </Grid>
               </Border>
+              <Border Classes="row">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Add processors while it runs" Classes="label" />
+                    <TextBlock Text="The machine starts with room for more, so processors can be added without shutting down (Settings, while it runs). Linux guests use them at once (the guest agent switches them on); Windows desktop editions only after a restart. Off keeps the machine exactly as quickemu would start it." Classes="help" />
+                  </StackPanel>
+                  <ToggleSwitch x:Name="HotPlugCpus" Grid.Column="1" IsChecked="{Binding HotPlugCpus}" />
+                </Grid>
+              </Border>
+              <Border Classes="row" IsVisible="{Binding HotPlugCpus}">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Up to" Classes="label" />
+                    <TextBlock Text="The most processors the machine can have while it runs. Rounded up to whole cores." Classes="help" />
+                  </StackPanel>
+                  <NumericUpDown x:Name="MaxCores" Grid.Column="1" Value="{Binding MaxCores}" Minimum="1" Maximum="{Binding HostCores}" Increment="1" FormatString="0" Width="150" />
+                </Grid>
+              </Border>
+            </StackPanel>
+          </Border>
+          <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding LiveCpusShown}" Margin="0,8,0,0">
+            <TextBlock Text="WHILE IT RUNS" Classes="grouptitle" />
+            <Border Grid.Column="1" Classes="badge-now"><TextBlock Text="Applies now" /></Border>
+          </Grid>
+          <Border x:Name="LiveCpus" Classes="group" IsVisible="{Binding LiveCpusShown}">
+            <StackPanel>
+              <Border Classes="row first">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Processors it has now" Classes="label" />
+                    <TextBlock Text="Raise it to add processors without shutting down. Added processors stay until the machine powers off." Classes="help" />
+                    <TextBlock x:Name="LiveCpusStatus" Text="{Binding LiveCpusStatus}" Classes="help" Margin="0,4,0,0" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                    <NumericUpDown x:Name="LiveCpusValue" Value="{Binding LiveCpus}" Minimum="1" Maximum="{Binding LiveCpusMost}" Increment="1" FormatString="0" Width="150" />
+                    <Button x:Name="ApplyLiveCpus" Classes="tool" Content="Add now" Command="{Binding ApplyLiveCpusCommand}" />
+                  </StackPanel>
+                </Grid>
+              </Border>
             </StackPanel>
           </Border>
           <TextBlock Text="ADVANCED" Classes="grouptitle" />

@@ -79,6 +79,24 @@ public sealed class GuestAgentClient(string socketPath)
     public async Task<bool> SetTimeAsync(DateTimeOffset now, TimeSpan timeout, CancellationToken ct = default) =>
         await CallAsync("guest-set-time", new JsonObject { ["time"] = (now - DateTimeOffset.UnixEpoch).Ticks * 100 }, timeout, ct).ConfigureAwait(false) is not null;
 
+    /// <summary>
+    /// Switches on every processor the guest has but keeps offline (Linux leaves processors added while running offline
+    /// unless a udev rule onlines them). Returns how many are online, or <c>null</c> when the agent did not answer.
+    /// </summary>
+    public async Task<int?> OnlineAllProcessorsAsync(TimeSpan timeout, CancellationToken ct = default)
+    {
+        if (await CallAsync("guest-get-vcpus", null, timeout, ct).ConfigureAwait(false) is not JsonArray cpus) return null;
+        var offline = cpus.OfType<JsonObject>().Where(c => c["online"]?.GetValue<bool>() == false && c["can-offline"] is not null).ToList();
+        if (offline.Count > 0)
+        {
+            var set = new JsonArray([.. offline.Select(c => (JsonNode)new JsonObject { ["logical-id"] = c["logical-id"]!.GetValue<long>(), ["online"] = true })]);
+            await CallAsync("guest-set-vcpus", new JsonObject { ["vcpus"] = set }, timeout, ct).ConfigureAwait(false);
+            if (await CallAsync("guest-get-vcpus", null, timeout, ct).ConfigureAwait(false) is JsonArray again) cpus = again;
+        }
+
+        return cpus.OfType<JsonObject>().Count(c => c["online"]?.GetValue<bool>() == true);
+    }
+
     /// <summary>Asks the guest to shut down cleanly. The agent does not answer this one; no exception means it was sent.</summary>
     public async Task<bool> ShutdownAsync(TimeSpan timeout, CancellationToken ct = default)
     {

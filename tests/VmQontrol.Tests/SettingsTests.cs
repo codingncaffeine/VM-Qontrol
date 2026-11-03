@@ -82,6 +82,55 @@ public sealed class SettingsTests
 
     [Trait("Tier", "Window")]
     [Fact]
+    public async Task Adding_processors_while_running_is_turned_on_in_settings_and_saved()
+    {
+        using var profile = new TestProfile("settings-hotplug");
+        var dir = Path.Combine(profile.Paths.DefaultLibrary, "Box");
+        Directory.CreateDirectory(dir);
+        MachineStore.Save(new MachineConfig { Name = "Box", Cpu = new CpuConfig { Cores = 2 }, Disks = [new DiskConfig { File = "disk0.qcow2", SizeGiB = 20 }] }, Path.Combine(dir, "vm.json"));
+
+        var described = await Ui.Run(() =>
+        {
+            var shell = new ShellViewModel(profile.Paths, AppSettings.Load(profile.Paths));
+            var window = new MainWindow { DataContext = shell, Width = 1320, Height = 900 };
+            Avalonia.Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
+            window.Show();
+            _ = shell.StartAsync();
+            Ui.PumpUntil(() => shell.Machines.Count == 1, "the library");
+            Ui.Click(window, Named<ListBox>(window, "Library").GetVisualDescendants().OfType<ListBoxItem>().First());
+            Ui.PumpUntil(() => shell.Selected is not null, "the machine page");
+            Ui.Pump(0.3);
+            Ui.Click(window, Named<Button>(window.GetVisualDescendants().OfType<MachineView>().Single(), "OpenSettings"));
+            Ui.PumpUntil(() => shell.SettingsPage is not null, "the settings", 15);
+            Ui.Pump(0.3);
+            var settings = shell.SettingsPage!;
+            var view = window.GetVisualDescendants().OfType<SettingsView>().Single();
+            Ui.Click(window, Named<ListBox>(view, "Sections").GetVisualDescendants().OfType<ListBoxItem>().First(i => (i.DataContext as SettingsSection)?.Key == "processors"));
+            Ui.Pump(0.2);
+            var hidden = Named<NumericUpDown>(view, "MaxCores").IsEffectivelyVisible;
+            Ui.Click(window, Named<ToggleSwitch>(view, "HotPlugCpus"));
+            Ui.Pump(0.2);
+            var shown = Named<NumericUpDown>(view, "MaxCores").IsEffectivelyVisible;
+            Ui.Capture(window, "s8", "settings-processors-dark");
+            Avalonia.Application.Current!.RequestedThemeVariant = ThemeVariant.Light;
+            Ui.Pump(0.2);
+            Ui.Capture(window, "s8", "settings-processors-light");
+            Avalonia.Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
+            Ui.Click(window, Named<Button>(view, "Save"));
+            Ui.PumpUntil(() => settings.SaveNote.StartsWith("Saved", StringComparison.Ordinal), "the save");
+            window.Close();
+            return (settings.SaveNote, hidden, shown);
+        });
+
+        Assert.False(described.hidden);
+        Assert.True(described.shown);
+        var saved = MachineStore.Load(Path.Combine(dir, "vm.json")).Cpu;
+        Assert.Equal(2, saved.Cores);
+        Assert.Equal(4, saved.MaxCores);
+    }
+
+    [Trait("Tier", "Window")]
+    [Fact]
     public async Task AutoProtect_turned_on_in_settings_is_saved()
     {
         using var profile = new TestProfile("settings-autoprotect");

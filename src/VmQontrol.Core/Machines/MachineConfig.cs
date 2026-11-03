@@ -146,6 +146,9 @@ public sealed record CpuConfig
 
     /// <summary>A QEMU CPU model; <c>null</c> = the profile's choice (host passthrough for most guests).</summary>
     public string? Model { get; set; }
+
+    /// <summary>Processors can be added while the machine runs, up to this many; <c>null</c> = not (quickemu's command line).</summary>
+    public int? MaxCores { get; set; }
 }
 
 /// <summary>A folder of this computer the machine sees; <see cref="Tag"/> is the name the guest mounts it by.</summary>
