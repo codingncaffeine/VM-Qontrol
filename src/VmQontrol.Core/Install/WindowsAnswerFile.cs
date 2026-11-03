@@ -140,6 +140,8 @@ public static class WindowsAnswerFile
             firstLogon.Add(@"cmd /c for %d in (D E F G H) do if exist %d:\virtio-win-guest-tools.exe start /wait %d:\virtio-win-guest-tools.exe /install /passive /norestart");
         }
 
+        // Tells VM Qontrol the install reached the desktop (InstallSignal): the machine page stops saying "installing".
+        firstLogon.Add(InstallSignal.WindowsCommand);
         firstLogon.AddRange(c.FirstLogonCommands);
         var shellOobe = new List<object>
         {

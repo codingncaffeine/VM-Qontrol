@@ -12,7 +12,7 @@ iso="$(realpath "$1")"; edition="${2:-1}"; shift; shift || true
 out="$root/scratch/windows-install"; shots="$root/snapshots/windows-install"
 rm -rf "$out" "$shots"; mkdir -p "$out" "$shots"
 export VMQONTROL_HOME="$out/home" PULSE_SERVER=unix:/nonexistent/vmq PIPEWIRE_REMOTE=/nonexistent/vmq
-vmq="$root/src/VmQontrol.Cli/bin/Release/net10.0/vmq"
+vmq="${VMQ:-$root/src/VmQontrol.Cli/bin/Release/net10.0/vmq}"
 start=$(date +%s)
 "$vmq" create win-test --iso "$iso" --easy-install --user tester --password 'Qontrol-1' --edition "$edition" \
     --memory-mib 4096 --cores 4 --disk-gib 40 --first-logon 'shutdown /s /t 15' "$@" || exit 1
@@ -29,4 +29,7 @@ used=$(du -sh "$out/home/VMs/win-test/disk0.qcow2" | cut -f1)
 # The control: an installed Windows fills several gigabytes; a machine that stopped early (or was stopped) does not.
 bytes=$(du -sb "$out/home/VMs/win-test/disk0.qcow2" | cut -f1)
 [ "$bytes" -gt $((5 * 1024 * 1024 * 1024)) ] || { echo "VERIFY FAILED: the machine stopped with only $used on its disk (no Windows installed)"; exit 1; }
+# The install signal (InstallSignal): the first logon wrote the marker to the machine's fourth COM port.
+grep -q VMQONTROL-INSTALLED "$out/home/VMs/win-test/install-signal.log" 2>/dev/null \
+    || { echo "VERIFY FAILED: Windows installed but never wrote the install signal ($(cat "$out/home/VMs/win-test/install-signal.log" 2>/dev/null | head -3))"; exit 1; }
 echo "VERIFY PASSED: Windows installed and shut itself down after its first logon in $((elapsed / 60)) min $((elapsed % 60)) s; disk uses $used"

@@ -198,6 +198,24 @@
   <Style Selector="Border.pill.muted TextBlock"><Setter Property="Foreground" Value="{DynamicResource QTextMuted}" /></Style>
 
   <!-- Cards with a status edge -->
+  <!-- Easy Install at work: the accent edge and wash; green once the guest says it finished. -->
+  <Style Selector="Border.card.install">
+    <Setter Property="BorderBrush" Value="{DynamicResource QAccent}" />
+    <Setter Property="Background" Value="{DynamicResource QAccentSoft}" />
+  </Style>
+  <Style Selector="Border.card.install.done">
+    <Setter Property="BorderBrush" Value="{DynamicResource QSuccess}" />
+    <Setter Property="Background" Value="{DynamicResource QSurface}" />
+  </Style>
+  <Style Selector="Border.card.install Path.badgeicon">
+    <Setter Property="Stroke" Value="{DynamicResource QAccent}" />
+    <Setter Property="StrokeThickness" Value="2" />
+    <Setter Property="StrokeLineCap" Value="Round" />
+    <Setter Property="StrokeJoin" Value="Round" />
+  </Style>
+  <Style Selector="Border.card.install.done Path.badgeicon">
+    <Setter Property="Stroke" Value="{DynamicResource QSuccess}" />
+  </Style>
   <Style Selector="Border.card.problem">
     <Setter Property="BorderBrush" Value="{DynamicResource QWarning}" />
   </Style>

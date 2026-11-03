@@ -28,6 +28,7 @@ public static class SettingsHistory
         string Mib(object? v) => v is long m ? (m % 1024 == 0 ? $"{m / 1024} GB" : $"{m} MB") : "recommended";
         Diff("Name", before.Name, after.Name);
         Diff("Notes", before.Notes.Length, after.Notes.Length, _ => "edited");
+        Diff("Easy Install", before.EasyInstall is null, after.EasyInstall is null, v => (bool?)v == true ? "off" : "on");
         Diff("Template", before.IsTemplate, after.IsTemplate, v => (bool?)v == true ? "yes" : "no");
         Diff("Memory", before.MemoryMiB, after.MemoryMiB, Mib);
         Diff("Processors", before.Cpu.Cores, after.Cpu.Cores);

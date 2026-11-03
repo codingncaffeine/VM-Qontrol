@@ -7,8 +7,8 @@
              x:DataType="vm:NewMachineViewModel">
   <DockPanel Margin="{DynamicResource QPagePadding}">
     <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,20">
-      <TextBlock Text="New virtual machine" Classes="hero" />
-      <TextBlock Text="Each step starts on the recommended answer. Change only what you want to." Classes="muted" />
+      <TextBlock x:Name="WizardTitle" Text="{Binding WizardTitle}" Classes="hero" />
+      <TextBlock Text="{Binding WizardSubtitle}" Classes="muted" TextWrapping="Wrap" />
     </StackPanel>
 
     <!-- Back / Continue -->
@@ -41,8 +41,16 @@
 
         <!-- 0 Installer -->
         <StackPanel Spacing="14" IsVisible="{Binding Step, Converter={x:Static vm:Text.Is}, ConverterParameter=0}">
-          <TextBlock Text="How will you install the operating system?" Classes="h1" />
-          <UniformGrid Columns="4" ColumnSpacing="12">
+          <TextBlock Text="{Binding Step0Title}" Classes="h1" />
+          <Border Classes="card problem" IsVisible="{Binding ExistingNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <TextBlock x:Name="ExistingNote" Text="{Binding ExistingNote}" TextWrapping="Wrap" />
+          </Border>
+          <Grid x:Name="EasyInstallPromise" ColumnDefinitions="Auto,*" ColumnSpacing="8" Margin="0,-4,0,0" IsVisible="{Binding !ForExisting}">
+            <Path Classes="icon" Data="{StaticResource IconCheck}" Width="14" Height="14" VerticalAlignment="Top" Margin="0,3,0,0" />
+            <TextBlock Grid.Column="1" Text="Windows, Ubuntu, Fedora and Debian install themselves: Easy Install answers every installer question, and you come back to a finished system."
+                       Classes="muted" TextWrapping="Wrap" />
+          </Grid>
+          <UniformGrid Columns="4" ColumnSpacing="12" IsVisible="{Binding !ForExisting}">
             <RadioButton x:Name="SourceDisc" Classes="choice" IsChecked="{Binding IsDisc, Mode=OneWay}" Command="{Binding ChooseSourceCommand}" CommandParameter="{x:Static vm:SourceKind.Disc}" GroupName="source">
               <StackPanel Spacing="4">
                 <TextBlock Text="Installer disc image" FontWeight="SemiBold" />
@@ -190,7 +198,7 @@
         <!-- 2 Easy Install -->
         <StackPanel Spacing="14" IsVisible="{Binding Step, Converter={x:Static vm:Text.Is}, ConverterParameter=2}">
           <TextBlock Text="{Binding EasyInstallTitle}" Classes="h1" />
-          <ToggleSwitch x:Name="EasyInstall" IsChecked="{Binding EasyInstall}" OnContent="Yes: install it with no questions" OffContent="No: I will answer the installer myself" />
+          <ToggleSwitch x:Name="EasyInstall" IsVisible="{Binding !ForExisting}" IsChecked="{Binding EasyInstall}" OnContent="Yes: install it with no questions" OffContent="No: I will answer the installer myself" />
           <TextBlock Text="{Binding EasyInstallExplain}" Classes="muted" TextWrapping="Wrap" />
           <Border Classes="card" IsVisible="{Binding EasyInstallShown}">
             <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="12">
@@ -198,7 +206,7 @@
               <TextBox x:Name="UserName" Grid.Column="1" Text="{Binding UserName}" />
               <TextBlock Grid.Row="1" Text="Password" VerticalAlignment="Center" />
               <StackPanel Grid.Row="1" Grid.Column="1" Spacing="4">
-                <TextBox Text="{Binding Password}" PasswordChar="●" RevealPassword="{Binding #ShowPassword.IsChecked}" />
+                <TextBox x:Name="Password" Text="{Binding Password}" PasswordChar="●" RevealPassword="{Binding #ShowPassword.IsChecked}" />
                 <CheckBox x:Name="ShowPassword" Content="Show password" />
                 <TextBlock Text="{Binding PasswordNote}" Classes="muted" Classes.warn="{Binding PasswordRequired}" TextWrapping="Wrap" FontSize="{DynamicResource QFontSmall}" />
               </StackPanel>

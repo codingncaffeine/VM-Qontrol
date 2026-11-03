@@ -80,6 +80,23 @@ public sealed record MachineConfig
 
     /// <summary>Where the machine came from when it was not made here; an imported machine's files stay where they were.</summary>
     public ImportSource? ImportedFrom { get; set; }
+
+    /// <summary>Set when VM Qontrol wrote this machine's answer file: the machine installs its system by itself, and the
+    /// machine page says so until the guest reports it has finished (<see cref="Install.InstallSignal"/>).</summary>
+    public EasyInstallConfig? EasyInstall { get; set; }
+}
+
+/// <summary>What Easy Install was asked to do, for the "Installing for you" card.</summary>
+public sealed record EasyInstallConfig
+{
+    /// <summary>"Windows 11 Pro", "Ubuntu": what the card says is being installed.</summary>
+    public string System { get; set; } = "";
+
+    /// <summary>The account the guest signs in to, as the person typed it.</summary>
+    public string UserName { get; set; } = "";
+
+    /// <summary>Windows: Lean Windows was on.</summary>
+    public bool Lean { get; set; }
 }
 
 /// <summary>The guest operating system. <see cref="Os"/> uses quickemu's names (linux, windows, macos, freebsd...).</summary>

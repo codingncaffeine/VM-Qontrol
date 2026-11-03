@@ -47,6 +47,9 @@ public sealed record LaunchContext
     /// <summary>Whether the system disk already holds an installed system: installers marked "until installed" stay out.</summary>
     public bool SystemDiskUsed { get; init; }
 
+    /// <summary>The file the guest's Easy Install signal port writes to (its last step writes "installed"); <c>null</c> = no such port.</summary>
+    public string? InstallSignal { get; init; }
+
     /// <summary>No screen, no sound, no viewer: tests and background work. Never anything audible.</summary>
     public bool Headless { get; init; }
 

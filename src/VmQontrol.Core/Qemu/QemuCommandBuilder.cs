@@ -467,6 +467,11 @@ public static class QemuCommandBuilder
         // Host serial ports follow as the machine's next COM ports (COM2 when the console has COM1).
         for (var i = 0; i < m.HostSerialPorts.Count; i++)
             args.AddRange(["-chardev", $"serial,id=hostserial{i},path={m.HostSerialPorts[i].Path}", "-device", $"isa-serial,chardev=hostserial{i},id=hostserial{i}-port"]);
+        // Easy Install's signal port: the fourth COM port (0x2e8, ttyS3, ACPI _UID 4), placed last so the ports above keep
+        // their numbers, and only while it fits (ISA has four).
+        if (ctx.InstallSignal is { } signal && (serial ? 1 : 0) + m.HostSerialPorts.Count < Install.InstallSignal.PortIndex + 1)
+            args.AddRange(["-chardev", $"file,id=installsignal,path={EscapeOption(signal)},append=on",
+                "-device", $"isa-serial,chardev=installsignal,id=installsignal-port,index={Install.InstallSignal.PortIndex}"]);
         AddPerformance(m, args);
         args.AddRange(m.ExtraArgs);
 

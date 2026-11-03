@@ -28,6 +28,9 @@ done
 installed=$(( $(date +%s) - start ))
 bytes=$(du -sb "$out/home/VMs/$name/disk0.qcow2" | cut -f1)
 [ "$bytes" -gt $((1024 * 1024 * 1024)) ] || { echo "VERIFY FAILED: the install stopped with only $bytes bytes on the disk"; exit 1; }
+# The install signal (InstallSignal): the installer's last step wrote the marker to ttyS3.
+grep -q VMQONTROL-INSTALLED "$out/home/VMs/$name/install-signal.log" 2>/dev/null \
+    || { echo "VERIFY FAILED: $name installed but never wrote the install signal"; exit 1; }
 echo "installed in $((installed / 60)) min; booting the new system"
 "$vmq" start "$name" --headless || exit 1
 for i in $(seq 1 60); do

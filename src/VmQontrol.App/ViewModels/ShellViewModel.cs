@@ -511,6 +511,31 @@ public sealed partial class ShellViewModel : ObservableObject
         Wizard = wizard;
     }
 
+    /// <summary>The wizard's Easy Install pages for a machine that exists and is not installed yet.</summary>
+    public void SetUpEasyInstall(MachineViewModel machine)
+    {
+        if (Wizard is not null) return;
+        var wizard = new NewMachineViewModel(this, machine.Machine, machine.Folder);
+        wizard.Closed += () => Ui.Post(() =>
+        {
+            if (Wizard == wizard) Wizard = null;
+            Selected ??= machine;
+        });
+        Wizard = wizard;
+    }
+
+    /// <summary>After Easy Install was set up on an existing machine: its page shows the new card, and it powers on if asked.</summary>
+    public void FinishEasyInstallSetup(string directory, Core.Machines.MachineConfig machine, bool powerOn)
+    {
+        var vm = _all.FirstOrDefault(m => m.Folder == directory);
+        if (vm is null) return;
+        vm.Reload(machine);
+        Wizard = null;
+        Selected = vm;
+        Note($"{machine.Name} will install {machine.EasyInstall?.System ?? "its system"} by itself.");
+        if (powerOn) vm.PowerOnCommand.Execute(null);
+    }
+
     /// <summary>After the wizard: the new machine appears selected in the library and, if asked, powers on.</summary>
     public async Task FinishNewMachineAsync(string directory, bool powerOn)
     {

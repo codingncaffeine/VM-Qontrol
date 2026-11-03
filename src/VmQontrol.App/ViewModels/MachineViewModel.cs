@@ -32,6 +32,7 @@ public sealed partial class MachineViewModel : ObservableObject
         Console.CopyRequested = text => shell.CopyToClipboard(text, "The console output is on the clipboard.");
         Snapshots = new SnapshotsViewModel(this, shell);
         _ = RefreshSuspendedAsync();
+        _ = RefreshInstallAsync();
     }
 
     public PerformanceViewModel Performance { get; } = new();
@@ -71,7 +72,7 @@ public sealed partial class MachineViewModel : ObservableObject
     public string GuestLabel => GuestNames.Describe(Machine.Guest);
 
     /// <summary>The sidebar's line under the name: it has no state text, so a template says so here.</summary>
-    public string LibraryLabel => GuestLabel + (IsTemplate ? " · Template" : "");
+    public string LibraryLabel => Install.Stage == Core.Install.InstallStage.Installing ? $"Installing {InstallSystem}…" : GuestLabel + (IsTemplate ? " · Template" : "");
 
     /// <summary>A template is never started, only cloned (see <see cref="MachineConfig.IsTemplate"/>).</summary>
     public bool IsTemplate => Machine.IsTemplate;
@@ -328,6 +329,7 @@ public sealed partial class MachineViewModel : ObservableObject
         Entry = Entry with { Machine = machine };
         Problems = LibraryScanner.MissingFiles(Entry);
         OnPropertyChanged(string.Empty);
+        _ = RefreshInstallAsync();
         _ = Task.Run(async () =>
         {
             var host = await _shell.HostAsync().ConfigureAwait(false);
@@ -690,6 +692,7 @@ public sealed partial class MachineViewModel : ObservableObject
             _ = watcher.Exited.ContinueWith(_ => Ui.Post(OnExited), TaskScheduler.Default);
             _ = PollGuestAsync(watcher);
             _ = AutoProtectLoopAsync(watcher);
+            _ = InstallLoopAsync(watcher);
         }
         catch (Exception ex) when (ex is IOException or System.Net.Sockets.SocketException or QmpException or TimeoutException)
         {
@@ -721,6 +724,7 @@ public sealed partial class MachineViewModel : ObservableObject
         _shell.Note(_suspending ? $"{Name} is suspended." : $"{Name} powered off.");
         _suspending = false;
         _ = RefreshSuspendedAsync();
+        _ = RefreshInstallAsync();
         _ = Task.Run(() => MachineRunner.Find(Machine, _shell.Paths));
     }
 

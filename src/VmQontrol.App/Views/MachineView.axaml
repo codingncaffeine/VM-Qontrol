@@ -197,6 +197,32 @@
           <Grid ColumnDefinitions="3*,2*" ColumnSpacing="20">
             <!-- The screen, refreshed every two seconds while the machine runs. -->
             <StackPanel Spacing="12">
+              <!-- Easy Install: what it is doing, until the guest itself says it finished (InstallSignal). -->
+              <Border x:Name="InstallCard" Classes="card install" Classes.done="{Binding InstallFinished}" IsVisible="{Binding ShowInstallCard}">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+                  <Path Classes="badgeicon" Width="22" Height="22" Stretch="Uniform" VerticalAlignment="Top" Margin="0,3,0,0"
+                        Data="{StaticResource IconDisc}" IsVisible="{Binding !InstallFinished}" />
+                  <Path Classes="badgeicon" Width="22" Height="22" Stretch="Uniform" VerticalAlignment="Top" Margin="0,3,0,0"
+                        Data="{StaticResource IconCheck}" IsVisible="{Binding InstallFinished}" />
+                  <StackPanel Grid.Column="1" Spacing="8">
+                    <TextBlock x:Name="InstallTitle" Text="{Binding InstallTitle}" FontSize="{DynamicResource QFontTitle}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    <TextBlock x:Name="InstallBody" Text="{Binding InstallBody}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding LeanNote}" Classes="muted" TextWrapping="Wrap" FontSize="{DynamicResource QFontSmall}" IsVisible="{Binding ShowLeanNote}" />
+                    <ProgressBar IsIndeterminate="True" Height="4" IsVisible="{Binding InstallWorking}" Margin="0,4,0,0" />
+                    <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding HasInstallTime}">
+                      <Path Classes="icon" Data="{StaticResource IconClock}" Width="12" Height="12" />
+                      <TextBlock x:Name="InstallTime" Text="{Binding InstallTime}" Classes="muted" FontSize="{DynamicResource QFontSmall}" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </StackPanel>
+                  <StackPanel Grid.Column="2" VerticalAlignment="Top" Spacing="8">
+                    <Button x:Name="InstallPowerOn" Classes="primary" Command="{Binding PowerOnCommand}" IsVisible="{Binding InstallNotStarted}" IsEnabled="{Binding !Busy}" Content="Power on and install" />
+                    <Button Classes="primary" Command="{Binding PowerOnCommand}" IsVisible="{Binding InstallWaiting}" IsEnabled="{Binding !Busy}" Content="Power on and carry on" />
+                    <Button x:Name="InstallGotIt" Classes="tool" Command="{Binding AcknowledgeInstallCommand}" IsVisible="{Binding InstallFinished}" Content="Got it" />
+                    <Button x:Name="SetUpEasyInstall" Classes="primary" Command="{Binding SetUpEasyInstallCommand}" IsVisible="{Binding ShowEasyInstallOffer}" Content="Set up Easy Install…" />
+                    <Button Classes="tool" Command="{Binding DismissEasyInstallOfferCommand}" IsVisible="{Binding ShowEasyInstallOffer}" Content="I will install it myself" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+                  </StackPanel>
+                </Grid>
+              </Border>
               <Border Background="{DynamicResource QScreen}" CornerRadius="{DynamicResource QRadiusLarge}" ClipToBounds="True"
                       BorderBrush="{DynamicResource QBorder}" BorderThickness="1">
                 <Grid>

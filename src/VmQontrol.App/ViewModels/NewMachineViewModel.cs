@@ -60,6 +60,36 @@ public sealed partial class NewMachineViewModel : ObservableObject
         });
     }
 
+    /// <summary>
+    /// Easy Install for a machine that exists (its disk still empty): the same disc and Easy Install pages, then
+    /// <see cref="MachineFactory.AddEasyInstall"/> instead of a new machine. Name, folder and hardware are the machine's own.
+    /// </summary>
+    public NewMachineViewModel(ShellViewModel shell, MachineConfig machine, string directory)
+        : this(shell)
+    {
+        _existing = (machine, directory);
+        Name = machine.Name;
+        LibraryRoot = Path.GetDirectoryName(directory) ?? LibraryRoot;
+        if (machine.Media.FirstOrDefault(x => x.Role == MediaRole.Installer) is { } installer)
+            _ = UseIsoAsync(Path.Combine(directory, installer.File));
+    }
+
+    private readonly (MachineConfig Machine, string Directory)? _existing;
+
+    public bool ForExisting => _existing is not null;
+
+    public string Step0Title => ForExisting ? "The installer disc" : "How will you install the operating system?";
+
+    public string WizardTitle => _existing is { } e ? $"Easy Install for {e.Machine.Name}" : "New virtual machine";
+
+    public string WizardSubtitle => ForExisting
+        ? "VM Qontrol answers the installer's questions from what you enter here. The machine's disk, hardware and folder stay as they are."
+        : "Each step starts on the recommended answer. Change only what you want to.";
+
+    /// <summary>Under the disc's description when Easy Install cannot answer this disc's installer.</summary>
+    public string ExistingNote => !ForExisting || Detecting || EasyInstallPossible ? ""
+        : "Easy Install does not know this disc's installer, so it cannot install it for you. Choose another disc image, or power the machine on and answer the installer yourself.";
+
     public IReadOnlyList<GuestChoice> GuestChoices { get; } = new GuestChoiceList();
 
     /// <summary>The systems a person can pick by hand (the wizard and Settings share it).</summary>
@@ -97,18 +127,20 @@ public sealed partial class NewMachineViewModel : ObservableObject
 
     public bool IsLast => Step == StepTitles.Length - 1;
 
-    public string NextText => IsLast ? (Source == SourceKind.Download ? "Download and create" : "Create machine") : "Continue";
+    public string NextText => IsLast && ForExisting ? "Set up Easy Install" : IsLast ? (Source == SourceKind.Download ? "Download and create" : "Create machine") : "Continue";
 
     /// <summary>A machine made from a template takes its system and hardware from it: only the name and the kind of copy are asked.</summary>
     private bool Skipped(int step) => step switch
     {
+        1 or 3 or 4 when ForExisting => true,
         1 or 4 => IsFromTemplate,
         2 => !EasyInstallPossible,
         _ => false,
     };
 
     /// <summary>The step rail: each step's title and whether it is the current one.</summary>
-    public IReadOnlyList<StepItem> Steps => StepTitles.Select((t, i) => new StepItem(t, i == Step, i < Step)).ToList();
+    public IReadOnlyList<StepItem> Steps => StepTitles.Select((t, i) => (Item: new StepItem(t, i == Step, i < Step), Index: i))
+        .Where(s => !ForExisting || !Skipped(s.Index)).Select(s => s.Item).ToList();
 
     partial void OnStepChanged(int value) => OnPropertyChanged(nameof(Steps));
 
@@ -258,7 +290,9 @@ public sealed partial class NewMachineViewModel : ObservableObject
 
     /// <summary>The Linux installer on the disc, when Easy Install knows it.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(EasyInstallPossible), nameof(EasyInstallShown), nameof(IsLinuxEasy), nameof(EasyInstallTitle), nameof(EasyInstallExplain))]
+    [NotifyPropertyChangedFor(nameof(EasyInstallPossible), nameof(EasyInstallShown), nameof(IsLinuxEasy), nameof(EasyInstallTitle), nameof(EasyInstallExplain),
+        nameof(PasswordRequired), nameof(PasswordNote), nameof(ExistingNote))]
+    [NotifyCanExecuteChangedFor(nameof(NextCommand))]
     private LinuxInstaller _linuxInstallerFound;
 
     public bool IsLinuxEasy => !IsWindows && LinuxInstallerFound != LinuxInstaller.None;
@@ -401,6 +435,7 @@ public sealed partial class NewMachineViewModel : ObservableObject
     // ── Navigation
     private bool CanNext() => !Busy && Step switch
     {
+        0 when ForExisting => IsoPath is not null && !IsoProblem && !Detecting && EasyInstallPossible,
         0 => Source switch { SourceKind.Disc => IsoPath is not null && !IsoProblem, SourceKind.Download => Entry is not null && (!Entry.FromMicrosoft || Editions.Count > 0), SourceKind.Template => Template is not null, _ => true },
         2 => !EasyInstallShown || (UserName.Trim().Length > 0 && !NeedsOwnKey && (!PasswordRequired || Password.Length > 0)),
         3 => Name.Trim().Length > 0,
@@ -493,6 +528,8 @@ public sealed partial class NewMachineViewModel : ObservableObject
             Edition = result.Editions.FirstOrDefault(e => e.DisplayName.EndsWith(" Pro", StringComparison.Ordinal)) ?? result.Editions.FirstOrDefault();
             if (result.Guest is { } g) Detected(g, result.Text);
             LinuxInstallerFound = result.Linux;
+            OnPropertyChanged(nameof(ExistingNote));
+            OnPropertyChanged(nameof(Steps));
             if (result.Name.Length > 0 && (Name == "New machine" || Name.Length == 0)) Name = Edition?.DisplayName ?? result.Name;
             OnPropertyChanged(nameof(EasyInstallPossible));
             OnPropertyChanged(nameof(EasyInstallShown));
@@ -674,45 +711,13 @@ public sealed partial class NewMachineViewModel : ObservableObject
             return;
         }
 
-        var request = new NewMachineRequest
+        if (_existing is { } existing)
         {
-            Name = Name.Trim(),
-            LibraryRoot = LibraryRoot,
-            Guest = Guest,
-            InstallerIso = Source == SourceKind.Disc ? IsoPath : null,
-            DriversIso = DriversIso,
-            DiskGiB = (long)DiskGb,
-            MemoryMiB = (long)(MemoryGb * 1024),
-            Cores = (int)Cores,
-            Firmware = Uefi ? FirmwareKind.Uefi : FirmwareKind.Bios,
-            SecureBoot = SecureBoot,
-            Tpm = Tpm,
-            LinuxEasyInstall = EasyInstallShown && IsLinuxEasy
-                ? new LinuxInstallChoices
-                {
-                    UserName = UserName.Trim(),
-                    Password = Password,
-                    HostName = LinuxEasyInstall.HostName(Name),
-                    TimeZone = IanaTimeZone,
-                    Locale = Locale.Replace('-', '_') + ".UTF-8",
-                }
-                : null,
-            WindowsEasyInstall = EasyInstallShown && IsWindows
-                ? new WindowsInstallChoices
-                {
-                    UserName = UserName.Trim(),
-                    Password = Password,
-                    ComputerName = WindowsAnswerFile.ComputerName(Name),
-                    EditionIndex = Edition?.Index ?? 1,
-                    EditionName = Edition?.Name ?? "",
-                    ConsumerDisc = ConsumerDisc,
-                    ProductKey = ProductKey.Trim(),
-                    Locale = Locale,
-                    TimeZone = TimeZone,
-                    Lean = LeanWindows,
-                }
-                : null,
-        };
+            await AddEasyInstallAsync(existing.Machine, existing.Directory).ConfigureAwait(false);
+            return;
+        }
+
+        var request = BuildRequest();
         try
         {
             string dir;
@@ -846,8 +851,88 @@ public sealed partial class NewMachineViewModel : ObservableObject
         }
     });
 
+    private NewMachineRequest BuildRequest() => new()
+    {
+        Name = Name.Trim(),
+        LibraryRoot = LibraryRoot,
+        Guest = Guest,
+        InstallerIso = Source == SourceKind.Disc ? IsoPath : null,
+        DriversIso = DriversIso,
+        DiskGiB = (long)DiskGb,
+        MemoryMiB = (long)(MemoryGb * 1024),
+        Cores = (int)Cores,
+        Firmware = Uefi ? FirmwareKind.Uefi : FirmwareKind.Bios,
+        SecureBoot = SecureBoot,
+        Tpm = Tpm,
+        SystemName = Guest.Os == "linux" ? null : GuestLabel,
+        LinuxEasyInstall = EasyInstallShown && IsLinuxEasy
+            ? new LinuxInstallChoices
+            {
+                UserName = UserName.Trim(),
+                Password = Password,
+                HostName = LinuxEasyInstall.HostName(Name),
+                TimeZone = IanaTimeZone,
+                Locale = Locale.Replace('-', '_') + ".UTF-8",
+            }
+            : null,
+        WindowsEasyInstall = EasyInstallShown && IsWindows
+            ? new WindowsInstallChoices
+            {
+                UserName = UserName.Trim(),
+                Password = Password,
+                ComputerName = WindowsAnswerFile.ComputerName(Name),
+                EditionIndex = Edition?.Index ?? 1,
+                EditionName = Edition?.Name ?? "",
+                ConsumerDisc = ConsumerDisc,
+                ProductKey = ProductKey.Trim(),
+                Locale = Locale,
+                TimeZone = TimeZone,
+                Lean = LeanWindows,
+            }
+            : null,
+    };
+
+    private async Task AddEasyInstallAsync(MachineConfig machine, string directory)
+    {
+        var request = BuildRequest();
+        Ui.Post(() => ProgressText = "Writing the answer disc…");
+        try
+        {
+            var updated = await Task.Run(() => MachineFactory.AddEasyInstall(machine, directory, request)).ConfigureAwait(false);
+            VmQontrol.Core.Log.Info($"{machine.Name}: Easy Install set up ({updated.EasyInstall?.System}).");
+            Ui.Post(() =>
+            {
+                _shell.FinishEasyInstallSetup(directory, updated, PowerOnAfter);
+                Closed?.Invoke();
+            });
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            Ui.Post(() =>
+            {
+                Busy = false;
+                NextCommand.NotifyCanExecuteChanged();
+                _shell.Show(new NoticeViewModel("Easy Install could not be set up", [ex.Message], isError: true));
+            });
+        }
+    }
+
     private IReadOnlyList<DetailRow> BuildSummary()
     {
+        if (_existing is { } existingMachine)
+        {
+            return
+            [
+                new("Machine", existingMachine.Machine.Name),
+                new("System", IsWindows ? Edition?.DisplayName ?? GuestLabel : GuestLabel),
+                new("Installer", Path.GetFileName(IsoPath) ?? ""),
+                IsWindows
+                    ? new("Easy Install", $"{Edition?.DisplayName ?? "Windows"} for {UserName}{(Password.Length == 0 ? " (no password)" : "")}{(LeanWindows ? ", Lean" : "")}")
+                    : new("Easy Install", $"For {UserName}, host name {LinuxEasyInstall.HostName(Name)}, time zone {IanaTimeZone}"),
+                new("Hardware", "As the machine has it now (change it in Settings)"),
+            ];
+        }
+
         if (IsFromTemplate && Template is { } t)
         {
             var m = t.Machine;

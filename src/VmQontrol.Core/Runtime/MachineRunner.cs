@@ -130,6 +130,7 @@ public static class MachineRunner
             Headless = options.Headless,
             NatSubnet = appSettings.NatSubnet is { } nat && Runtime.SegmentSubnet.Parse(nat) is { } natNet ? natNet.ToString() : null,
             FirmwareMenu = options.FirmwareSetup && m.Firmware.Kind == FirmwareKind.Bios && m.Guest.Os != "macos",
+            InstallSignal = Install.InstallSignal.Prepare(m, machineDirectory),
         };
         var launch = QemuCommandBuilder.Build(m, context);
         if (launch.Errors.Count > 0) throw new StartRefusedException(launch.Errors);
