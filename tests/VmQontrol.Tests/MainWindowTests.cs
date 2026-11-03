@@ -603,8 +603,11 @@ public sealed class MainWindowTests
                 Ui.PumpUntil(() => shell.Selected is { IsRunning: true }, "the running state", 20);
                 Ui.Pump(0.3);
                 var page = window.GetVisualDescendants().OfType<MachineView>().Single();
+                // The state is named after QEMU quits: held back here, a page that only looks at the exit says Powered off.
+                VmQontrol.Core.Runtime.MachineSuspend.NamingDelay = TimeSpan.FromSeconds(1.5);
                 Ui.Click(window, Named<Button>(page, "Suspend"));
                 Ui.PumpUntil(() => shell.Selected is { IsOff: true, IsSuspended: true }, "the machine suspended", 30);
+                VmQontrol.Core.Runtime.MachineSuspend.NamingDelay = TimeSpan.Zero;
                 Ui.Pump(0.3);
                 var suspendedState = Named<TextBlock>(page, "StateText").Text;
                 var powerOnText = string.Join("", Named<Button>(page, "PowerOn").GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));

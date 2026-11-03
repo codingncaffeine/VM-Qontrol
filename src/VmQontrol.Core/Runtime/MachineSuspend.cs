@@ -14,6 +14,9 @@ public static class MachineSuspend
     /// <summary>QEMU's command line when it was suspended: the state fits only that hardware, so resume uses it again.</summary>
     public const string CommandFile = "suspended.args.json";
 
+    /// <summary>Tests only: a wait between QEMU quitting and the state taking its name, so a page that looks too early is seen.</summary>
+    internal static TimeSpan NamingDelay { get; set; }
+
     public static string StatePath(string machineDirectory) => Path.Combine(machineDirectory, StateFile);
 
     /// <summary>
@@ -111,6 +114,7 @@ public static class MachineSuspend
             throw;
         }
 
+        if (NamingDelay > TimeSpan.Zero) await Task.Delay(NamingDelay, CancellationToken.None).ConfigureAwait(false);
         File.Move(partial, file, overwrite: true);
         Log.Info($"{running.Name}: suspended to {file}");
     }
