@@ -36,6 +36,9 @@ public sealed partial class WelcomeViewModel : ObservableObject
     [ObservableProperty]
     private bool _checked;
 
+    [ObservableProperty]
+    private bool _rechecking;
+
     public void Show(IReadOnlyList<DoctorCheck> checks)
     {
         Checks = checks.Select(c => new CheckRow(c.Title, c.Detail, c.Fix, c.Status)).OrderByDescending(r => r.Status).ToList();

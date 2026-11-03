@@ -63,7 +63,16 @@
 
       <!-- The host check. -->
       <StackPanel Spacing="10">
-        <TextBlock Text="THIS COMPUTER" Classes="section" />
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Text="THIS COMPUTER" Classes="section" VerticalAlignment="Center" />
+          <Button x:Name="RecheckHost" Grid.Column="1" Classes="tool" Command="{Binding RecheckHostCommand}" IsEnabled="{Binding !Welcome.Rechecking}"
+                  ToolTip.Tip="Look at this computer again, after installing something listed here">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Path Classes="icon" Data="{StaticResource IconRefresh}" />
+              <TextBlock Text="Check again" />
+            </StackPanel>
+          </Button>
+        </Grid>
         <TextBlock x:Name="CheckSummary" Text="{Binding Welcome.Summary}" TextWrapping="Wrap" FontWeight="SemiBold" />
         <Border Classes="card" Padding="0">
           <ItemsControl x:Name="Checks" ItemsSource="{Binding Welcome.Checks}">

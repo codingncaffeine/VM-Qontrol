@@ -78,4 +78,28 @@ public sealed class PreferencesTests
         // The control: the person's own startup folder was never touched.
         Assert.Equal(realBefore, File.Exists(realEntry));
     }
+
+    [Trait("Tier", "Window")]
+    [Fact]
+    public async Task The_host_check_runs_again_from_its_button()
+    {
+        using var profile = new TestProfile("recheck");
+        var note = await Ui.Run(() =>
+        {
+            var shell = new ShellViewModel(profile.Paths, AppSettings.Load(profile.Paths)) { WatchUsb = false };
+            var window = new MainWindow { DataContext = shell, Width = 1320, Height = 900 };
+            window.Show();
+            _ = shell.StartAsync();
+            Ui.PumpUntil(() => shell.Welcome.Checked, "the first host check", 30);
+            var button = window.GetVisualDescendants().OfType<WelcomeView>().Single().GetLogicalDescendants().OfType<Button>().First(b => b.Name == "RecheckHost");
+            button.BringIntoView();
+            Ui.Pump(0.2);
+            Ui.Click(window, button);
+            Ui.PumpUntil(() => shell.Status == "This computer was checked again.", "the second host check", 30);
+            var checks = shell.Welcome.Checks.Count;
+            window.Close();
+            return checks;
+        });
+        Assert.True(note > 3);
+    }
 }

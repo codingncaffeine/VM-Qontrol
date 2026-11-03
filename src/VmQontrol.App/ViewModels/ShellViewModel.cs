@@ -16,7 +16,7 @@ namespace VmQontrol.App.ViewModels;
 public sealed partial class ShellViewModel : ObservableObject
 {
     private readonly List<MachineViewModel> _all = [];
-    private readonly Lazy<Task<HostCapabilities>> _host = new(() => Task.Run(() => HostProbe.Probe()));
+    private Lazy<Task<HostCapabilities>> _host = new(() => Task.Run(() => HostProbe.Probe()));
 
     public ShellViewModel(QontrolPaths paths, AppSettings settings)
     {
@@ -265,6 +265,27 @@ public sealed partial class ShellViewModel : ObservableObject
     public Func<string, Task>? Clipboard { get; set; }
 
     public Task<HostCapabilities> HostAsync() => _host.Value;
+
+    /// <summary>The host check again, from scratch (after installing something it said was missing).</summary>
+    [RelayCommand]
+    private async Task RecheckHostAsync()
+    {
+        Ui.Post(() =>
+        {
+            _host = new(() => Task.Run(() => HostProbe.Probe()));
+            Welcome.Rechecking = true;
+        });
+        await Task.Yield();
+        var host = await Ui.InvokeAsync(HostAsync).ConfigureAwait(false);
+        var h = await host.ConfigureAwait(false);
+        var checks = await Task.Run(() => Doctor.Run(h, Doctor.DetectThisDistro(), Settings.LibraryRoots[0])).ConfigureAwait(false);
+        Ui.Post(() =>
+        {
+            Welcome.Show(checks);
+            Welcome.Rechecking = false;
+            Note("This computer was checked again.");
+        });
+    }
 
     /// <summary>The first look: probe the host, run the host check and read the library, all off the UI thread.</summary>
     public async Task StartAsync()
