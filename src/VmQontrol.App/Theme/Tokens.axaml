@@ -1,5 +1,5 @@
-<!-- VM Qontrol's design tokens: every colour, radius and spacing the views use comes from here, in light and dark.
-     The accent is the logo's blue; surfaces are a cool slate so the machines' screenshots carry the colour. -->
+<!-- VM Qontrol's design tokens: every color, radius and spacing the views use comes from here, in light and dark.
+     The accent is the logo's blue; surfaces are a cool slate so the machines' screenshots carry the color. -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <ResourceDictionary.ThemeDictionaries>

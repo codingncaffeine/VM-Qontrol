@@ -11,7 +11,7 @@ public sealed record WindowsEdition(int Index, string Name, string DisplayName, 
 /// <summary>What a Windows installation disc really holds.</summary>
 public sealed record WindowsMediaInfo(int Build, string Branch, string Architecture, string Release, bool Server, IReadOnlyList<WindowsEdition> Editions)
 {
-    /// <summary>A consumer disc (Home, Pro… together) rather than a volume-licence disc (Enterprise, no Home).</summary>
+    /// <summary>A consumer disc (Home, Pro… together) rather than a volume-license disc (Enterprise, no Home).</summary>
     public bool ConsumerDisc => !Editions.Any(e => e.Name.Contains("Enterprise", StringComparison.OrdinalIgnoreCase))
                                 || Editions.Any(e => e.Name.Contains("Home", StringComparison.OrdinalIgnoreCase));
 
@@ -22,7 +22,7 @@ public sealed record WindowsMediaInfo(int Build, string Branch, string Architect
 /// <summary>
 /// Names the exact Windows release on a disc. Windows 10 and 11 discs share one volume label, so osinfo-db (and
 /// libosinfo's own osinfo-detect) cannot tell them apart; the build number in sources/idwbinfo.txt can. The editions
-/// come from the install image's XML catalogue, which a WIM or ESD file keeps uncompressed after its header.
+/// come from the install image's XML catalog, which a WIM or ESD file keeps uncompressed after its header.
 /// </summary>
 public static class WindowsMedia
 {
@@ -49,7 +49,7 @@ public static class WindowsMedia
         var fields = Encoding.ASCII.GetString(info).Split('\n').Select(l => l.Trim().Split('=', 2)).Where(p => p.Length == 2)
             .ToDictionary(p => p[0].Trim(), p => p[1].Trim(), StringComparer.OrdinalIgnoreCase);
         var editions = Editions(readAt, "sources/install.wim") ?? Editions(readAt, "sources/install.esd") ?? [];
-        // The image catalogue names the exact build; the branch is the fallback (Windows 10 22H2's file has no build at all).
+        // The image catalog names the exact build; the branch is the fallback (Windows 10 22H2's file has no build at all).
         var build = editions.Select(e => e.Build).FirstOrDefault(b => b > 0);
         if (build == 0 && int.TryParse(fields.GetValueOrDefault("BuildBuild"), NumberStyles.None, CultureInfo.InvariantCulture, out var stated)) build = stated;
         if (build == 0) build = BranchBuild(fields.GetValueOrDefault("BuildBranch") ?? "");
@@ -59,7 +59,7 @@ public static class WindowsMedia
         return new WindowsMediaInfo(build, fields.GetValueOrDefault("BuildBranch") ?? "", fields.GetValueOrDefault("BuildArch") ?? "", release, server, editions);
     }
 
-    /// <summary>The first build of each Windows development branch, for discs whose catalogue cannot be read.</summary>
+    /// <summary>The first build of each Windows development branch, for discs whose catalog cannot be read.</summary>
     public static int BranchBuild(string branch) => branch.Split('_')[0].ToLowerInvariant() switch
     {
         "th1" => 10240,
@@ -110,10 +110,10 @@ public static class WindowsMedia
         var size = (long)(BinaryPrimitives.ReadUInt64LittleEndian(header.AsSpan(72)) & 0x00FF_FFFF_FFFF_FFFF);
         var offset = (long)BinaryPrimitives.ReadUInt64LittleEndian(header.AsSpan(80));
         if (size <= 0 || size > 8 * 1024 * 1024 || readAt(path, offset, (int)size) is not { } xmlBytes) return null;
-        return ParseCatalogue(Encoding.Unicode.GetString(xmlBytes).TrimStart('﻿'));
+        return ParseCatalog(Encoding.Unicode.GetString(xmlBytes).TrimStart('﻿'));
     }
 
-    public static IReadOnlyList<WindowsEdition> ParseCatalogue(string xml)
+    public static IReadOnlyList<WindowsEdition> ParseCatalog(string xml)
     {
         var doc = new XmlDocument { XmlResolver = null };
         doc.LoadXml(xml);

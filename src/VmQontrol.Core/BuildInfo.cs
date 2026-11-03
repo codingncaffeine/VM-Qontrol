@@ -15,7 +15,7 @@ public static class BuildInfo
     /// <summary>The version, the operating system and the runtime identifier on one line.</summary>
     public static string Stamp => $"{Version} on {RuntimeInformation.OSDescription} ({RuntimeInformation.RuntimeIdentifier})";
 
-    public const string Licence = """
+    public const string License = """
         Copyright (C) 2026 VM Qontrol contributors
         License GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.
         This is free software: you are free to change and redistribute it.

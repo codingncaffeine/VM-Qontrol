@@ -113,7 +113,7 @@ public sealed partial class PaletteViewModel(ShellViewModel shell) : ObservableO
             Add("Delete machine", s.DeleteMachineCommand, s.IsOff);
             Add("Open folder", s.OpenFolderCommand);
             Add("Copy command line", s.CopyCommandLineCommand);
-            Add(s.IsFavourite ? "Remove from favourites" : "Add to favourites", s.ToggleFavouriteCommand);
+            Add(s.IsFavorite ? "Remove from favorites" : "Add to favorites", s.ToggleFavoriteCommand);
             items.Add(new("Show summary", s.Name, () => s.Tab = 0));
             items.Add(new("Show snapshots", s.Name, () => s.Tab = 1));
             items.Add(new("Show performance", s.Name, () => s.Tab = 2));

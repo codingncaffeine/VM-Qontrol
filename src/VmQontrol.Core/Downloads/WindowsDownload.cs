@@ -7,7 +7,7 @@ using VmQontrol.Core.Media;
 
 namespace VmQontrol.Core.Downloads;
 
-/// <summary>One Windows image file in Microsoft's Media Creation Tool catalogue: one language and architecture, with
+/// <summary>One Windows image file in Microsoft's Media Creation Tool catalog: one language and architecture, with
 /// every edition it carries (a consumer file holds Home, Pro, Education…; a business file holds Enterprise).</summary>
 public sealed record WindowsImageFile(string Release, string Language, string Architecture, bool Business, long Size, string Sha1, string Url, string FileName, IReadOnlyList<string> EditionIds)
 {
@@ -19,7 +19,7 @@ public sealed record WindowsImageFile(string Release, string Language, string Ar
 public sealed record WindowsDownloadEdition(string EditionId, string Name, WindowsImageFile File);
 
 /// <summary>
-/// Windows from Microsoft's own catalogue, the one its Media Creation Tool reads (D28): a small cabinet at a fixed
+/// Windows from Microsoft's own catalog, the one its Media Creation Tool reads (D28): a small cabinet at a fixed
 /// go.microsoft.com link lists every language, architecture and edition of the current release, each as one .esd file
 /// on Microsoft's download network with its SHA-1. That network is not behind the bot check that refuses scripted
 /// downloads from Microsoft's web page. The .esd becomes an installer disc with wimlib and xorriso (<see cref="BuildDiscAsync"/>).
@@ -28,7 +28,7 @@ public static class WindowsDownload
 {
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromMinutes(2) };
 
-    public static readonly IReadOnlyDictionary<string, string> CatalogueLinks = new Dictionary<string, string>
+    public static readonly IReadOnlyDictionary<string, string> CatalogLinks = new Dictionary<string, string>
     {
         ["11"] = "https://go.microsoft.com/fwlink/?LinkId=2156292",
         ["10"] = "https://go.microsoft.com/fwlink/?LinkId=841361",
@@ -45,7 +45,7 @@ public static class WindowsDownload
         return missing;
     }
 
-    /// <summary>The catalogue for a release ("11" or "10"), cached for a day; an old copy is used when offline.</summary>
+    /// <summary>The catalog for a release ("11" or "10"), cached for a day; an old copy is used when offline.</summary>
     public static async Task<IReadOnlyList<WindowsImageFile>> LoadAsync(QontrolPaths paths, string release, CancellationToken ct = default)
     {
         var cache = Path.Combine(paths.Cache, $"windows-{release}-products.xml");
@@ -53,22 +53,22 @@ public static class WindowsDownload
         {
             try
             {
-                var xml = await FetchCatalogueAsync(paths, CatalogueLinks[release], ct).ConfigureAwait(false);
+                var xml = await FetchCatalogAsync(paths, CatalogLinks[release], ct).ConfigureAwait(false);
                 Directory.CreateDirectory(paths.Cache);
                 await File.WriteAllTextAsync(cache, xml, ct).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or TaskCanceledException && !ct.IsCancellationRequested)
             {
-                if (!File.Exists(cache)) throw new DownloadFailedException([$"Microsoft's Windows catalogue could not be read: {ex.Message}"]);
+                if (!File.Exists(cache)) throw new DownloadFailedException([$"Microsoft's Windows catalog could not be read: {ex.Message}"]);
             }
         }
 
         return Parse(await File.ReadAllTextAsync(cache, ct).ConfigureAwait(false), release);
     }
 
-    private static async Task<string> FetchCatalogueAsync(QontrolPaths paths, string link, CancellationToken ct)
+    private static async Task<string> FetchCatalogAsync(QontrolPaths paths, string link, CancellationToken ct)
     {
-        var work = Path.Combine(paths.Cache, $"windows-catalogue-{Guid.NewGuid():N}");
+        var work = Path.Combine(paths.Cache, $"windows-catalog-{Guid.NewGuid():N}");
         Directory.CreateDirectory(work);
         try
         {
@@ -78,11 +78,11 @@ public static class WindowsDownload
                 await body.CopyToAsync(file, ct).ConfigureAwait(false);
             var head = new byte[4];
             await using (var f = File.OpenRead(cab)) f.ReadExactly(head);
-            if (!head.AsSpan().SequenceEqual("MSCF"u8)) throw new InvalidDataException("the link did not give Microsoft's catalogue file");
+            if (!head.AsSpan().SequenceEqual("MSCF"u8)) throw new InvalidDataException("the link did not give Microsoft's catalog file");
             var (tool, args) = Hosts.Doctor.OnPath("bsdtar") ? ("bsdtar", new[] { "-xf", cab, "-C", work }) : ("cabextract", new[] { "-q", "-d", work, cab });
             var (code, output) = await RunAsync(tool, args, null, ct).ConfigureAwait(false);
             var xml = Path.Combine(work, "products.xml");
-            if (code != 0 || !File.Exists(xml)) throw new InvalidDataException($"{tool} could not open the catalogue: {Last(output)}");
+            if (code != 0 || !File.Exists(xml)) throw new InvalidDataException($"{tool} could not open the catalog: {Last(output)}");
             return await File.ReadAllTextAsync(xml, ct).ConfigureAwait(false);
         }
         finally
@@ -128,7 +128,7 @@ public static class WindowsDownload
         return result.DistinctBy(e => e.EditionId).ToList();
     }
 
-    /// <summary>Microsoft's edition ids and the names Windows shows. Legacy ids the catalogue still lists (Starter,
+    /// <summary>Microsoft's edition ids and the names Windows shows. Legacy ids the catalog still lists (Starter,
     /// HomeBasic, Ultimate…) are not in the file and are left out.</summary>
     public static readonly IReadOnlyDictionary<string, string> EditionNames = new Dictionary<string, string>
     {

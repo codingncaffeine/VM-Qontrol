@@ -3,7 +3,7 @@
 # VM Qontrol
 
 A modern, intuitive manager for QEMU/KVM virtual machines on Linux. Create a machine in a few guided steps, download
-an operating system from a catalogue or use your own installer, and change every setting in a dialog that explains
+an operating system from a catalog or use your own installer, and change every setting in a dialog that explains
 what it does and what the recommended value is. No daemon, no root, and one portable folder per machine.
 
 > **Status: early development.** Nothing is released yet. The first release will run machines in an external viewer
@@ -12,9 +12,9 @@ what it does and what the recommended value is. No daemon, no root, and one port
 ## Planned for the first release
 
 - A library of machines with live thumbnails, performance graphs and a serial console.
-- A New Virtual Machine wizard: your own ISO, or a download: Windows 10 and 11 straight from Microsoft's own catalogue
+- A New Virtual Machine wizard: your own ISO, or a download: Windows 10 and 11 straight from Microsoft's own catalog
   (the one its Media Creation Tool uses, checked against Microsoft's checksums and made into an installer disc), other
-  systems from the quickget catalogue. The operating system is detected from the media, with unattended installation
+  systems from the quickget catalog. The operating system is detected from the media, with unattended installation
   for Windows and the major Linux distributions. "Lean Windows" leaves out the bundled promotions, games and ads while
   installing Microsoft's own, untouched Windows.
 - A settings dialog covering the whole machine: memory, processors, disks, CD/DVD, network, USB, sound, display,
@@ -43,12 +43,12 @@ New here? [Getting started](docs/getting-started.md) and [Troubleshooting](docs/
 | Shared folders (optional) | `virtiofsd` | `virtiofsd` | `virtiofsd` |
 | Faster user networking (optional) | `passt` | `passt` | `passt` |
 | Windows downloads (optional) | `wimlib libisoburn` | `wimtools xorriso libarchive-tools` | `wimlib-utils xorriso bsdtar` |
-| OS download catalogue (optional) | `quickemu` | `quickemu` | `quickemu` |
+| OS download catalog (optional) | `quickemu` | `quickemu` | `quickemu` |
 
 **Alpine and other musl distributions** are supported for building from source:
 `apk add dotnet10-sdk qemu-system-x86_64 qemu-img ovmf swtpm virt-viewer osinfo-db` (plus `virtiofsd passt` if
 wanted, and `wimlib xorriso libarchive-tools` for Windows downloads). Alpine's UEFI firmware has no Secure Boot build, and quickget is not packaged there, so the download
-catalogue is unavailable unless you install quickemu yourself.
+catalog is unavailable unless you install quickemu yourself.
 
 Your user needs access to `/dev/kvm`, through the `kvm` group or your distribution's default rule.
 

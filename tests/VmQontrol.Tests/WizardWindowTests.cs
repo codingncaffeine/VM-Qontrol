@@ -216,7 +216,7 @@ public sealed class WizardWindowTests
     }
 
     /// <summary>
-    /// Download → Windows → 11: Microsoft's catalogue (a cached copy, no network) gives the editions on the card, Pro
+    /// Download → Windows → 11: Microsoft's catalog (a cached copy, no network) gives the editions on the card, Pro
     /// chosen, and Easy Install is offered for the download as for a disc. The download itself is proven by
     /// tools/verify-windows-download.sh (4.4 GB).
     /// </summary>
@@ -227,9 +227,9 @@ public sealed class WizardWindowTests
         using var profile = new TestProfile("wizard-mswin");
         Directory.CreateDirectory(profile.Paths.DefaultLibrary);
         Directory.CreateDirectory(profile.Paths.Cache);
-        File.WriteAllText(Path.Combine(profile.Paths.Cache, "windows-11-products.xml"), WindowsDownloadTests.Catalogue());
+        File.WriteAllText(Path.Combine(profile.Paths.Cache, "windows-11-products.xml"), WindowsDownloadTests.Catalog());
         // quickget's list, cached as the app caches it, so the test never runs quickget (over a minute on a busy machine).
-        File.WriteAllText(Path.Combine(profile.Paths.Cache, "catalogue.json"),
+        File.WriteAllText(Path.Combine(profile.Paths.Cache, "catalog.json"),
             """[{"Display Name":"Ubuntu","OS":"ubuntu","Release":"24.04","Option":"","PNG":""},{"Display Name":"Windows","OS":"windows","Release":"11","Option":"English (United States)","PNG":"icon.png"}]""");
 
         await Ui.Run(() =>
@@ -241,13 +241,13 @@ public sealed class WizardWindowTests
             var wizard = shell.Wizard!;
             wizard.Locale = "en-US";
             Ui.Click(window, Named<RadioButton>(window, "SourceDownload"));
-            Ui.PumpUntil(() => wizard.Systems.Any(s => s.Os == "windows"), "the catalogue", 10);
+            Ui.PumpUntil(() => wizard.Systems.Any(s => s.Os == "windows"), "the catalog", 10);
             Assert.Equal(["Windows", "Ubuntu"], wizard.Systems.Select(s => s.DisplayName)); // quickget's Windows is replaced, not doubled
             Assert.Equal("windows", wizard.Systems[0].Os); // the most asked-for download comes first
             var windows = wizard.Systems.Single(s => s.Os == "windows");
             Assert.Equal(["11", "10"], windows.Entries.Select(e => e.Release));
             Assert.All(windows.Entries, e => Assert.True(e.FromMicrosoft));
-            Named<ListBox>(window, "CatalogueSystems").SelectedItem = windows;
+            Named<ListBox>(window, "CatalogSystems").SelectedItem = windows;
             Ui.PumpUntil(() => wizard.Editions.Count > 0, "Microsoft's editions", 10);
             Ui.Pump(0.3);
             Assert.True(Named<StackPanel>(window, "MicrosoftWindows").IsEffectivelyVisible);
@@ -260,7 +260,7 @@ public sealed class WizardWindowTests
             Assert.Equal("Windows 11 Pro", wizard.Name);
             Ui.Capture(window, "wizard-mswin", "1-download-card");
 
-            // Enterprise comes from the business file: volume-licence keys.
+            // Enterprise comes from the business file: volume-license keys.
             wizard.Edition = wizard.Editions.Single(e => e.Name == "Windows 11 Enterprise");
             Assert.False(wizard.ConsumerDisc);
             wizard.Edition = wizard.Editions.Single(e => e.Name == "Windows 11 Pro");

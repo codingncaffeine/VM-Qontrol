@@ -11,7 +11,7 @@ public sealed class ExportTests
 {
     private static async Task<(MachineConfig M, string Dir)> Machine(TestProfile profile)
     {
-        var dir = Path.Combine(profile.Paths.DefaultLibrary, "Traveller");
+        var dir = Path.Combine(profile.Paths.DefaultLibrary, "Traveler");
         Directory.CreateDirectory(Path.Combine(dir, "tpm"));
         await QemuImg.RunAsync(TestContext.Current.CancellationToken, "create", "-q", "-f", "qcow2", Path.Combine(dir, "disk0.qcow2"), "64M");
         Io(Path.Combine(dir, "disk0.qcow2"), "write -P 0x5a 0 1M");
@@ -21,7 +21,7 @@ public sealed class ExportTests
         File.WriteAllBytes(Path.Combine(dir, "unattended.iso"), [6]);
         var m = new MachineConfig
         {
-            Name = "Traveller",
+            Name = "Traveler",
             Guest = new GuestConfig { Os = "windows", Release = "11" },
             MemoryMiB = 8192,
             Cpu = new CpuConfig { Cores = 4 },
@@ -68,7 +68,7 @@ public sealed class ExportTests
         Assert.Contains("read 1048576/1048576", Io(Path.Combine(folder, "disk0.qcow2"), "read -P 0x5a 0 1M"), StringComparison.Ordinal);
         Assert.Contains("before", await QemuImg.RunAsync(TestContext.Current.CancellationToken, "snapshot", "-l", Path.Combine(folder, "disk0.qcow2")), StringComparison.Ordinal);
         // Listed where it now is, beside nothing else.
-        Assert.Contains(LibraryScanner.Scan(elsewhere), e => e.Machine?.Name == "Traveller");
+        Assert.Contains(LibraryScanner.Scan(elsewhere), e => e.Machine?.Name == "Traveler");
     }
 
     [Fact]
@@ -77,13 +77,13 @@ public sealed class ExportTests
         using var profile = new TestProfile("export-tar");
         var (m, dir) = await Machine(profile);
         var (tar, _) = await MachineExport.ExportAsync(m, dir, profile.Root, asTar: true, None, TestContext.Current.CancellationToken);
-        Assert.EndsWith("Traveller.tar", tar, StringComparison.Ordinal);
-        Assert.False(Directory.Exists(Path.Combine(profile.Root, "Traveller")));
+        Assert.EndsWith("Traveler.tar", tar, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(Path.Combine(profile.Root, "Traveler")));
 
         var other = Path.Combine(profile.Root, "other-library");
         Directory.CreateDirectory(other);
         var folder = await MachineExport.UnpackAsync(tar, other, TestContext.Current.CancellationToken);
-        Assert.Equal(Path.Combine(other, "Traveller"), folder);
+        Assert.Equal(Path.Combine(other, "Traveler"), folder);
         Assert.Empty(await MachineExport.VerifyAsync(folder, TestContext.Current.CancellationToken));
         Assert.False(Directory.Exists(Path.Combine(other, ".importing")) && Directory.EnumerateFileSystemEntries(Path.Combine(other, ".importing")).Any());
 
@@ -94,7 +94,7 @@ public sealed class ExportTests
         File.WriteAllBytes(tar, bytes);
         var ex = await Assert.ThrowsAsync<InvalidDataException>(() => MachineExport.UnpackAsync(tar, other, TestContext.Current.CancellationToken));
         Assert.Contains("OVMF_VARS.fd is damaged", ex.Message, StringComparison.Ordinal);
-        Assert.False(Directory.Exists(Path.Combine(other, "Traveller (2)")));
+        Assert.False(Directory.Exists(Path.Combine(other, "Traveler (2)")));
     }
 
     private static int IndexOf(byte[] haystack, byte[] needle)
@@ -110,12 +110,12 @@ public sealed class ExportTests
         using var profile = new TestProfile("export-quickemu");
         var (m, dir) = await Machine(profile);
         var conf = MachineExport.WriteQuickemuConf(m, dir);
-        Assert.Equal(Path.Combine(profile.Paths.DefaultLibrary, "Traveller.conf"), conf);
+        Assert.Equal(Path.Combine(profile.Paths.DefaultLibrary, "Traveler.conf"), conf);
         var back = QuickemuImporter.Import(conf).Machine;
         Assert.Equal(Path.Combine(dir, "disk0.qcow2"), back.Disks[0].File);
         Assert.Equal((m.MemoryMiB, m.Cpu.Cores, m.Guest.Os, FirmwareKind.Uefi, true, true), (back.MemoryMiB, back.Cpu.Cores, back.Guest.Os, back.Firmware.Kind, back.Firmware.SecureBoot, back.Tpm));
         Assert.Equal("52:54:00:aa:bb:cc", back.Nics[0].Mac);
         // The library lists the machine once (from its vm.json), not again from the .conf beside it.
-        Assert.Single(LibraryScanner.Scan(profile.Paths.DefaultLibrary), e => e.Machine?.Name == "Traveller");
+        Assert.Single(LibraryScanner.Scan(profile.Paths.DefaultLibrary), e => e.Machine?.Name == "Traveler");
     }
 }

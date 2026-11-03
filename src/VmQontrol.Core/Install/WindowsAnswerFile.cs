@@ -18,7 +18,7 @@ public sealed record WindowsInstallChoices
     /// <summary>The edition's name ("Windows 11 Pro"), which picks Microsoft's setup key when no key is given.</summary>
     public string EditionName { get; init; } = "";
 
-    /// <summary>A consumer disc (Home, Pro… together) rather than a volume-licence disc: they take different setup keys.</summary>
+    /// <summary>A consumer disc (Home, Pro… together) rather than a volume-license disc: they take different setup keys.</summary>
     public bool ConsumerDisc { get; init; } = true;
 
     /// <summary>A product key, or empty to use the edition's published setup key (Windows asks for activation later).</summary>

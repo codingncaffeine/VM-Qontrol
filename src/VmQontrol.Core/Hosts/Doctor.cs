@@ -4,7 +4,7 @@ public enum CheckStatus
 {
     Ok,
 
-    /// <summary>Works, but something is missing that a feature needs (shared folders, the download catalogue).</summary>
+    /// <summary>Works, but something is missing that a feature needs (shared folders, the download catalog).</summary>
     Optional,
 
     /// <summary>Works badly (no KVM: very slow).</summary>
@@ -138,7 +138,7 @@ public static class Doctor
             : new("USB devices", CheckStatus.Optional, "Handing USB devices to machines needs spice-gtk's USB helper, the same one virt-viewer uses.", InstallCommand(distro, "usb-helper")));
 
         checks.Add(exists("/usr/share/osinfo") || exists("/usr/local/share/osinfo")
-            ? new("Operating-system database", CheckStatus.Ok, "Installer discs are recognised and machines get the right defaults.")
+            ? new("Operating-system database", CheckStatus.Ok, "Installer discs are recognized and machines get the right defaults.")
             : new("Operating-system database", CheckStatus.Optional, "Without it you choose the operating system yourself when creating a machine.", InstallCommand(distro, "osinfo")));
 
         checks.Add(onPath("virtiofsd") || exists("/usr/lib/virtiofsd") || exists("/usr/libexec/virtiofsd")
@@ -152,8 +152,8 @@ public static class Doctor
             ? new("Windows downloads (wimlib, xorriso)", CheckStatus.Ok, "Windows can be downloaded from Microsoft and made into an installer disc.")
             : new("Windows downloads (wimlib, xorriso)", CheckStatus.Optional, $"Downloading Windows needs {string.Join(" and ", windowsTools)} to turn Microsoft's file into an installer disc; your own Windows discs work without them.", InstallCommand(distro, "windows-download")));
         checks.Add(onPath("quickget")
-            ? new("Download catalogue (quickget)", CheckStatus.Ok, "Operating systems can be downloaded from the New Machine wizard.")
-            : new("Download catalogue (quickget)", CheckStatus.Optional,
+            ? new("Download catalog (quickget)", CheckStatus.Ok, "Operating systems can be downloaded from the New Machine wizard.")
+            : new("Download catalog (quickget)", CheckStatus.Optional,
                 distro == DistroFamily.Alpine ? "quickemu is not packaged for Alpine; use your own installer discs, or install quickemu from its project page." : "Without it you supply installer discs yourself.",
                 distro == DistroFamily.Alpine ? null : InstallCommand(distro, "quickemu")));
 

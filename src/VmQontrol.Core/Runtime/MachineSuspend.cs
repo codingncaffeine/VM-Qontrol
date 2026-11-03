@@ -81,7 +81,7 @@ public static class MachineSuspend
                 var info = await qmp.ExecuteAsync("query-migrate", ct: ct).ConfigureAwait(false);
                 var status = info?["status"]?.GetValue<string>();
                 if (status == "completed") break;
-                if (status is "failed" or "cancelled")
+                if (status is "failed" or "canceled")
                     throw new QmpException("migrate", "MigrationFailed", info?["error-desc"]?.GetValue<string>() ?? "QEMU could not save the machine's state.");
                 if (info?["ram"] is JsonObject ram && ram["total"]?.GetValue<long>() is > 0 and var total)
                     progress?.Report($"Saving the machine's memory… {100 * (ram["transferred"]?.GetValue<long>() ?? 0) / total}%");
@@ -122,7 +122,7 @@ public static class MachineSuspend
                 var info = await qmp.ExecuteAsync("query-migrate", ct: ct).ConfigureAwait(false);
                 var status = info?["status"]?.GetValue<string>();
                 if (status == "completed") break;
-                if (status is "failed" or "cancelled")
+                if (status is "failed" or "canceled")
                     throw new StartRefusedException([$"The suspended state could not be loaded ({info?["error-desc"]?.GetValue<string>() ?? "QEMU gave no reason"}). Discard it to start the machine afresh."]);
                 if (DateTime.UtcNow > deadline) throw new StartRefusedException(["The suspended state took more than ten minutes to load."]);
                 await Task.Delay(200, ct).ConfigureAwait(false);

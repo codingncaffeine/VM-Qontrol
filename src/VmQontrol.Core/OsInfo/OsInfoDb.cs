@@ -5,7 +5,7 @@ using VmQontrol.Core.Media;
 
 namespace VmQontrol.Core.OsInfo;
 
-/// <summary>One operating system in osinfo-db: its name, how to recognise its media, and what it needs.</summary>
+/// <summary>One operating system in osinfo-db: its name, how to recognize its media, and what it needs.</summary>
 public sealed record OsEntry(
     string Id,
     string ShortId,
@@ -69,7 +69,7 @@ public sealed class OsInfoDb
 
     public OsEntry? Find(string id) => Entries.FirstOrDefault(e => e.Id == id || e.ShortId == id);
 
-    /// <summary>The operating system on a disc, or <c>null</c> when nothing in the database recognises it.</summary>
+    /// <summary>The operating system on a disc, or <c>null</c> when nothing in the database recognizes it.</summary>
     public OsMatch? Identify(IsoVolume iso, string arch = "x86_64")
     {
         var hits = new List<(OsEntry Os, OsMedia Media, int Score)>();

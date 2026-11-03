@@ -21,7 +21,7 @@ internal static class Program
         if (args.Any(a => a is "--version" or "-V"))
         {
             Console.WriteLine($"VM Qontrol {BuildInfo.Stamp}");
-            Console.WriteLine(BuildInfo.Licence);
+            Console.WriteLine(BuildInfo.License);
             return 0;
         }
 
@@ -32,7 +32,7 @@ internal static class Program
 
                   MACHINE             Open on this machine's page (its name in the library).
 
-                  --version           Print the version and licence, then exit.
+                  --version           Print the version and license, then exit.
 
                 {QontrolPaths.HomeVariable}=DIR keeps every setting, log and machine under DIR instead of the usual folders.
                 VMQONTROL_UI_TRACE=1 logs every moment the window's thread was busy for more than 4 ms.

@@ -3,13 +3,25 @@ using System.Text.Json.Serialization;
 
 namespace VmQontrol.Core;
 
-/// <summary>The app's own settings (settings.json): where machines live, favourites and folders, and display choices.</summary>
+/// <summary>The app's own settings (settings.json): where machines live, favorites and folders, and display choices.</summary>
 public sealed record AppSettings
 {
     /// <summary>Folders scanned for machines; the first is where new machines go.</summary>
     public List<string> LibraryRoots { get; set; } = [];
 
-    public HashSet<string> Favourites { get; set; } = [];
+    public HashSet<string> Favorites { get; set; } = [];
+
+    /// <summary>Settings saved before 2026-11-03 spelled it "favourites": read once, never written.</summary>
+    [JsonPropertyName("favourites")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public HashSet<string>? FavoritesBefore
+    {
+        get => null;
+        set
+        {
+            if (value is not null) Favorites.UnionWith(value);
+        }
+    }
 
     /// <summary>Machine id → the sidebar folder it is filed under.</summary>
     public Dictionary<string, string> Folders { get; set; } = [];
@@ -40,8 +52,20 @@ public sealed record AppSettings
     /// <summary>Ask before Reset.</summary>
     public bool ConfirmReset { get; set; } = true;
 
-    /// <summary>Open the app minimised when it starts at sign-in.</summary>
-    public bool StartMinimised { get; set; }
+    /// <summary>Open the app minimized when it starts at sign-in.</summary>
+    public bool StartMinimized { get; set; }
+
+    /// <summary>Settings saved before 2026-11-03 spelled it "startMinimised": read once, never written.</summary>
+    [JsonPropertyName("startMinimised")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? StartMinimizedBefore
+    {
+        get => null;
+        set
+        {
+            if (value is { } v) StartMinimized = v;
+        }
+    }
 
     /// <summary>Warn before powering on a machine that would leave this computer short of memory.</summary>
     public bool WarnLowMemory { get; set; } = true;

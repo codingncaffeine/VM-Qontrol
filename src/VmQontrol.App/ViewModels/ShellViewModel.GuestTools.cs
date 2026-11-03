@@ -45,7 +45,7 @@ public sealed partial class ShellViewModel
         });
     }
 
-    /// <summary>The guest tools disc: found, or downloaded now with progress here (and in <paramref name="also"/>). <c>null</c> = cancelled or failed (the person was told).</summary>
+    /// <summary>The guest tools disc: found, or downloaded now with progress here (and in <paramref name="also"/>). <c>null</c> = canceled or failed (the person was told).</summary>
     public Task<string?> GetGuestToolsAsync(IProgress<DownloadProgress>? also = null)
     {
         _guestToolsAlso = also;

@@ -102,9 +102,9 @@ public sealed class EasyInstallTests
     }
 
     [Fact]
-    public void A_Windows_image_catalogue_lists_editions_with_their_build()
+    public void A_Windows_image_catalog_lists_editions_with_their_build()
     {
-        var editions = WindowsMedia.ParseCatalogue("""
+        var editions = WindowsMedia.ParseCatalog("""
             <WIM><IMAGE INDEX="1"><NAME>Windows 11 Home</NAME><DISPLAYNAME>Windows 11 Home</DISPLAYNAME><WINDOWS><VERSION><BUILD>26100</BUILD></VERSION></WINDOWS></IMAGE>
             <IMAGE INDEX="6"><NAME>Windows 11 Pro</NAME><WINDOWS><VERSION><BUILD>26100</BUILD></VERSION></WINDOWS></IMAGE></WIM>
             """);

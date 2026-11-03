@@ -37,7 +37,7 @@ public static class GuestNames
         _ => g.Os.Length >= 2 ? char.ToUpperInvariant(g.Os[0]) + g.Os[1..2] : "VM",
     };
 
-    /// <summary>The badge colour family: windows, apple, linux, bsd or other.</summary>
+    /// <summary>The badge color family: windows, apple, linux, bsd or other.</summary>
     public static string Family(GuestConfig g) => g.Os switch
     {
         "windows" or "windows-server" or "reactos" => "windows",

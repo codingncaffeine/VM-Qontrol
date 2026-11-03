@@ -20,7 +20,7 @@ public static class GuestTools
 
     private const string Brings = "The guest tools bring copy and paste, dragging files in, a screen that follows the window's size, the machine's address here, and a clean shut down from this app.";
 
-    /// <summary>The steps for <paramref name="guest"/>; <paramref name="osReleaseId"/> is the guest's own os-release ID when known (it overrides the guess from the catalogue).</summary>
+    /// <summary>The steps for <paramref name="guest"/>; <paramref name="osReleaseId"/> is the guest's own os-release ID when known (it overrides the guess from the catalog).</summary>
     public static GuestToolsAdvice Advise(GuestConfig guest, string? osReleaseId = null)
     {
         switch (guest.Os)

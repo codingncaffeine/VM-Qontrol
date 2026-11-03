@@ -16,4 +16,4 @@ What it needs from your distribution
   Fedora:         qemu-kvm edk2-ovmf swtpm virt-viewer
   Alpine:         qemu-system-x86_64 qemu-img ovmf swtpm virt-viewer
 
-Licence: GPL-3.0-or-later (LICENSE).
+License: GPL-3.0-or-later (LICENSE).

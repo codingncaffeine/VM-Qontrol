@@ -1,4 +1,4 @@
-<!-- Named styles over the tokens. A view picks a class (h1, muted, primary, card) and never sets a colour itself. -->
+<!-- Named styles over the tokens. A view picks a class (h1, muted, primary, card) and never sets a color itself. -->
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <Style Selector="Window">
@@ -120,7 +120,7 @@
     <Setter Property="Width" Value="16" />
     <Setter Property="Height" Value="16" />
   </Style>
-  <Style Selector="Path.icon.favourite">
+  <Style Selector="Path.icon.favorite">
     <Setter Property="Stroke" Value="{DynamicResource QWarning}" />
     <Setter Property="Fill" Value="{DynamicResource QWarning}" />
   </Style>
@@ -180,8 +180,8 @@
   </Style>
   <Style Selector="Ellipse.state.running"><Setter Property="Fill" Value="{DynamicResource QSuccess}" /></Style>
   <Style Selector="Ellipse.state.paused"><Setter Property="Fill" Value="{DynamicResource QWarning}" /></Style>
-  <!-- Menus (the toolbar's ⋯ and USB menus) in the app's own surfaces instead of Fluent's stock grey. -->
-  <!-- Tooltips: the menus' raised surface, the body's text colour, wrapped at a reading width (no shadow: a popup clips it, and its corners would show black without a compositor). Every
+  <!-- Menus (the toolbar's ⋯ and USB menus) in the app's own surfaces instead of Fluent's stock gray. -->
+  <!-- Tooltips: the menus' raised surface, the body's text color, wrapped at a reading width (no shadow: a popup clips it, and its corners would show black without a compositor). Every
        icon-only button carries one (tests/VmQontrol.Tests/TooltipTests.cs). -->
   <Style Selector="ToolTip">
     <Setter Property="Background" Value="{DynamicResource QSurfaceRaised}" />

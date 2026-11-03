@@ -413,7 +413,7 @@ public static class QemuCommandBuilder
         if (m.Media.FirstOrDefault(x => x.Role == MediaRole.Drivers && Attached(x)) is { } drivers)
             args.AddRange(["-drive", $"media=cdrom,index=1,file={File(drivers.File)}"]);
 
-        const string optimisations = "discard=unmap,detect-zeroes=unmap,cache=writeback,aio=threads";
+        const string optimizations = "discard=unmap,detect-zeroes=unmap,cache=writeback,aio=threads";
         if (m.Disks.Count == 0) errors.Add("This machine has no disk.");
         else
         {
@@ -432,22 +432,22 @@ public static class QemuCommandBuilder
                     "-drive", $"id=BootLoader,if=none,format=qcow2,file={(loader is null ? "" : File(loader.File))}"]);
                 if (m.Media.FirstOrDefault(x => x.Role == MediaRole.Recovery && Attached(x)) is { } recovery)
                     args.AddRange(["-device", "ide-hd,bus=ahci.1,drive=RecoveryImage", "-drive", $"id=RecoveryImage,if=none,format=raw,file={File(recovery.File)}"]);
-                args.AddRange(["-device", $"{device0 ?? macDisk},drive=SystemDisk", "-drive", $"id=SystemDisk,if=none,format=qcow2,file={diskPath},{optimisations}{Throttle(disk)}"]);
+                args.AddRange(["-device", $"{device0 ?? macDisk},drive=SystemDisk", "-drive", $"id=SystemDisk,if=none,format=qcow2,file={diskPath},{optimizations}{Throttle(disk)}"]);
             }
             else if (os == "kolibrios")
-                args.AddRange(["-device", "ahci,id=ahci", "-device", "ide-hd,bus=ahci.0,drive=SystemDisk", "-drive", $"id=SystemDisk,if=none,format=qcow2,file={diskPath},{optimisations}{Throttle(disk)}"]);
+                args.AddRange(["-device", "ahci,id=ahci", "-device", "ide-hd,bus=ahci.0,drive=SystemDisk", "-drive", $"id=SystemDisk,if=none,format=qcow2,file={diskPath},{optimizations}{Throttle(disk)}"]);
             else if (os == "reactos" && device0 is null)
                 args.AddRange(["-drive", $"if=ide,index=0,media=disk,file={diskPath}"]);
             else if (os == "windows-server" && device0 is null)
-                args.AddRange(["-device", "ide-hd,drive=SystemDisk", "-drive", $"id=SystemDisk,if=none,format=qcow2,file={diskPath},{optimisations}{Throttle(disk)}"]);
+                args.AddRange(["-device", "ide-hd,drive=SystemDisk", "-drive", $"id=SystemDisk,if=none,format=qcow2,file={diskPath},{optimizations}{Throttle(disk)}"]);
             else
-                args.AddRange(["-device", $"{device0 ?? "virtio-blk-pci"},drive=SystemDisk", "-drive", $"id=SystemDisk,if=none,format={disk.Format},file={diskPath},{optimisations}{Throttle(disk)}"]);
+                args.AddRange(["-device", $"{device0 ?? "virtio-blk-pci"},drive=SystemDisk", "-drive", $"id=SystemDisk,if=none,format={disk.Format},file={diskPath},{optimizations}{Throttle(disk)}"]);
 
             for (var i = 1; i < m.Disks.Count; i++)
             {
                 var extra = m.Disks[i];
                 var dev = extra.Bus switch { DiskBus.Sata or DiskBus.Ide => "ide-hd", DiskBus.Nvme => $"nvme,serial=vmqdisk{i}", DiskBus.Pvscsi => "scsi-hd,bus=pvscsi0.0", DiskBus.Scsi => "scsi-hd,bus=vscsi0.0", _ => "virtio-blk-pci" };
-                args.AddRange(["-device", $"{dev},drive=Disk{i}", "-drive", $"id=Disk{i},if=none,format={extra.Format},file={File(extra.File)},{optimisations}{Throttle(extra)}"]);
+                args.AddRange(["-device", $"{dev},drive=Disk{i}", "-drive", $"id=Disk{i},if=none,format={extra.Format},file={File(extra.File)},{optimizations}{Throttle(extra)}"]);
             }
         }
 

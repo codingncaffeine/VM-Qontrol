@@ -81,7 +81,7 @@
                                   ToolTip.Tip="Power on every machine in this folder that is off, without opening their screens" />
                         <MenuItem x:Name="FolderShutDown" Header="{Binding FolderShutDownText}" Command="{Binding $parent[ListBox].((vm:ShellViewModel)DataContext).ShutDownFolderCommand}" CommandParameter="{Binding FolderName}" IsVisible="{Binding HasFolder}"
                                   ToolTip.Tip="Ask every running machine in this folder to shut down, as its power button would" />
-                        <MenuItem Header="{Binding IsFavourite, Converter={x:Static vm:Text.FavouriteToggle}}" Command="{Binding ToggleFavouriteCommand}" />
+                        <MenuItem Header="{Binding IsFavorite, Converter={x:Static vm:Text.FavoriteToggle}}" Command="{Binding ToggleFavoriteCommand}" />
                         <Separator />
                         <MenuItem Header="Open folder" Command="{Binding OpenFolderCommand}" />
                         <MenuItem Header="Copy command line" Command="{Binding CopyCommandLineCommand}" />
@@ -96,7 +96,7 @@
                       <TextBlock Text="{Binding LibraryLabel}" Classes="muted" FontSize="{DynamicResource QFontSmall}" TextTrimming="CharacterEllipsis" />
                     </StackPanel>
                     <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                      <Path Classes="iconfill" Data="{StaticResource IconStar}" Width="11" Height="11" Fill="{DynamicResource QWarning}" IsVisible="{Binding IsFavourite}" />
+                      <Path Classes="iconfill" Data="{StaticResource IconStar}" Width="11" Height="11" Fill="{DynamicResource QWarning}" IsVisible="{Binding IsFavorite}" />
                       <Ellipse Classes="state" Classes.running="{Binding IsRunning}" Classes.paused="{Binding IsPaused}" ToolTip.Tip="{Binding StateText}" />
                     </StackPanel>
                   </Grid>

@@ -98,19 +98,19 @@
                     </DataTemplate>
                   </ComboBox.ItemTemplate>
                 </ComboBox>
-                <TextBlock Text="The disc holds several editions; Pro is chosen because it suits most people. Your licence key decides which one you may activate." Classes="muted" TextWrapping="Wrap" />
+                <TextBlock Text="The disc holds several editions; Pro is chosen because it suits most people. Your license key decides which one you may activate." Classes="muted" TextWrapping="Wrap" />
               </StackPanel>
             </StackPanel>
           </Border>
 
           <Border Classes="card" IsVisible="{Binding IsDownload}">
             <StackPanel Spacing="10">
-              <TextBlock Text="{Binding CatalogueNote}" Classes="muted" TextWrapping="Wrap" />
-              <TextBox Classes="search" Text="{Binding CatalogueSearch}" PlaceholderText="Search: Ubuntu, Fedora, Debian…" IsVisible="{Binding CatalogueAvailable}" />
-              <Grid ColumnDefinitions="*,*" ColumnSpacing="12" Height="320" IsVisible="{Binding CatalogueAvailable}">
-                <ListBox x:Name="CatalogueSystems" Classes="library" ItemsSource="{Binding Systems}" SelectedItem="{Binding System}">
+              <TextBlock Text="{Binding CatalogNote}" Classes="muted" TextWrapping="Wrap" />
+              <TextBox Classes="search" Text="{Binding CatalogSearch}" PlaceholderText="Search: Ubuntu, Fedora, Debian…" IsVisible="{Binding CatalogAvailable}" />
+              <Grid ColumnDefinitions="*,*" ColumnSpacing="12" Height="320" IsVisible="{Binding CatalogAvailable}">
+                <ListBox x:Name="CatalogSystems" Classes="library" ItemsSource="{Binding Systems}" SelectedItem="{Binding System}">
                   <ListBox.ItemTemplate>
-                    <DataTemplate x:DataType="dl:CatalogueSystem">
+                    <DataTemplate x:DataType="dl:CatalogSystem">
                       <TextBlock Text="{Binding DisplayName}" />
                     </DataTemplate>
                   </ListBox.ItemTemplate>
@@ -127,13 +127,13 @@
                           </DataTemplate>
                         </ComboBox.ItemTemplate>
                       </ComboBox>
-                      <TextBlock Text="Pro suits most people. Your licence key decides which edition you may activate." Classes="muted" TextWrapping="Wrap" FontSize="{DynamicResource QFontSmall}" />
+                      <TextBlock Text="Pro suits most people. Your license key decides which edition you may activate." Classes="muted" TextWrapping="Wrap" FontSize="{DynamicResource QFontSmall}" />
                     </StackPanel>
                     <TextBlock x:Name="WindowsDownloadNote" Text="{Binding WindowsDownloadNote}" Classes="muted" TextWrapping="Wrap" FontSize="{DynamicResource QFontSmall}" />
                   </StackPanel>
-                  <ListBox x:Name="CatalogueEntries" Classes="library" ItemsSource="{Binding System.Entries}" SelectedItem="{Binding Entry}">
+                  <ListBox x:Name="CatalogEntries" Classes="library" ItemsSource="{Binding System.Entries}" SelectedItem="{Binding Entry}">
                     <ListBox.ItemTemplate>
-                      <DataTemplate x:DataType="dl:CatalogueEntry">
+                      <DataTemplate x:DataType="dl:CatalogEntry">
                         <TextBlock Text="{Binding Label}" />
                       </DataTemplate>
                     </ListBox.ItemTemplate>

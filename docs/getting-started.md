@@ -9,10 +9,10 @@ on your distribution. `vmq doctor` prints the same list in a terminal. Your acco
 
 **Create a virtual machine** opens the wizard:
 
-- **Your own disc**: pick an `.iso`; the system on it is recognised (Windows editions and builds, the common Linux
+- **Your own disc**: pick an `.iso`; the system on it is recognized (Windows editions and builds, the common Linux
   distributions).
-- **Download**: Windows 10 and 11 come from Microsoft's own catalogue; macOS and other systems come from the quickget
-  catalogue (needs `quickemu` installed).
+- **Download**: Windows 10 and 11 come from Microsoft's own catalog; macOS and other systems come from the quickget
+  catalog (needs `quickemu` installed).
 - **Install later**: an empty machine; add a disc in Settings when you are ready.
 
 For Windows and the major Linux distributions, **Easy Install** answers the installer for you: type a user name and

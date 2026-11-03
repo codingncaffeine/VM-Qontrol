@@ -123,9 +123,9 @@ public sealed class LiveChart : Control
         void Dot(IReadOnlyList<double>? series, IBrush? brush)
         {
             if (series is null || index >= series.Count || brush is null) return;
-            var centre = new Point(x, Y(series[index]));
-            context.DrawEllipse(SurfaceBrush, new Pen(SurfaceBrush, 2), centre, 6, 6);
-            context.DrawEllipse(brush, null, centre, 4, 4);
+            var center = new Point(x, Y(series[index]));
+            context.DrawEllipse(SurfaceBrush, new Pen(SurfaceBrush, 2), center, 6, 6);
+            context.DrawEllipse(brush, null, center, 4, 4);
         }
 
         Dot(Series1, Series1Brush);

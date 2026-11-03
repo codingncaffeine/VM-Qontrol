@@ -40,7 +40,7 @@ public sealed class LinuxEasyInstallTests
     public void Host_names_follow_the_rules(string machine, string host) => Assert.Equal(host, LinuxEasyInstall.HostName(machine));
 
     [Fact]
-    public void A_Fedora_family_disc_gets_a_kickstart_volume_labelled_OEMDRV_and_no_kernel_boot()
+    public void A_Fedora_family_disc_gets_a_kickstart_volume_labeled_OEMDRV_and_no_kernel_boot()
     {
         using var profile = new TestProfile("ks");
         var iso = Path.Combine(profile.Root, "fedora.iso");

@@ -17,11 +17,11 @@ public sealed class DownloadFailedException(IReadOnlyList<string> reasons) : Exc
 /// produced (quickget can report success while saving an error page), and turns the result into a VM Qontrol machine.
 /// Progress is measured from the files growing on disk against the size the server reports.
 /// </summary>
-public sealed class DownloadJob(CatalogueEntry entry, string libraryRoot, string machineName)
+public sealed class DownloadJob(CatalogEntry entry, string libraryRoot, string machineName)
 {
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(15) };
 
-    public CatalogueEntry Entry { get; } = entry;
+    public CatalogEntry Entry { get; } = entry;
 
     public async Task<(MachineConfig Machine, string Directory)> RunAsync(IProgress<DownloadProgress> progress, CancellationToken ct)
     {
@@ -33,7 +33,7 @@ public sealed class DownloadJob(CatalogueEntry entry, string libraryRoot, string
             var expected = await ExpectedBytesAsync(ct).ConfigureAwait(false);
             var args = new List<string> { Entry.Os, Entry.Release };
             if (Entry.Option.Length > 0) args.Add(Entry.Option);
-            var start = new ProcessStartInfo(Catalogue.Program) { WorkingDirectory = staging, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+            var start = new ProcessStartInfo(Catalog.Program) { WorkingDirectory = staging, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
             foreach (var a in args) start.ArgumentList.Add(a);
             using var process = Process.Start(start) ?? throw new DownloadFailedException(["quickget could not be started."]);
             var output = process.StandardOutput.ReadToEndAsync(ct);
@@ -79,7 +79,7 @@ public sealed class DownloadJob(CatalogueEntry entry, string libraryRoot, string
     }
 
     /// <summary>The staging folder's name: the entry, then a unique tail, at most 48 characters (a short entry is not padded).</summary>
-    internal static string StagingName(CatalogueEntry entry)
+    internal static string StagingName(CatalogEntry entry)
     {
         var name = $"{entry.Os}-{entry.Release}-{entry.Option}-{Guid.NewGuid():N}";
         return name[..Math.Min(name.Length, 48)].TrimEnd('-');
@@ -112,7 +112,7 @@ public sealed class DownloadJob(CatalogueEntry entry, string libraryRoot, string
     {
         var args = new List<string> { "--url", Entry.Os, Entry.Release };
         if (Entry.Option.Length > 0) args.Add(Entry.Option);
-        var text = await Catalogue.RunAsync(ct, [.. args]).ConfigureAwait(false);
+        var text = await Catalog.RunAsync(ct, [.. args]).ConfigureAwait(false);
         long total = 0;
         // quickget prints "name: url" lines.
         foreach (var url in System.Text.RegularExpressions.Regex.Matches(text, @"https?://\S+").Select(m => m.Value).Distinct().Take(4))

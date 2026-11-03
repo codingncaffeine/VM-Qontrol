@@ -28,7 +28,7 @@ public sealed record GuestChoice(string Label, string Os, string Release)
 /// <summary>
 /// The New Machine wizard. Every page answers one question, says why it matters, and starts on the recommended answer;
 /// detection fills in what can be known from the disc so the person is never asked it. Slow work (reading a disc,
-/// loading the catalogue, downloading, creating) runs on workers.
+/// loading the catalog, downloading, creating) runs on workers.
 /// </summary>
 public sealed partial class NewMachineViewModel : ObservableObject
 {
@@ -230,27 +230,27 @@ public sealed partial class NewMachineViewModel : ObservableObject
 
     partial void OnEditionsChanged(IReadOnlyList<WindowsEdition> value) => OnPropertyChanged(nameof(HasEditions));
 
-    // Download catalogue
-    public ObservableCollection<CatalogueSystem> Systems { get; } = [];
+    // Download catalog
+    public ObservableCollection<CatalogSystem> Systems { get; } = [];
 
-    private IReadOnlyList<CatalogueSystem> _allSystems = [];
-
-    [ObservableProperty]
-    private string _catalogueSearch = "";
+    private IReadOnlyList<CatalogSystem> _allSystems = [];
 
     [ObservableProperty]
-    private string _catalogueNote = "";
+    private string _catalogSearch = "";
 
     [ObservableProperty]
-    private CatalogueSystem? _system;
+    private string _catalogNote = "";
+
+    [ObservableProperty]
+    private CatalogSystem? _system;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(NextCommand))]
-    private CatalogueEntry? _entry;
+    private CatalogEntry? _entry;
 
-    public bool CatalogueAvailable => _allSystems.Count > 0;
+    public bool CatalogAvailable => _allSystems.Count > 0;
 
-    /// <summary>Windows from Microsoft's own catalogue (not quickget): its editions, and the line that says what will be downloaded.</summary>
+    /// <summary>Windows from Microsoft's own catalog (not quickget): its editions, and the line that says what will be downloaded.</summary>
     public bool IsMicrosoftWindows => Source == SourceKind.Download && Entry?.FromMicrosoft == true;
 
     private IReadOnlyList<WindowsImageFile> _microsoftFiles = [];
@@ -344,12 +344,12 @@ public sealed partial class NewMachineViewModel : ObservableObject
     /// <summary>Home editions have no published setup key: Easy Install needs the person's own.</summary>
     public bool NeedsOwnKey => EasyInstallShown && IsWindows && ProductKey.Trim().Length == 0 && WindowsSetupKeys.For(Edition?.Name ?? "", ConsumerDisc) is null;
 
-    /// <summary>A consumer disc (Home, Pro…) takes retail setup keys; a volume-licence disc takes KMS client setup keys.</summary>
+    /// <summary>A consumer disc (Home, Pro…) takes retail setup keys; a volume-license disc takes KMS client setup keys.</summary>
     public bool ConsumerDisc => IsMicrosoftWindows ? MicrosoftEdition?.File.Business != true : !Editions.Any(e => e.Name.Contains("Enterprise", StringComparison.OrdinalIgnoreCase)) || Editions.Any(e => e.Name.Contains("Home", StringComparison.OrdinalIgnoreCase));
 
     public string KeyNote => NeedsOwnKey
         ? $"{Edition?.DisplayName ?? "This edition"} needs your product key to install without questions. Enter it here, or choose a Pro edition on the first page."
-        : "Leave empty to install now and activate later with your own licence.";
+        : "Leave empty to install now and activate later with your own license.";
 
     [ObservableProperty]
     private string _locale;
@@ -530,7 +530,7 @@ public sealed partial class NewMachineViewModel : ObservableObject
     private void ChooseSource(SourceKind kind)
     {
         Source = kind;
-        if (kind == SourceKind.Download && _allSystems.Count == 0) _ = LoadCatalogueAsync();
+        if (kind == SourceKind.Download && _allSystems.Count == 0) _ = LoadCatalogAsync();
         // Editions belong to the source on show: the disc's, or Microsoft's for a Windows download.
         if (kind == SourceKind.Download && Entry?.FromMicrosoft == true) ShowMicrosoftEditions();
         else if (kind == SourceKind.Download) Editions = [];
@@ -568,7 +568,7 @@ public sealed partial class NewMachineViewModel : ObservableObject
                 return new DiscDetection(false, GuestMapping.ToGuest(match.Os), $"{match.Os.Name}.{also}", [], match.Os.Name, linux);
             }
 
-            return new DiscDetection(false, new GuestConfig { Os = "linux" }, $"A disc labelled \"{volume.VolumeId}\". Its system is not known; choose it on the next page.", [], volume.VolumeId, linux);
+            return new DiscDetection(false, new GuestConfig { Os = "linux" }, $"A disc labeled \"{volume.VolumeId}\". Its system is not known; choose it on the next page.", [], volume.VolumeId, linux);
         }).ConfigureAwait(false);
         Ui.Post(() =>
         {
@@ -612,32 +612,32 @@ public sealed partial class NewMachineViewModel : ObservableObject
         Recalculate();
     }
 
-    // ── Catalogue
-    private async Task LoadCatalogueAsync()
+    // ── Catalog
+    private async Task LoadCatalogAsync()
     {
-        CatalogueNote = "Loading the catalogue…";
-        var quickget = await Catalogue.LoadAsync(_shell.Paths).ConfigureAwait(false);
-        // Windows comes from Microsoft's own catalogue (the Media Creation Tool's), not quickget's scripted web-page download.
+        CatalogNote = "Loading the catalog…";
+        var quickget = await Catalog.LoadAsync(_shell.Paths).ConfigureAwait(false);
+        // Windows comes from Microsoft's own catalog (the Media Creation Tool's), not quickget's scripted web-page download.
         var icon = quickget.FirstOrDefault(s => s.Os == "windows")?.IconUrl ?? "";
-        var windows = new CatalogueSystem("windows", "Windows", icon,
-            [new CatalogueEntry("Windows", "windows", "11", "", icon, FromMicrosoft: true), new CatalogueEntry("Windows", "windows", "10", "", icon, FromMicrosoft: true)]);
+        var windows = new CatalogSystem("windows", "Windows", icon,
+            [new CatalogEntry("Windows", "windows", "11", "", icon, FromMicrosoft: true), new CatalogEntry("Windows", "windows", "10", "", icon, FromMicrosoft: true)]);
         var systems = quickget.Where(s => s.Os != "windows").OrderBy(s => s.DisplayName, StringComparer.CurrentCultureIgnoreCase).Prepend(windows).ToList();
         Ui.Post(() =>
         {
             _allSystems = systems;
-            CatalogueNote = quickget.Count == 0
+            CatalogNote = quickget.Count == 0
                 ? "Windows comes straight from Microsoft. Other systems need quickget (part of quickemu): " + Doctor.InstallCommand(Doctor.DetectThisDistro(), "quickemu")
                 : $"{systems.Count} systems. Downloads are checked before the machine is made.";
-            FilterCatalogue();
-            OnPropertyChanged(nameof(CatalogueAvailable));
+            FilterCatalog();
+            OnPropertyChanged(nameof(CatalogAvailable));
         });
     }
 
-    partial void OnCatalogueSearchChanged(string value) => FilterCatalogue();
+    partial void OnCatalogSearchChanged(string value) => FilterCatalog();
 
-    private void FilterCatalogue()
+    private void FilterCatalog()
     {
-        var term = CatalogueSearch.Trim();
+        var term = CatalogSearch.Trim();
         Systems.Clear();
         foreach (var s in _allSystems.Where(s => term.Length == 0 || s.DisplayName.Contains(term, StringComparison.OrdinalIgnoreCase) || s.Os.Contains(term, StringComparison.OrdinalIgnoreCase)))
             Systems.Add(s);
@@ -645,9 +645,9 @@ public sealed partial class NewMachineViewModel : ObservableObject
         if (System is { } chosen && !Systems.Contains(chosen) && term.Length == 0) System = null;
     }
 
-    partial void OnSystemChanged(CatalogueSystem? value) => Entry = value?.Entries.FirstOrDefault();
+    partial void OnSystemChanged(CatalogSystem? value) => Entry = value?.Entries.FirstOrDefault();
 
-    partial void OnEntryChanged(CatalogueEntry? value)
+    partial void OnEntryChanged(CatalogEntry? value)
     {
         if (value is null) return;
         var os = value.Os switch
@@ -671,7 +671,7 @@ public sealed partial class NewMachineViewModel : ObservableObject
 
     private async Task LoadMicrosoftEditionsAsync(string release)
     {
-        Ui.Post(() => WindowsDownloadNote = $"Reading Microsoft's Windows {release} catalogue…");
+        Ui.Post(() => WindowsDownloadNote = $"Reading Microsoft's Windows {release} catalog…");
         IReadOnlyList<WindowsImageFile> files;
         try
         {
@@ -708,7 +708,7 @@ public sealed partial class NewMachineViewModel : ObservableObject
     {
         if (MicrosoftEdition is not { } m)
         {
-            WindowsDownloadNote = _microsoftFiles.Count == 0 ? WindowsDownloadNote : "Microsoft's catalogue has no Windows for this computer's architecture.";
+            WindowsDownloadNote = _microsoftFiles.Count == 0 ? WindowsDownloadNote : "Microsoft's catalog has no Windows for this computer's architecture.";
             return;
         }
 
@@ -801,7 +801,7 @@ public sealed partial class NewMachineViewModel : ObservableObject
                 _download = new CancellationTokenSource();
                 var job = new DownloadJob(entry, LibraryRoot, request.Name);
                 var (machine, folder) = await Task.Run(() => job.RunAsync(progress, _download.Token)).ConfigureAwait(false);
-                // The catalogue's machine, with the hardware chosen here.
+                // The catalog's machine, with the hardware chosen here.
                 machine.MemoryMiB = request.MemoryMiB;
                 machine.Cpu.Cores = request.Cores;
                 if (machine.Disks.Count > 0) machine.Disks[0].SizeGiB = request.DiskGiB;
@@ -838,7 +838,7 @@ public sealed partial class NewMachineViewModel : ObservableObject
         }
         catch (OperationCanceledException)
         {
-            Ui.Post(() => _shell.Note("The download was cancelled."));
+            Ui.Post(() => _shell.Note("The download was canceled."));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

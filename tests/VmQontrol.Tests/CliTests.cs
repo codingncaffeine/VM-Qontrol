@@ -13,7 +13,7 @@ public sealed class CliTests
     }
 
     [Fact]
-    public void Version_names_the_tool_and_the_licence()
+    public void Version_names_the_tool_and_the_license()
     {
         var (code, output, _) = Vmq("version");
         Assert.Equal(0, code);

@@ -5,20 +5,20 @@ using System.Text.Json.Serialization;
 namespace VmQontrol.Core.Downloads;
 
 /// <summary>One downloadable system release and edition, as quickget lists it.</summary>
-public sealed record CatalogueEntry(string DisplayName, string Os, string Release, string Option, string IconUrl, bool FromMicrosoft = false)
+public sealed record CatalogEntry(string DisplayName, string Os, string Release, string Option, string IconUrl, bool FromMicrosoft = false)
 {
     public string Label => Option.Length > 0 ? $"{Release} · {Option}" : Release;
 }
 
 /// <summary>A system (Ubuntu, Fedora, Windows…) and its releases, newest first.</summary>
-public sealed record CatalogueSystem(string Os, string DisplayName, string IconUrl, IReadOnlyList<CatalogueEntry> Entries);
+public sealed record CatalogSystem(string Os, string DisplayName, string IconUrl, IReadOnlyList<CatalogEntry> Entries);
 
 /// <summary>
-/// The download catalogue: quickget's list of systems, releases and editions (93 systems, 700+ entries), cached for a
-/// day so the wizard opens at once and works offline. quickget is optional; without it the catalogue is empty and the
+/// The download catalog: quickget's list of systems, releases and editions (93 systems, 700+ entries), cached for a
+/// day so the wizard opens at once and works offline. quickget is optional; without it the catalog is empty and the
 /// wizard offers installer discs only.
 /// </summary>
-public static class Catalogue
+public static class Catalog
 {
     public static string Program { get; set; } = "quickget";
 
@@ -29,9 +29,9 @@ public static class Catalogue
         [property: JsonPropertyName("Option")] string Option,
         [property: JsonPropertyName("PNG")] string Png);
 
-    public static async Task<IReadOnlyList<CatalogueSystem>> LoadAsync(QontrolPaths paths, bool refresh = false, CancellationToken ct = default)
+    public static async Task<IReadOnlyList<CatalogSystem>> LoadAsync(QontrolPaths paths, bool refresh = false, CancellationToken ct = default)
     {
-        var cache = Path.Combine(paths.Cache, "catalogue.json");
+        var cache = Path.Combine(paths.Cache, "catalog.json");
         string? json = null;
         if (!refresh && File.Exists(cache) && File.GetLastWriteTimeUtc(cache) > DateTime.UtcNow.AddDays(-1))
             json = await File.ReadAllTextAsync(cache, ct).ConfigureAwait(false);
@@ -56,12 +56,12 @@ public static class Catalogue
         return Parse(json);
     }
 
-    public static IReadOnlyList<CatalogueSystem> Parse(string json)
+    public static IReadOnlyList<CatalogSystem> Parse(string json)
     {
         var raw = JsonSerializer.Deserialize<List<Raw>>(json) ?? [];
         return raw.GroupBy(r => r.Os)
-            .Select(g => new CatalogueSystem(g.Key, g.First().DisplayName, g.First().Png,
-                g.Select(r => new CatalogueEntry(r.DisplayName, r.Os, r.Release, r.Option, r.Png))
+            .Select(g => new CatalogSystem(g.Key, g.First().DisplayName, g.First().Png,
+                g.Select(r => new CatalogEntry(r.DisplayName, r.Os, r.Release, r.Option, r.Png))
                  .OrderByDescending(e => e.Release, ReleaseComparer.Instance).ThenBy(e => e.Option, StringComparer.Ordinal).ToList()))
             .OrderBy(s => s.DisplayName, StringComparer.CurrentCultureIgnoreCase).ToList();
     }

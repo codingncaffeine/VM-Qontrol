@@ -35,7 +35,7 @@ public enum LinuxInstaller
     /// <summary>Ubuntu's Subiquity: autoinstall from a "cidata" seed, started with the "autoinstall" kernel option.</summary>
     Ubuntu,
 
-    /// <summary>Anaconda (Fedora, RHEL, Rocky, Alma): a ks.cfg kickstart on a volume labelled OEMDRV is read on its own.</summary>
+    /// <summary>Anaconda (Fedora, RHEL, Rocky, Alma): a ks.cfg kickstart on a volume labeled OEMDRV is read on its own.</summary>
     Anaconda,
 
     /// <summary>debian-installer: preseed.cfg inside the initrd is read on its own.</summary>
@@ -44,7 +44,7 @@ public enum LinuxInstaller
 
 /// <summary>
 /// Linux Easy Install, the way virt-install does it: each installer gets its answer file where it looks by itself
-/// (a seed disc, a labelled volume, or inside its initrd) and, where it needs an option, its own kernel booted directly
+/// (a seed disc, a labeled volume, or inside its initrd) and, where it needs an option, its own kernel booted directly
 /// with that option added. Everything is made in the machine's folder; the disc is only read.
 /// </summary>
 public static class LinuxEasyInstall

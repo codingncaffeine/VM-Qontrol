@@ -27,7 +27,7 @@ public static class RowLabels
         var texts = row.GetVisualDescendants().OfType<TextBlock>().ToList();
         var label = texts.FirstOrDefault(t => t.Classes.Contains("label"))?.Text;
         if (string.IsNullOrWhiteSpace(label)) return;
-        // A button beside a labelled switch or list says what it does in its own content; name it only when it has none.
+        // A button beside a labeled switch or list says what it does in its own content; name it only when it has none.
         AutomationProperties.SetName(control, control is Button ? $"{label}: {ButtonWords(control)}".TrimEnd(':', ' ') : label);
         if (texts.FirstOrDefault(t => t.Classes.Contains("help"))?.Text is { Length: > 0 } help && string.IsNullOrWhiteSpace(AutomationProperties.GetHelpText(control)))
             AutomationProperties.SetHelpText(control, help);

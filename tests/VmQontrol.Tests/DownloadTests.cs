@@ -7,9 +7,9 @@ namespace VmQontrol.Tests;
 public sealed class DownloadTests
 {
     [Fact]
-    public void The_catalogue_groups_systems_and_orders_releases_newest_first()
+    public void The_catalog_groups_systems_and_orders_releases_newest_first()
     {
-        var systems = Catalogue.Parse("""
+        var systems = Catalog.Parse("""
             [{"Display Name":"Ubuntu","OS":"ubuntu","Release":"9.10","Option":"","PNG":"u.png"},
              {"Display Name":"Ubuntu","OS":"ubuntu","Release":"24.04","Option":"","PNG":"u.png"},
              {"Display Name":"Ubuntu","OS":"ubuntu","Release":"daily-live","Option":"","PNG":"u.png"},
@@ -46,7 +46,7 @@ public sealed class DownloadTests
         using var profile = new TestProfile("download");
         Directory.CreateDirectory(profile.Paths.DefaultLibrary);
         var reports = new List<DownloadProgress>();
-        var job = new DownloadJob(new CatalogueEntry("Tiny Core Linux", "tinycore", "15", "Core", ""), profile.Paths.DefaultLibrary, "Tiny Core");
+        var job = new DownloadJob(new CatalogEntry("Tiny Core Linux", "tinycore", "15", "Core", ""), profile.Paths.DefaultLibrary, "Tiny Core");
         var (m, dir) = await job.RunAsync(new Progress<DownloadProgress>(reports.Add), TestContext.Current.CancellationToken);
         Assert.Empty(MachineChecks.Problems(m, dir));
         Assert.NotNull(VmQontrol.Core.Media.IsoVolume.Read(Path.Combine(dir, m.Media.Single(x => x.Role == MediaRole.Installer).File)));
@@ -55,13 +55,13 @@ public sealed class DownloadTests
     }
 
     [Fact]
-    public void A_short_catalogue_entry_gets_a_staging_folder_too()
+    public void A_short_catalog_entry_gets_a_staging_folder_too()
     {
         // macOS, Alpine and every entry without an edition made a name under 48 characters, and cutting it threw.
-        var shortName = DownloadJob.StagingName(new CatalogueEntry("macOS", "macos", "sonoma", "", ""));
+        var shortName = DownloadJob.StagingName(new CatalogEntry("macOS", "macos", "sonoma", "", ""));
         Assert.StartsWith("macos-sonoma-", shortName, StringComparison.Ordinal);
-        Assert.NotEqual(shortName, DownloadJob.StagingName(new CatalogueEntry("macOS", "macos", "sonoma", "", "")));
-        var longName = DownloadJob.StagingName(new CatalogueEntry("Windows", "windows", "11", "English International", ""));
+        Assert.NotEqual(shortName, DownloadJob.StagingName(new CatalogEntry("macOS", "macos", "sonoma", "", "")));
+        var longName = DownloadJob.StagingName(new CatalogEntry("Windows", "windows", "11", "English International", ""));
         Assert.True(longName.Length <= 48, longName);
         Assert.False(longName.EndsWith('-'));
     }

@@ -32,7 +32,7 @@ public sealed class GuestToolsTests
     }
 
     [Fact]
-    public void The_guests_own_name_beats_the_catalogues_guess()
+    public void The_guests_own_name_beats_the_catalogs_guess()
     {
         var advice = GuestTools.Advise(new GuestConfig { Os = "linux", OsInfoId = "http://ubuntu.com/ubuntu/24.04" }, osReleaseId: "fedora");
         Assert.Contains("sudo dnf install", advice.Command);

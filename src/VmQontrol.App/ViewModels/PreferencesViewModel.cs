@@ -33,7 +33,7 @@ public sealed partial class PreferencesViewModel : ObservableObject
         Viewer = ViewerOptions.FirstOrDefault(o => o.Value == s.Viewer) ?? ViewerOptions[0];
         ConfirmPowerOff = s.ConfirmPowerOff;
         ConfirmReset = s.ConfirmReset;
-        StartMinimised = s.StartMinimised;
+        StartMinimized = s.StartMinimized;
         Size = SizeOptions.FirstOrDefault(o => o.Value == s.NewMachineSize) ?? SizeOptions[1];
         NewPowerOn = s.NewMachinePowerOn;
         NewLean = s.NewMachineLean;
@@ -99,7 +99,7 @@ public sealed partial class PreferencesViewModel : ObservableObject
     [ObservableProperty] private bool _confirmPowerOff;
     [ObservableProperty] private bool _confirmReset;
     [ObservableProperty] private bool _startAtSignIn;
-    [ObservableProperty] private bool _startMinimised;
+    [ObservableProperty] private bool _startMinimized;
     [ObservableProperty] private string _guestToolsText = "Looking…";
     [ObservableProperty] private bool _guestToolsHere;
 
@@ -171,7 +171,7 @@ public sealed partial class PreferencesViewModel : ObservableObject
 
     partial void OnConfirmResetChanged(bool value) => Save(s => s with { ConfirmReset = value });
 
-    partial void OnStartMinimisedChanged(bool value) => Save(s => s with { StartMinimised = value });
+    partial void OnStartMinimizedChanged(bool value) => Save(s => s with { StartMinimized = value });
 
     partial void OnSizeChanged(Option value)
     {

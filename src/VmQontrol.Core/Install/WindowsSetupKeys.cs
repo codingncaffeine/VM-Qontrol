@@ -3,7 +3,7 @@ namespace VmQontrol.Core.Install;
 /// <summary>
 /// The keys Windows Setup needs to install a chosen edition without stopping to ask: Microsoft's published KMS client
 /// setup keys ("KMS client activation and product keys", learn.microsoft.com), shared by Windows 10 and 11. They only
-/// select the edition; Windows still asks to be activated with the person's own licence. Home editions have no published
+/// select the edition; Windows still asks to be activated with the person's own license. Home editions have no published
 /// setup key, so Easy Install asks for the person's key for those.
 /// </summary>
 public static class WindowsSetupKeys
@@ -47,7 +47,7 @@ public static class WindowsSetupKeys
         ("11 Home", "YTMG3-N6DKC-DKB77-7M9GH-8HVX7"),
     ];
 
-    /// <summary>The setup key for an edition name such as "Windows 11 Pro" on a consumer or a volume-licence disc, or <c>null</c>.</summary>
+    /// <summary>The setup key for an edition name such as "Windows 11 Pro" on a consumer or a volume-license disc, or <c>null</c>.</summary>
     public static string? For(string editionName, bool consumerDisc)
     {
         if (!consumerDisc) return For(editionName);
@@ -57,7 +57,7 @@ public static class WindowsSetupKeys
         return null;
     }
 
-    /// <summary>The KMS client setup key for an edition name such as "Windows 11 Pro" (volume-licence discs), or <c>null</c>.</summary>
+    /// <summary>The KMS client setup key for an edition name such as "Windows 11 Pro" (volume-license discs), or <c>null</c>.</summary>
     public static string? For(string editionName)
     {
         // "Windows 10 Pro N for Workstations" names the same edition as "Pro for Workstations N".

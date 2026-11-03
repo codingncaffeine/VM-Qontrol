@@ -19,8 +19,8 @@ public static class Text
 
     public static readonly IReadOnlyList<string> Protocols = ["tcp", "udp"];
 
-    public static readonly IValueConverter FavouriteToggle =
-        new FuncValueConverter<bool, string>(f => f ? "Remove from favourites" : "Add to favourites");
+    public static readonly IValueConverter FavoriteToggle =
+        new FuncValueConverter<bool, string>(f => f ? "Remove from favorites" : "Add to favorites");
 
     /// <summary>"ctrl+alt+f2" → "Ctrl+Alt+F2", the way the keys are printed on a keyboard.</summary>
     public static string KeyLabel(string qcodes) => string.Join('+', qcodes.Split('+').Select(k => k switch

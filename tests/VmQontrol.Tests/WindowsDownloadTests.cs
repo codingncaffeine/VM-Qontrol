@@ -6,7 +6,7 @@ using VmQontrol.Core.Media;
 
 namespace VmQontrol.Tests;
 
-/// <summary>Windows from Microsoft's Media Creation Tool catalogue, and the disc it becomes.</summary>
+/// <summary>Windows from Microsoft's Media Creation Tool catalog, and the disc it becomes.</summary>
 public sealed class WindowsDownloadTests
 {
     private static string FileXml(string lang, string arch, string edition, string name, string sha1 = "AB12", string host = "dl.delivery.mp.microsoft.com") => $"""
@@ -16,7 +16,7 @@ public sealed class WindowsDownloadTests
         """;
 
     /// <summary>A trimmed copy of products.xml as the Windows 11 cabinet holds it (same element names and nesting).</summary>
-    internal static string Catalogue()
+    internal static string Catalog()
     {
         const string consumer = "26100.4349.250607-1500.ge_release_svc_refresh_CLIENTCONSUMER_RET_x64FRE_en-us.esd";
         const string business = "26100.4349.250607-1500.ge_release_svc_refresh_CLIENTBUSINESS_VOL_x64FRE_en-us.esd";
@@ -34,9 +34,9 @@ public sealed class WindowsDownloadTests
     }
 
     [Fact]
-    public void The_catalogue_gives_one_file_per_language_and_architecture_with_its_editions()
+    public void The_catalog_gives_one_file_per_language_and_architecture_with_its_editions()
     {
-        var files = WindowsDownload.Parse(Catalogue(), "11");
+        var files = WindowsDownload.Parse(Catalog(), "11");
         Assert.DoesNotContain(files, f => f.FileName == "elsewhere.esd"); // only Microsoft's own download network
         var consumer = Assert.Single(files, f => f.Language == "en-us" && f.Architecture == "x64" && !f.Business);
         Assert.Equal(["Professional", "Core", "Ultimate"], consumer.EditionIds);
@@ -49,7 +49,7 @@ public sealed class WindowsDownloadTests
     [Fact]
     public void Editions_follow_the_language_and_leave_out_names_the_file_does_not_hold()
     {
-        var files = WindowsDownload.Parse(Catalogue(), "11");
+        var files = WindowsDownload.Parse(Catalog(), "11");
         var us = WindowsDownload.Editions(files, "en-US");
         Assert.Equal(["Windows 11 Pro", "Windows 11 Home", "Windows 11 Enterprise"], us.Select(e => e.Name));
         Assert.True(us.Single(e => e.EditionId == "Enterprise").File.Business);
@@ -139,9 +139,9 @@ public sealed class WindowsDownloadTests
 }
 
 /// <summary>
-/// The real thing, opt-in (network, ~1 minute, 10 GB of scratch): Microsoft's live catalogue, then the disc built by
+/// The real thing, opt-in (network, ~1 minute, 10 GB of scratch): Microsoft's live catalog, then the disc built by
 /// the app's own code. VMQONTROL_WINDOWS_ESD=path to the en-us consumer .esd already downloaded (linked in, so the test
-/// does not download 4.4 GB again; its SHA-1 is still checked against the catalogue).
+/// does not download 4.4 GB again; its SHA-1 is still checked against the catalog).
 /// </summary>
 public sealed class WindowsDownloadIntegrationTests
 {

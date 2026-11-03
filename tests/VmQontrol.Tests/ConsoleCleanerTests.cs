@@ -14,7 +14,7 @@ public sealed class ConsoleCleanerTests
     }
 
     [Fact]
-    public void Colour_and_title_sequences_are_removed() =>
+    public void Color_and_title_sequences_are_removed() =>
         Assert.Equal("login: ", new ConsoleViewModel.EscapeCleaner().Feed("\u001b[1;32mlogin: \u001b[0m\u001b]0;title\u0007"));
 
     /// <summary>The login program resets the terminal (ESC c) and switches character sets just before its prompt: the prompt must show at once.</summary>

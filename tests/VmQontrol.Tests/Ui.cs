@@ -75,15 +75,15 @@ internal static class Ui
         }
     }
 
-    /// <summary>A left click at a control's centre, through the window's input like a real pointer.</summary>
+    /// <summary>A left click at a control's center, through the window's input like a real pointer.</summary>
     public static void Click(Avalonia.Controls.TopLevel window, Avalonia.Controls.Control target, Avalonia.Input.MouseButton button = Avalonia.Input.MouseButton.Left)
     {
         // A control in a popup (a context menu) is clicked through the popup's own top level.
         var root = Avalonia.Controls.TopLevel.GetTopLevel(target) ?? window;
-        var centre = target.TranslatePoint(new Point(target.Bounds.Width / 2, target.Bounds.Height / 2), root) ?? throw new InvalidOperationException("the control is not on screen");
-        root.MouseMove(centre);
-        root.MouseDown(centre, button);
-        root.MouseUp(centre, button);
+        var center = target.TranslatePoint(new Point(target.Bounds.Width / 2, target.Bounds.Height / 2), root) ?? throw new InvalidOperationException("the control is not on screen");
+        root.MouseMove(center);
+        root.MouseDown(center, button);
+        root.MouseUp(center, button);
         Pump(0.1);
     }
 

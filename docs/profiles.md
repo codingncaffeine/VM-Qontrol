@@ -24,7 +24,7 @@ configurations (every guest family and the main options) with a stand-in QEMU th
 | Controller for handed-over USB devices | Only when `usb_devices` is set | Always on VM Qontrol's own machines (`qemu-xhci,id=hostpass`) | Devices connected while running go on it: a USB 2 (EHCI) bus refuses the full-speed mice, keyboards and receivers most people pass, and QEMU then resets them over and over. Imported quickemu machines keep quickemu's line. |
 | Firmware flash "secure" | `-global driver=cfi.pflash01,property=secure,value=on` on every UEFI machine | Only when SMM is on (Windows, FreeDOS, Linux with Secure Boot) | A secure flash takes writes only from SMM. With SMM off (macOS, Linux and BSD without Secure Boot) it refused every NVRAM write: the startup disk and the macOS installer's own state were lost at each restart, so an install fell back to Recovery, and Linux boot entries vanished. Measured: the variables file never changed with it, and changed at once without it. |
 
-## Known quickemu behaviour kept for parity
+## Known quickemu behavior kept for parity
 
 - An odd number of cores on an SMT host loses one (5 cores → 2 cores × 2 threads). Kept so an imported machine
   starts with the same topology; new VM Qontrol machines will offer even counts.

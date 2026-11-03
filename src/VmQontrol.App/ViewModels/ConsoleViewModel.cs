@@ -9,8 +9,8 @@ namespace VmQontrol.App.ViewModels;
 
 /// <summary>
 /// The machine's serial port as text: what the guest prints (boot messages, a login prompt on Linux), and a line to
-/// type into it. Terminal colour and cursor codes are removed; it is a console, not a full terminal.
-/// Output is a list of lines (the view virtualises them, so only visible lines are laid out), and arriving text is
+/// type into it. Terminal color and cursor codes are removed; it is a console, not a full terminal.
+/// Output is a list of lines (the view virtualizes them, so only visible lines are laid out), and arriving text is
 /// gathered on the reader's thread and handed to the window at most ten times a second: a Linux boot prints hundreds
 /// of lines, and re-laying out the whole log for each one stalled the window for minutes.
 /// </summary>

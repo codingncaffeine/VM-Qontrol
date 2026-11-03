@@ -173,7 +173,7 @@ public sealed record ShareConfig
     public bool ReadOnly { get; set; }
 }
 
-/// <summary>Devices and boot behaviour beyond the main hardware. <c>null</c> = quickemu's choice.</summary>
+/// <summary>Devices and boot behavior beyond the main hardware. <c>null</c> = quickemu's choice.</summary>
 public sealed record DevicesConfig
 {
     /// <summary>A random-number generator the guest can draw on (faster boots and key generation); on by default.</summary>

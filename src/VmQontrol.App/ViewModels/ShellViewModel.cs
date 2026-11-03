@@ -64,7 +64,7 @@ public sealed partial class ShellViewModel : ObservableObject
 
     public WelcomeViewModel Welcome { get; } = new();
 
-    /// <summary>The machines the sidebar shows: favourites first, then by name, filtered by the search box.</summary>
+    /// <summary>The machines the sidebar shows: favorites first, then by name, filtered by the search box.</summary>
     public ObservableCollection<MachineViewModel> Machines { get; } = [];
 
     /// <summary>What the sidebar lists: folder headings and machines, in order.</summary>
@@ -525,7 +525,7 @@ public sealed partial class ShellViewModel : ObservableObject
             {
                 var vm = new MachineViewModel(this, entry)
                 {
-                    IsFavourite = Settings.Favourites.Contains(entry.Machine!.Id),
+                    IsFavorite = Settings.Favorites.Contains(entry.Machine!.Id),
                     FolderName = Settings.Folders.GetValueOrDefault(entry.Machine!.Id, ""),
                 };
                 _all.Add(vm);
@@ -565,7 +565,7 @@ public sealed partial class ShellViewModel : ObservableObject
         var term = Search.Trim();
         var shown = _all
             .Where(m => term.Length == 0 || m.Name.Contains(term, StringComparison.OrdinalIgnoreCase) || m.LibraryLabel.Contains(term, StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(m => m.IsFavourite).ThenBy(m => m.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+            .OrderByDescending(m => m.IsFavorite).ThenBy(m => m.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
         var keep = Selected;
         Machines.Clear();
         foreach (var m in shown.OrderBy(m => m.FolderName.Length == 0 ? "" : "\u0001" + m.FolderName, StringComparer.CurrentCultureIgnoreCase)) Machines.Add(m);
@@ -637,13 +637,13 @@ public sealed partial class ShellViewModel : ObservableObject
         });
     }
 
-    public void SetFavourite(MachineViewModel machine, bool favourite)
+    public void SetFavorite(MachineViewModel machine, bool favorite)
     {
-        machine.IsFavourite = favourite;
-        var set = new HashSet<string>(Settings.Favourites);
-        if (favourite) set.Add(machine.Id);
+        machine.IsFavorite = favorite;
+        var set = new HashSet<string>(Settings.Favorites);
+        if (favorite) set.Add(machine.Id);
         else set.Remove(machine.Id);
-        Settings = Settings with { Favourites = set };
+        Settings = Settings with { Favorites = set };
         var settings = Settings;
         _ = Task.Run(() => settings.Save(Paths));
         ApplyFilter();

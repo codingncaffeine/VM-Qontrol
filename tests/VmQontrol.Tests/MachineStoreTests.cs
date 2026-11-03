@@ -71,7 +71,7 @@ public sealed class MachineStoreTests
         File.WriteAllText(profile.Paths.SettingsFile, """{"viewer": "spicy"}""");
         var settings = VmQontrol.Core.AppSettings.Load(profile.Paths);
         Assert.Equal("spicy", settings.Viewer);
-        Assert.NotNull(settings.Favourites);
+        Assert.NotNull(settings.Favorites);
         Assert.NotNull(settings.Folders);
         Assert.Equal([profile.Paths.DefaultLibrary], settings.LibraryRoots);
     }

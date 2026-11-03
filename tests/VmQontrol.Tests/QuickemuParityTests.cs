@@ -7,7 +7,7 @@ namespace VmQontrol.Tests;
 /// The command builder against quickemu itself: each reference .conf was run through the real quickemu with a stand-in
 /// QEMU that only recorded its arguments (tools/record-oracle.sh). The import of the same .conf, built for the same
 /// host, must give the same command, argument for argument. Only the socket and process-id paths differ (VM Qontrol
-/// keeps them in a short runtime folder) and the monitor (VM Qontrol uses QMP); both sides are normalised for those.
+/// keeps them in a short runtime folder) and the monitor (VM Qontrol uses QMP); both sides are normalized for those.
 /// </summary>
 public sealed class QuickemuParityTests
 {
@@ -31,12 +31,12 @@ public sealed class QuickemuParityTests
         });
 
         Assert.Empty(launch.Errors);
-        var ours = Normalise(launch.Args.Select(a => a.Replace(dir + "/", "", StringComparison.Ordinal).Replace(runtime.Directory, "<RUN>", StringComparison.Ordinal)).ToList(), name);
-        var theirs = Normalise(File.ReadAllLines(Path.Combine(dir, name + ".args")).Select(a => a.Replace("<ROOT>/", "", StringComparison.Ordinal)).ToList(), name);
+        var ours = Normalize(launch.Args.Select(a => a.Replace(dir + "/", "", StringComparison.Ordinal).Replace(runtime.Directory, "<RUN>", StringComparison.Ordinal)).ToList(), name);
+        var theirs = Normalize(File.ReadAllLines(Path.Combine(dir, name + ".args")).Select(a => a.Replace("<ROOT>/", "", StringComparison.Ordinal)).ToList(), name);
         Assert.Equal(string.Join('\n', theirs), string.Join('\n', ours));
     }
 
-    private static List<string> Normalise(List<string> args, string name)
+    private static List<string> Normalize(List<string> args, string name)
     {
         var result = new List<string>();
         for (var i = 0; i < args.Count; i++)

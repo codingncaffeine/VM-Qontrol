@@ -195,10 +195,10 @@
             <Border Classes="row" IsEnabled="{Binding StartAtSignIn}">
               <Grid ColumnDefinitions="*,Auto">
                 <StackPanel>
-                  <TextBlock Text="Start minimised" Classes="label" />
+                  <TextBlock Text="Start minimized" Classes="label" />
                   <TextBlock Text="When it opens at sign-in, it waits on the taskbar instead of opening its window." Classes="help" />
                 </StackPanel>
-                <ToggleSwitch Grid.Column="1" IsChecked="{Binding StartMinimised}" />
+                <ToggleSwitch Grid.Column="1" IsChecked="{Binding StartMinimized}" />
               </Grid>
             </Border>
           </StackPanel>
