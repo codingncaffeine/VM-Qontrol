@@ -32,11 +32,18 @@ public static class ViewerLauncher
     }
 
     /// <summary>Starts the viewer and returns its program name, or <c>null</c> when none is installed.</summary>
-    public static string? Open(MachineConfig m, RunningMachine running)
+    /// <remarks>remote-viewer's icon buttons get tooltips through <see cref="ViewerTooltips"/>, written under <paramref name="paths"/>' cache.</remarks>
+    public static string? Open(MachineConfig m, RunningMachine running, QontrolPaths? paths = null)
     {
         if (Command(m, running) is not { } command) return null;
         var start = new ProcessStartInfo(command.Program) { UseShellExecute = false };
         foreach (var a in command.Args) start.ArgumentList.Add(a);
+        if (paths is not null && Path.GetFileName(command.Program) == "remote-viewer" && ViewerTooltips.Overlay(command.Program, paths.Cache) is { } overlay)
+        {
+            // Kept with any overlays the person set themselves (GLib reads a colon-separated list).
+            var own = Environment.GetEnvironmentVariable(ViewerTooltips.Variable);
+            start.Environment[ViewerTooltips.Variable] = string.IsNullOrEmpty(own) ? overlay : $"{overlay}:{own}";
+        }
         using var _ = Process.Start(start);
         return Path.GetFileName(command.Program);
     }
