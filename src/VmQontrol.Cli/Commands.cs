@@ -23,10 +23,12 @@ internal static class Commands
                               MACHINE is a quickemu .conf, a vm.json, a machine folder, or a name in the library.
           detect FILE.iso     Name the operating system on an installer disc.
           create NAME [--iso FILE] [--os OS] [--disk-gib N] [--memory-mib N] [--cores N] [--bios] [--tpm] [--[no-]secure-boot]
-                 [--easy-install --user NAME [--password P] [--edition N] [--key KEY] [--lean] [--drivers virtio-win.iso] [--first-logon CMD]]
+                 [--easy-install --user NAME [--password-file FILE|-] [--edition N] [--key KEY] [--lean] [--drivers virtio-win.iso] [--first-logon CMD]]
                               Make a new machine in the library (the system is detected from --iso when --os is left out).
                               --easy-install installs Windows, Ubuntu, Fedora/RHEL or Debian with no questions
-                              (Linux needs --password; --power-off-when-done stops the machine after installing).
+                              (Linux needs a password; --power-off-when-done stops the machine after installing).
+                              --password-file reads the account's password from FILE, or from standard input with "-";
+                              --password P still works, but every user of this computer can read it in the process list.
                               --lean (Windows) removes the bundled promotions, games and ads while installing.
           template MACHINE [--undo]
                               Make a machine that is off into a template (never started, only cloned), or back.
@@ -367,8 +369,15 @@ internal static class Commands
     private static int Create(string[] args, QontrolPaths paths, Func<HostCapabilities> host, TextWriter output, TextWriter error)
     {
         var name = args[0];
+        string? password = null;
         string? Option(string flag) => Array.IndexOf(args, flag) is var i and >= 0 && i + 1 < args.Length ? args[i + 1] : null;
         long? Number(string flag) => long.TryParse(Option(flag), NumberStyles.None, CultureInfo.InvariantCulture, out var v) ? v : null;
+        if (args.Contains("--easy-install"))
+        {
+            if (!ReadPassword(Option, Console.In, error, out var read)) return 2;
+            password = read;
+        }
+
         if (Directory.Exists(System.IO.Path.Combine(paths.DefaultLibrary, name)))
         {
             error.WriteLine($"vmq create: {System.IO.Path.Combine(paths.DefaultLibrary, name)} already exists.");
@@ -403,9 +412,9 @@ internal static class Commands
         LinuxInstallChoices? linuxEasy = null;
         if (args.Contains("--easy-install") && !isWindows)
         {
-            if (iso is null || Option("--user") is not { } linuxUser || Option("--password") is not { Length: > 0 } linuxPassword)
+            if (iso is null || Option("--user") is not { } linuxUser || password is not { Length: > 0 } linuxPassword)
             {
-                error.WriteLine("vmq create: Linux Easy Install needs --iso, --user NAME and --password P (the installers make no account without one).");
+                error.WriteLine("vmq create: Linux Easy Install needs --iso, --user NAME and --password-file FILE (the installers make no account without one).");
                 return 2;
             }
 
@@ -435,7 +444,7 @@ internal static class Commands
             easy = new WindowsInstallChoices
             {
                 UserName = user,
-                Password = Option("--password") ?? "",
+                Password = password ?? "",
                 ComputerName = WindowsAnswerFile.ComputerName(name),
                 EditionIndex = (int)(Number("--edition") ?? 1),
                 EditionName = iso is not null ? WindowsMedia.Inspect(iso)?.Editions.FirstOrDefault(e => e.Index == (int)(Number("--edition") ?? 1))?.Name ?? "" : "",
@@ -600,6 +609,33 @@ internal static class Commands
         if (File.Exists(json) && System.IO.Path.GetFileName(json) == MachineStore.FileName)
             return new LibraryEntry(MachineKind.Native, System.IO.Path.GetFullPath(json), System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(json))!, MachineStore.Load(json), [], null);
         return LibraryScanner.Scan(paths.DefaultLibrary, paths.State).FirstOrDefault(e => string.Equals(e.Machine?.Name, target, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// The Easy Install password: from --password-file (a file, or standard input with "-"; one trailing line break is
+    /// dropped), else --password, which stays for scripts but is readable by anyone in the process list while vmq runs.
+    /// </summary>
+    internal static bool ReadPassword(Func<string, string?> option, TextReader stdin, TextWriter error, out string? password)
+    {
+        password = option("--password");
+        if (option("--password-file") is not { } source) return true;
+        if (password is not null)
+        {
+            error.WriteLine("vmq create: give --password or --password-file, not both.");
+            return false;
+        }
+
+        try
+        {
+            var text = source == "-" ? stdin.ReadToEnd() : File.ReadAllText(source);
+            password = text.EndsWith("\r\n", StringComparison.Ordinal) ? text[..^2] : text.EndsWith('\n') ? text[..^1] : text;
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            error.WriteLine($"vmq create: the password file could not be read ({ex.Message}).");
+            return false;
+        }
     }
 
     private static string Quote(string s) => s.Any(c => c is ' ' or '(' or ')' or '\'' or '"' or '$') ? $"'{s.Replace("'", "'\\''", StringComparison.Ordinal)}'" : s;
