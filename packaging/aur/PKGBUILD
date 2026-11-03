@@ -29,7 +29,7 @@ optdepends=('swtpm: the TPM Windows 11 requires'
             'polkit: one-prompt host changes (host drives, PCI handover, huge pages, nested virtualization)')
 options=('!strip')   # a self-contained .NET bundle: stripping breaks it
 source=("$url/releases/download/v$pkgver/VMQontrol-$pkgver-linux-x64.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('403999444958bb45c5df7388a4407b04d40b24ed5b2b3e3803ce3505ae54fb7b')
 noextract=("VMQontrol-$pkgver-linux-x64.tar.gz")
 
 prepare() {
