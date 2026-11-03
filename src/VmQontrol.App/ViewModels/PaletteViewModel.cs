@@ -89,6 +89,7 @@ public sealed partial class PaletteViewModel(ShellViewModel shell) : ObservableO
         {
             With(new("New machine", "Create", shell.NewMachine), "New machine"),
             With(new("Preferences", "The app's own settings", shell.OpenPreferences), "Preferences"),
+            new("About VM Qontrol", "Version, check for updates, guides", shell.OpenAbout),
             With(new("Import a machine", "From VMware, VirtualBox, an OVF appliance, virt-manager or a disk", shell.OpenImport), "Import a machine"),
             With(new("Refresh the library", "Library", () => _ = shell.RefreshAsync()), "Look for machines again"),
             new("Show the host check", "Welcome", () => shell.Selected = null),

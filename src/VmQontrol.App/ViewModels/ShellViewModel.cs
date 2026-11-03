@@ -56,6 +56,13 @@ public sealed partial class ShellViewModel : ObservableObject
         PreferencesPage = page;
     }
 
+    /// <summary>Preferences, scrolled to About (version, updates, links).</summary>
+    public void OpenAbout()
+    {
+        OpenPreferences();
+        PreferencesPage?.RequestAbout();
+    }
+
     public PaletteViewModel Palette { get; }
 
     public QontrolPaths Paths { get; }

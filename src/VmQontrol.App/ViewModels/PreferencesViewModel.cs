@@ -258,6 +258,113 @@ public sealed partial class PreferencesViewModel : ObservableObject
         });
     }
 
+    // ── About ──
+
+    private bool _aboutRequested;
+
+    /// <summary>Raised when the page should scroll to About (the view may not exist yet: it takes the request on load).</summary>
+    public event Action? AboutRequested;
+
+    public void RequestAbout()
+    {
+        _aboutRequested = true;
+        AboutRequested?.Invoke();
+    }
+
+    /// <summary>The view takes a pending scroll-to-About once.</summary>
+    public bool TakeAboutRequest()
+    {
+        var was = _aboutRequested;
+        _aboutRequested = false;
+        return was;
+    }
+
+    /// <summary>"0.0.5".</summary>
+    public string AppVersion => UpdateCheck.ThisVersion;
+
+    /// <summary>"Version 0.0.5 · build c776d83": the build line a bug report needs.</summary>
+    public string VersionLine => BuildInfo.Version.Split('+') is [var v, var rev, ..] ? $"Version {v} · build {rev[..Math.Min(7, rev.Length)]}" : $"Version {BuildInfo.Version}";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LatestText), nameof(UpdateAvailable), nameof(CheckButtonText))]
+    private bool _checkingUpdates;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LatestText))]
+    private string? _checkProblem;
+
+    /// <summary>A newer release than this build is known (from the last Check for updates).</summary>
+    public bool UpdateAvailable => !CheckingUpdates && UpdateCheck.IsNewer(_shell.Settings.LatestKnownVersion, AppVersion);
+
+    public string CheckButtonText => CheckingUpdates ? "Checking…" : "Check for updates";
+
+    /// <summary>This version against the newest release known: nothing is fetched until the person asks.</summary>
+    public string LatestText
+    {
+        get
+        {
+            if (CheckingUpdates) return "Asking GitHub for the newest release…";
+            var s = _shell.Settings;
+            var when = s.LatestCheckedAt is { } at ? $" (checked {Ago(at)})" : "";
+            var known = UpdateCheck.Normalize(s.LatestKnownVersion);
+            var line = known is null
+                ? "Newest release: not checked yet. Check for updates asks GitHub once; nothing about you or this computer is sent."
+                : UpdateCheck.IsNewer(known, AppVersion)
+                    ? $"Version {known} is available{when}. {HowToUpdate}"
+                    : $"This is the newest release{when}.";
+            return CheckProblem is { } p ? $"{p} {line}" : line;
+        }
+    }
+
+    /// <summary>The way this copy was installed decides how it is updated.</summary>
+    private static string HowToUpdate =>
+        Environment.ProcessPath?.StartsWith("/usr/", StringComparison.Ordinal) != true
+            ? "Download the new tarball from the release page and replace this folder."
+            : File.Exists("/usr/bin/pacman")
+                ? "Update it with your AUR helper (package vm-qontrol-bin)."
+                : "Install the new .deb from the release page.";
+
+    private static string Ago(DateTimeOffset at)
+    {
+        var age = DateTimeOffset.Now - at;
+        return age.TotalMinutes < 2 ? "just now"
+            : age.TotalHours < 1 ? $"{(int)age.TotalMinutes} minutes ago"
+            : age.TotalDays < 1 ? $"{(int)age.TotalHours} hour{((int)age.TotalHours == 1 ? "" : "s")} ago"
+            : at.LocalDateTime.ToString("MMMM d, yyyy", System.Globalization.CultureInfo.GetCultureInfo("en-US"));
+    }
+
+    [RelayCommand]
+    private async Task CheckForUpdatesAsync()
+    {
+        if (CheckingUpdates) return;
+        CheckingUpdates = true;
+        CheckProblem = null;
+        try
+        {
+            var latest = await Task.Run(() => UpdateCheck.LatestAsync()).ConfigureAwait(false);
+            Ui.Post(() =>
+            {
+                _shell.UpdateSettings(s => s with { LatestKnownVersion = latest.Version, LatestKnownUrl = latest.Url, LatestCheckedAt = DateTimeOffset.Now });
+                CheckingUpdates = false;
+                _shell.Note(UpdateCheck.IsNewer(latest.Version, AppVersion) ? $"VM Qontrol {latest.Version} is available." : "VM Qontrol is up to date.");
+            });
+        }
+        catch (IOException ex)
+        {
+            Ui.Post(() =>
+            {
+                CheckProblem = ex.Message;
+                CheckingUpdates = false;
+            });
+        }
+    }
+
+    [RelayCommand]
+    private void OpenRelease() => Platform.Links.Open(_shell.Settings.LatestKnownUrl ?? UpdateCheck.ReleasesPage);
+
+    [RelayCommand]
+    private void OpenLink(string url) => Platform.Links.Open(url);
+
     [RelayCommand]
     private void Close() => Closed?.Invoke();
 }

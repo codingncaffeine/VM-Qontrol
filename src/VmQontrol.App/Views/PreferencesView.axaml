@@ -220,8 +220,53 @@
             <Border Classes="row">
               <StackPanel>
                 <TextBlock Text="What VM Qontrol connects to" Classes="label" />
-                <TextBlock Classes="help" Text="Nothing, unless you ask: it goes online only to download a system you chose, Windows from Microsoft, or the guest tools. It sends no usage data and checks for no updates." />
+                <TextBlock Classes="help" Text="Nothing, unless you ask: it goes online only to download a system you chose, Windows from Microsoft, the guest tools, or to ask GitHub for the newest release when you press Check for updates. It sends no usage data and never checks for updates by itself." />
               </StackPanel>
+            </Border>
+          </StackPanel>
+        </Border>
+
+        <TextBlock Text="ABOUT" Classes="section" Margin="2,14,0,0" />
+        <Border x:Name="About" Classes="group" ClipToBounds="True">
+          <StackPanel>
+            <Border Padding="22,20" BorderBrush="{DynamicResource QBorder}" BorderThickness="0,0,0,1">
+              <Border.Background>
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                  <GradientStop Offset="0" Color="{DynamicResource QAccentSoftColor}" />
+                  <GradientStop Offset="1" Color="{DynamicResource QSurfaceColor}" />
+                </LinearGradientBrush>
+              </Border.Background>
+              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="20">
+                <Image Source="avares://vmqontrol/Assets/icon-256.png" Width="84" Height="84" VerticalAlignment="Center"
+                       RenderOptions.BitmapInterpolationMode="HighQuality" />
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3">
+                  <TextBlock Text="VM Qontrol" Classes="hero" />
+                  <TextBlock Text="Create, run and fine-tune virtual machines on Linux, with settings that explain themselves." Classes="muted" TextWrapping="Wrap" />
+                  <TextBlock x:Name="VersionLine" Text="{Binding VersionLine}" FontSize="{DynamicResource QFontSmall}" Foreground="{DynamicResource QTextMuted}" Margin="0,4,0,0" />
+                </StackPanel>
+              </Grid>
+            </Border>
+            <Border Classes="row first">
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                <StackPanel>
+                  <TextBlock Text="Updates" Classes="label" />
+                  <TextBlock x:Name="LatestText" Text="{Binding LatestText}" Classes="help" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                  <Button x:Name="OpenRelease" Classes="primary" Content="Open release page" IsVisible="{Binding UpdateAvailable}"
+                          ToolTip.Tip="The new release's notes and downloads, in your browser" Command="{Binding OpenReleaseCommand}" />
+                  <Button x:Name="CheckUpdates" Classes="tool" Content="{Binding CheckButtonText}" IsEnabled="{Binding !CheckingUpdates}"
+                          ToolTip.Tip="Ask GitHub once for the newest release; nothing about you or this computer is sent" Command="{Binding CheckForUpdatesCommand}" />
+                </StackPanel>
+              </Grid>
+            </Border>
+            <Border Classes="row">
+              <WrapPanel x:Name="AboutLinks" ItemSpacing="8" LineSpacing="8">
+                <Button Classes="tool" Content="Project page" ToolTip.Tip="Source code and releases on GitHub" Command="{Binding OpenLinkCommand}" CommandParameter="https://github.com/codingncaffeine/VM-Qontrol" />
+                <Button Classes="tool" Content="Guides" ToolTip.Tip="The wiki: first machine, guest tools, networking, troubleshooting" Command="{Binding OpenLinkCommand}" CommandParameter="https://github.com/codingncaffeine/VM-Qontrol/wiki" />
+                <Button Classes="tool" Content="Report a problem" ToolTip.Tip="Open a new issue on GitHub; Collect support data on the welcome page gathers what helps" Command="{Binding OpenLinkCommand}" CommandParameter="https://github.com/codingncaffeine/VM-Qontrol/issues/new" />
+                <Button Classes="tool" Content="License: GPL 3.0 or later" ToolTip.Tip="Free software: you may share and change it under the GNU GPL" Command="{Binding OpenLinkCommand}" CommandParameter="https://github.com/codingncaffeine/VM-Qontrol/blob/main/LICENSE" />
+              </WrapPanel>
             </Border>
           </StackPanel>
         </Border>

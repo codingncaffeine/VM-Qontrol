@@ -106,6 +106,13 @@ public sealed record AppSettings
     /// <summary>The wizard's Lean Windows switch starts on.</summary>
     public bool NewMachineLean { get; set; } = true;
 
+    /// <summary>The newest release the last Check for updates found ("0.0.6"), its page, and when it was asked.</summary>
+    public string? LatestKnownVersion { get; set; }
+
+    public string? LatestKnownUrl { get; set; }
+
+    public DateTimeOffset? LatestCheckedAt { get; set; }
+
     /// <summary>The main window as it was last closed: its size, whether it was maximized, and (X11 only) its place.</summary>
     public WindowPlacement? MainWindow { get; set; }
 
