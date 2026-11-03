@@ -212,4 +212,80 @@ public sealed class WizardWindowTests
         Assert.True(template.IsTemplate);
         Assert.NotNull(DiskState.BackingFile(Path.Combine(dir, template.Disks[0].File)));
     }
+
+    /// <summary>
+    /// Download → Windows → 11: Microsoft's catalogue (a cached copy, no network) gives the editions on the card, Pro
+    /// chosen, and Easy Install is offered for the download as for a disc. The download itself is proven by
+    /// tools/verify-windows-download.sh (4.4 GB).
+    /// </summary>
+    [Trait("Tier", "Smoke")]
+    [Fact]
+    public async Task Windows_from_microsoft_shows_its_editions_and_offers_easy_install()
+    {
+        using var profile = new TestProfile("wizard-mswin");
+        Directory.CreateDirectory(profile.Paths.DefaultLibrary);
+        Directory.CreateDirectory(profile.Paths.Cache);
+        File.WriteAllText(Path.Combine(profile.Paths.Cache, "windows-11-products.xml"), WindowsDownloadTests.Catalogue());
+
+        await Ui.Run(() =>
+        {
+            var (window, shell) = Open(profile);
+            Ui.PumpUntil(() => shell.Welcome.Checked, "the host check");
+            Ui.Click(window, Named<Button>(window, "NewMachine"));
+            Ui.PumpUntil(() => shell.Wizard is not null, "the wizard");
+            var wizard = shell.Wizard!;
+            wizard.Locale = "en-US";
+            Ui.Click(window, Named<RadioButton>(window, "SourceDownload"));
+            Ui.PumpUntil(() => wizard.Systems.Any(s => s.Os == "windows"), "the catalogue", 60);
+            Assert.Equal("windows", wizard.Systems[0].Os); // the most asked-for download comes first
+            var windows = wizard.Systems.Single(s => s.Os == "windows");
+            Assert.Equal(["11", "10"], windows.Entries.Select(e => e.Release));
+            Assert.All(windows.Entries, e => Assert.True(e.FromMicrosoft));
+            Named<ListBox>(window, "CatalogueSystems").SelectedItem = windows;
+            Ui.PumpUntil(() => wizard.Editions.Count > 0, "Microsoft's editions", 10);
+            Ui.Pump(0.3);
+            Assert.True(Named<StackPanel>(window, "MicrosoftWindows").IsEffectivelyVisible);
+            Assert.Equal("Windows 11 Pro", wizard.Edition?.Name);
+            Assert.Equal(["Windows 11 Pro", "Windows 11 Home", "Windows 11 Enterprise"], wizard.Editions.Select(e => e.Name));
+            Assert.Contains("26100.4349", wizard.WindowsDownloadNote);
+            Assert.Contains("English (United States)", wizard.WindowsDownloadNote);
+            Assert.True(wizard.ConsumerDisc);
+            Assert.True(wizard.EasyInstallPossible);
+            Assert.Equal("Windows 11 Pro", wizard.Name);
+            Ui.Capture(window, "wizard-mswin", "1-download-card");
+
+            // Enterprise comes from the business file: volume-licence keys.
+            wizard.Edition = wizard.Editions.Single(e => e.Name == "Windows 11 Enterprise");
+            Assert.False(wizard.ConsumerDisc);
+            wizard.Edition = wizard.Editions.Single(e => e.Name == "Windows 11 Pro");
+
+            Ui.Click(window, Named<Button>(window, "Next"));
+            Ui.Pump(0.2);
+            Ui.Click(window, Named<Button>(window, "Next"));
+            Ui.Pump(0.3);
+            Assert.Equal(2, wizard.Step); // Easy Install is asked, not skipped
+            Assert.True(wizard.EasyInstallShown);
+            Assert.False(wizard.NeedsOwnKey); // Pro has a published setup key
+            Assert.Equal("Install Windows for you?", wizard.EasyInstallTitle);
+            // The Windows answers are on the page: the system became Windows after the page was built.
+            var page = window.GetLogicalDescendants().OfType<ComboBox>().Where(c => c.IsEffectivelyVisible).ToList();
+            Assert.Contains(page, c => ReferenceEquals(c.ItemsSource, wizard.TimeZones));
+            Assert.Contains(window.GetLogicalDescendants().OfType<TextBox>(), t => t.IsEffectivelyVisible && t.PlaceholderText?.StartsWith("Optional: XXXXX", StringComparison.Ordinal) == true);
+            Ui.Capture(window, "wizard-mswin", "2-easy-install");
+
+            // Back to a disc: the download's editions do not leak into the disc card.
+            wizard.Step = 0;
+            Ui.Click(window, Named<RadioButton>(window, "SourceDisc"));
+            Ui.Pump(0.2);
+            Assert.False(wizard.IsMicrosoftWindows);
+            Ui.Capture(window, "wizard-mswin", "3-back-to-disc");
+            Avalonia.Application.Current!.RequestedThemeVariant = ThemeVariant.Light;
+            Ui.Click(window, Named<RadioButton>(window, "SourceDownload"));
+            Ui.PumpUntil(() => wizard.Editions.Count > 0, "the editions again", 10);
+            Ui.Pump(0.3);
+            Ui.Capture(window, "wizard-mswin", "4-download-card-light");
+            window.Close();
+            return true;
+        });
+    }
 }

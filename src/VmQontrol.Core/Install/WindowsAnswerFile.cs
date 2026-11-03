@@ -30,6 +30,10 @@ public sealed record WindowsInstallChoices
     /// <summary>The keyboard, e.g. "0409:00000409" (US); empty = the locale's default.</summary>
     public string InputLocale { get; init; } = "";
 
+    /// <summary>The disc's own language for Setup's screens and Windows' display language ("en-US"); empty = <see cref="Locale"/>.
+    /// A downloaded disc carries one language, which can differ from the person's region.</summary>
+    public string UiLanguage { get; init; } = "";
+
     /// <summary>A Windows time zone name, e.g. "Pacific Standard Time".</summary>
     public string TimeZone { get; init; } = "UTC";
 
@@ -65,6 +69,7 @@ public static class WindowsAnswerFile
         var driverOs = windowsRelease == "11" ? "w11" : "w10";
         var locale = c.Locale;
         var input = c.InputLocale.Length > 0 ? c.InputLocale : locale;
+        var ui = c.UiLanguage.Length > 0 ? c.UiLanguage : locale;
 
         XElement Component(string name, params object[] content) => new(U + "component",
             new XAttribute("name", name), new XAttribute("processorArchitecture", "amd64"),
@@ -107,8 +112,8 @@ public static class WindowsAnswerFile
 
         var windowsPe = new List<object>
         {
-            Component("Microsoft-Windows-International-Core-WinPE", E("SetupUILanguage", E("UILanguage", locale)),
-                E("InputLocale", input), E("SystemLocale", locale), E("UILanguage", locale), E("UserLocale", locale)),
+            Component("Microsoft-Windows-International-Core-WinPE", E("SetupUILanguage", E("UILanguage", ui)),
+                E("InputLocale", input), E("SystemLocale", locale), E("UILanguage", ui), E("UserLocale", locale)),
             setup,
         };
         if (c.VirtioDrivers)
@@ -159,7 +164,7 @@ public static class WindowsAnswerFile
                     Component("Microsoft-Windows-Deployment", E("RunSynchronous",
                         Added("RunSynchronousCommand", 1, E("Path", @"reg add HKLM\SYSTEM\CurrentControlSet\Control\Network\NewNetworkWindowOff /f"))))),
                 E("settings", new XAttribute("pass", "oobeSystem"),
-                    Component("Microsoft-Windows-International-Core", E("InputLocale", input), E("SystemLocale", locale), E("UILanguage", locale), E("UserLocale", locale)),
+                    Component("Microsoft-Windows-International-Core", E("InputLocale", input), E("SystemLocale", locale), E("UILanguage", ui), E("UserLocale", locale)),
                     Component("Microsoft-Windows-Shell-Setup", shellOobe))));
         return document.Declaration + Environment.NewLine + document.ToString();
     }

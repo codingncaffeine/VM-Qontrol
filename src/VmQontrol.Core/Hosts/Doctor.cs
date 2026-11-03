@@ -45,6 +45,7 @@ public static class Doctor
         ["ffmpeg"] = new() { [DistroFamily.Arch] = "ffmpeg", [DistroFamily.Debian] = "ffmpeg", [DistroFamily.Fedora] = "ffmpeg-free", [DistroFamily.Alpine] = "ffmpeg", [DistroFamily.OpenSuse] = "ffmpeg" },
         ["virtiofsd"] = new() { [DistroFamily.Arch] = "virtiofsd", [DistroFamily.Debian] = "virtiofsd", [DistroFamily.Fedora] = "virtiofsd", [DistroFamily.Alpine] = "virtiofsd", [DistroFamily.OpenSuse] = "virtiofsd" },
         ["passt"] = new() { [DistroFamily.Arch] = "passt", [DistroFamily.Debian] = "passt", [DistroFamily.Fedora] = "passt", [DistroFamily.Alpine] = "passt", [DistroFamily.OpenSuse] = "passt" },
+        ["windows-download"] = new() { [DistroFamily.Arch] = "wimlib libisoburn libarchive", [DistroFamily.Debian] = "wimtools xorriso libarchive-tools", [DistroFamily.Fedora] = "wimlib-utils xorriso bsdtar", [DistroFamily.Alpine] = "wimlib xorriso libarchive-tools", [DistroFamily.OpenSuse] = "wimlib xorriso bsdtar" },
         ["quickemu"] = new() { [DistroFamily.Arch] = "quickemu", [DistroFamily.Debian] = "quickemu", [DistroFamily.Fedora] = "quickemu" },
     };
 
@@ -146,6 +147,10 @@ public static class Doctor
         checks.Add(onPath("passt")
             ? new("Fast networking (passt)", CheckStatus.Ok, "Machines get faster networking with IPv6.")
             : new("Fast networking (passt)", CheckStatus.Optional, "Networking uses QEMU's built-in method without it.", InstallCommand(distro, "passt")));
+        var windowsTools = Downloads.WindowsDownload.MissingTools(onPath);
+        checks.Add(windowsTools.Count == 0
+            ? new("Windows downloads (wimlib, xorriso)", CheckStatus.Ok, "Windows can be downloaded from Microsoft and made into an installer disc.")
+            : new("Windows downloads (wimlib, xorriso)", CheckStatus.Optional, $"Downloading Windows needs {string.Join(" and ", windowsTools)} to turn Microsoft's file into an installer disc; your own Windows discs work without them.", InstallCommand(distro, "windows-download")));
         checks.Add(onPath("quickget")
             ? new("Download catalogue (quickget)", CheckStatus.Ok, "Operating systems can be downloaded from the New Machine wizard.")
             : new("Download catalogue (quickget)", CheckStatus.Optional,
@@ -180,7 +185,7 @@ public static class Doctor
         }
     }
 
-    private static bool OnPath(string name) =>
+    internal static bool OnPath(string name) =>
         (Environment.GetEnvironmentVariable("PATH") ?? "/usr/bin").Split(':', StringSplitOptions.RemoveEmptyEntries).Any(d => File.Exists(Path.Combine(d, name)));
 
     private static bool IsSetuid(string file)

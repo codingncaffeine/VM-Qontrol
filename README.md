@@ -12,8 +12,10 @@ what it does and what the recommended value is. No daemon, no root, and one port
 ## Planned for the first release
 
 - A library of machines with live thumbnails, performance graphs and a serial console.
-- A New Virtual Machine wizard: your own ISO, or a download from the quickget catalogue, with the operating system
-  detected from the media and unattended installation for Windows and the major Linux distributions.
+- A New Virtual Machine wizard: your own ISO, or a download: Windows 10 and 11 straight from Microsoft's own catalogue
+  (the one its Media Creation Tool uses, checked against Microsoft's checksums and made into an installer disc), other
+  systems from the quickget catalogue. The operating system is detected from the media, with unattended installation
+  for Windows and the major Linux distributions.
 - A settings dialog covering the whole machine: memory, processors, disks, CD/DVD, network, USB, sound, display,
   TPM, firmware and boot options. Each setting shows when it takes effect.
 - Snapshots taken while a machine runs, full and linked clones, templates, suspend and resume.
@@ -35,11 +37,12 @@ what it does and what the recommended value is. No daemon, no root, and one port
 | OS detection | `osinfo-db` | `osinfo-db` | `osinfo-db` |
 | Shared folders (optional) | `virtiofsd` | `virtiofsd` | `virtiofsd` |
 | Faster user networking (optional) | `passt` | `passt` | `passt` |
+| Windows downloads (optional) | `wimlib libisoburn` | `wimtools xorriso libarchive-tools` | `wimlib-utils xorriso bsdtar` |
 | OS download catalogue (optional) | `quickemu` | `quickemu` | `quickemu` |
 
 **Alpine and other musl distributions** are supported for building from source:
 `apk add dotnet10-sdk qemu-system-x86_64 qemu-img ovmf swtpm virt-viewer osinfo-db` (plus `virtiofsd passt` if
-wanted). Alpine's UEFI firmware has no Secure Boot build, and quickget is not packaged there, so the download
+wanted, and `wimlib xorriso libarchive-tools` for Windows downloads). Alpine's UEFI firmware has no Secure Boot build, and quickget is not packaged there, so the download
 catalogue is unavailable unless you install quickemu yourself.
 
 Your user needs access to `/dev/kvm`, through the `kvm` group or your distribution's default rule.

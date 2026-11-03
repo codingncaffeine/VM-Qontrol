@@ -5,7 +5,7 @@ using System.Text.Json.Serialization;
 namespace VmQontrol.Core.Downloads;
 
 /// <summary>One downloadable system release and edition, as quickget lists it.</summary>
-public sealed record CatalogueEntry(string DisplayName, string Os, string Release, string Option, string IconUrl)
+public sealed record CatalogueEntry(string DisplayName, string Os, string Release, string Option, string IconUrl, bool FromMicrosoft = false)
 {
     public string Label => Option.Length > 0 ? $"{Release} · {Option}" : Release;
 }

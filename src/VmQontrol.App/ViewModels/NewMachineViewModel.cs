@@ -164,15 +164,21 @@ public sealed partial class NewMachineViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(NextCommand))]
+    [NotifyPropertyChangedFor(nameof(IsoOk))]
     private string? _isoPath;
 
     [ObservableProperty]
     private string _isoSummary = "";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsoOk))]
     private bool _isoProblem;
 
+    /// <summary>A disc was chosen and read without a problem (the tick beside its summary).</summary>
+    public bool IsoOk => IsoPath is not null && !IsoProblem && !Detecting;
+
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsoOk))]
     private bool _detecting;
 
     [ObservableProperty]
@@ -205,9 +211,22 @@ public sealed partial class NewMachineViewModel : ObservableObject
 
     public bool CatalogueAvailable => _allSystems.Count > 0;
 
+    /// <summary>Windows from Microsoft's own catalogue (not quickget): its editions, and the line that says what will be downloaded.</summary>
+    public bool IsMicrosoftWindows => Source == SourceKind.Download && Entry?.FromMicrosoft == true;
+
+    private IReadOnlyList<WindowsImageFile> _microsoftFiles = [];
+
+    [ObservableProperty]
+    private string _windowsDownloadNote = "";
+
+    /// <summary>The edition chosen, with the file that carries it in the language that suits <see cref="Locale"/>.</summary>
+    private WindowsDownloadEdition? MicrosoftEdition =>
+        Edition is { } e ? WindowsDownload.Editions(_microsoftFiles, Locale).FirstOrDefault(m => m.EditionId == e.EditionId) : null;
+
     // ── System
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsWindows), nameof(GuestLabel))]
+    [NotifyPropertyChangedFor(nameof(IsWindows), nameof(GuestLabel), nameof(IsWindowsEasy), nameof(IsLinuxEasy), nameof(EasyInstallTitle),
+        nameof(EasyInstallExplain), nameof(PasswordRequired), nameof(PasswordNote), nameof(NeedsOwnKey), nameof(KeyNote))]
     private GuestConfig _guest = new();
 
     [ObservableProperty]
@@ -234,7 +253,8 @@ public sealed partial class NewMachineViewModel : ObservableObject
 
     public bool EasyInstallShown => EasyInstallPossible && EasyInstall;
 
-    public bool EasyInstallPossible => Source == SourceKind.Disc && IsoPath is not null && (IsWindows || LinuxInstallerFound != LinuxInstaller.None);
+    public bool EasyInstallPossible => (Source == SourceKind.Disc && IsoPath is not null && (IsWindows || LinuxInstallerFound != LinuxInstaller.None))
+                                       || (IsMicrosoftWindows && Editions.Count > 0);
 
     /// <summary>The Linux installer on the disc, when Easy Install knows it.</summary>
     [ObservableProperty]
@@ -284,7 +304,7 @@ public sealed partial class NewMachineViewModel : ObservableObject
     public bool NeedsOwnKey => EasyInstallShown && IsWindows && ProductKey.Trim().Length == 0 && WindowsSetupKeys.For(Edition?.Name ?? "", ConsumerDisc) is null;
 
     /// <summary>A consumer disc (Home, Pro…) takes retail setup keys; a volume-licence disc takes KMS client setup keys.</summary>
-    public bool ConsumerDisc => !Editions.Any(e => e.Name.Contains("Enterprise", StringComparison.OrdinalIgnoreCase)) || Editions.Any(e => e.Name.Contains("Home", StringComparison.OrdinalIgnoreCase));
+    public bool ConsumerDisc => IsMicrosoftWindows ? MicrosoftEdition?.File.Business != true : !Editions.Any(e => e.Name.Contains("Enterprise", StringComparison.OrdinalIgnoreCase)) || Editions.Any(e => e.Name.Contains("Home", StringComparison.OrdinalIgnoreCase));
 
     public string KeyNote => NeedsOwnKey
         ? $"{Edition?.DisplayName ?? "This edition"} needs your product key to install without questions. Enter it here, or choose a Pro edition on the first page."
@@ -304,6 +324,7 @@ public sealed partial class NewMachineViewModel : ObservableObject
 
     /// <summary>Windows time zones by their names, from this computer's zone list.</summary>
     public IReadOnlyList<NamedChoice> TimeZones { get; } = TimeZoneInfo.GetSystemTimeZones()
+        .OrderBy(z => z.Id == TimeZoneInfo.Local.Id ? 0 : 1) // this computer's own city names its Windows zone
         .Select(z => TimeZoneInfo.TryConvertIanaIdToWindowsId(z.Id, out var w) ? new NamedChoice(w, $"{w} ({z.Id})") : null)
         .Where(c => c is not null).Select(c => c!).DistinctBy(c => c.Value)
         .OrderBy(c => c.Label, StringComparer.Ordinal).ToList();
@@ -373,7 +394,7 @@ public sealed partial class NewMachineViewModel : ObservableObject
     // ── Navigation
     private bool CanNext() => !Busy && Step switch
     {
-        0 => Source switch { SourceKind.Disc => IsoPath is not null && !IsoProblem, SourceKind.Download => Entry is not null, SourceKind.Template => Template is not null, _ => true },
+        0 => Source switch { SourceKind.Disc => IsoPath is not null && !IsoProblem, SourceKind.Download => Entry is not null && (!Entry.FromMicrosoft || Editions.Count > 0), SourceKind.Template => Template is not null, _ => true },
         2 => !EasyInstallShown || (UserName.Trim().Length > 0 && !NeedsOwnKey && (!PasswordRequired || Password.Length > 0)),
         3 => Name.Trim().Length > 0,
         _ => true,
@@ -417,6 +438,11 @@ public sealed partial class NewMachineViewModel : ObservableObject
     {
         Source = kind;
         if (kind == SourceKind.Download && _allSystems.Count == 0) _ = LoadCatalogueAsync();
+        // Editions belong to the source on show: the disc's, or Microsoft's for a Windows download.
+        if (kind == SourceKind.Download && Entry?.FromMicrosoft == true) ShowMicrosoftEditions();
+        else if (kind == SourceKind.Download) Editions = [];
+        if (kind == SourceKind.Disc && IsoPath is { } iso) _ = UseIsoAsync(iso);
+        OnPropertyChanged(nameof(IsMicrosoftWindows));
         if (kind == SourceKind.Later) Detected(new GuestConfig { Os = "linux" }, "Choose the system you will install on the next page.");
         if (kind == SourceKind.Template && Template is null && Templates.Count == 1) Template = Templates[0];
         NextCommand.NotifyCanExecuteChanged();
@@ -476,6 +502,8 @@ public sealed partial class NewMachineViewModel : ObservableObject
 
     partial void OnEditionChanged(WindowsEdition? value)
     {
+        OnPropertyChanged(nameof(ConsumerDisc));
+        if (IsMicrosoftWindows) UpdateWindowsDownloadNote();
         OnPropertyChanged(nameof(NeedsOwnKey));
         OnPropertyChanged(nameof(KeyNote));
         if (value is not null && (Name.StartsWith("Windows", StringComparison.Ordinal) || Name == "New machine")) Name = value.DisplayName;
@@ -493,12 +521,17 @@ public sealed partial class NewMachineViewModel : ObservableObject
     private async Task LoadCatalogueAsync()
     {
         CatalogueNote = "Loading the catalogue…";
-        var systems = await Catalogue.LoadAsync(_shell.Paths).ConfigureAwait(false);
+        var quickget = await Catalogue.LoadAsync(_shell.Paths).ConfigureAwait(false);
+        // Windows comes from Microsoft's own catalogue (the Media Creation Tool's), not quickget's scripted web-page download.
+        var icon = quickget.FirstOrDefault(s => s.Os == "windows")?.IconUrl ?? "";
+        var windows = new CatalogueSystem("windows", "Windows", icon,
+            [new CatalogueEntry("Windows", "windows", "11", "", icon, FromMicrosoft: true), new CatalogueEntry("Windows", "windows", "10", "", icon, FromMicrosoft: true)]);
+        var systems = quickget.Where(s => s.Os != "windows").OrderBy(s => s.DisplayName, StringComparer.CurrentCultureIgnoreCase).Prepend(windows).ToList();
         Ui.Post(() =>
         {
             _allSystems = systems;
-            CatalogueNote = systems.Count == 0
-                ? "The download catalogue needs quickget (part of quickemu). " + Doctor.InstallCommand(Doctor.DetectThisDistro(), "quickemu")
+            CatalogueNote = quickget.Count == 0
+                ? "Windows comes straight from Microsoft. Other systems need quickget (part of quickemu): " + Doctor.InstallCommand(Doctor.DetectThisDistro(), "quickemu")
                 : $"{systems.Count} systems. Downloads are checked before the machine is made.";
             FilterCatalogue();
             OnPropertyChanged(nameof(CatalogueAvailable));
@@ -513,6 +546,8 @@ public sealed partial class NewMachineViewModel : ObservableObject
         Systems.Clear();
         foreach (var s in _allSystems.Where(s => term.Length == 0 || s.DisplayName.Contains(term, StringComparison.OrdinalIgnoreCase) || s.Os.Contains(term, StringComparison.OrdinalIgnoreCase)))
             Systems.Add(s);
+        // Keep the choice when the list is filtered again (a filter that hides it leaves it chosen).
+        if (System is { } chosen && !Systems.Contains(chosen) && term.Length == 0) System = null;
     }
 
     partial void OnSystemChanged(CatalogueSystem? value) => Entry = value?.Entries.FirstOrDefault();
@@ -530,6 +565,68 @@ public sealed partial class NewMachineViewModel : ObservableObject
         };
         Detected(os, $"{value.DisplayName} {value.Label}, downloaded and checked by VM Qontrol.");
         Name = $"{value.DisplayName} {value.Release}".Trim();
+        _microsoftFiles = [];
+        Editions = [];
+        WindowsDownloadNote = "";
+        if (value.FromMicrosoft) _ = LoadMicrosoftEditionsAsync(value.Release);
+        OnPropertyChanged(nameof(IsMicrosoftWindows));
+        OnPropertyChanged(nameof(EasyInstallPossible));
+        OnPropertyChanged(nameof(EasyInstallShown));
+    }
+
+    private async Task LoadMicrosoftEditionsAsync(string release)
+    {
+        Ui.Post(() => WindowsDownloadNote = $"Reading Microsoft's Windows {release} catalogue…");
+        IReadOnlyList<WindowsImageFile> files;
+        try
+        {
+            files = await WindowsDownload.LoadAsync(_shell.Paths, release).ConfigureAwait(false);
+        }
+        catch (DownloadFailedException ex)
+        {
+            Ui.Post(() => WindowsDownloadNote = string.Join(" ", ex.Reasons));
+            return;
+        }
+
+        Ui.Post(() =>
+        {
+            if (Entry is not { FromMicrosoft: true } entry || entry.Release != release) return; // the person moved on
+            _microsoftFiles = files;
+            ShowMicrosoftEditions();
+        });
+    }
+
+    /// <summary>Microsoft's editions as the wizard's edition list (each becomes a one-edition disc, so its index is 1).</summary>
+    private void ShowMicrosoftEditions()
+    {
+        var offered = WindowsDownload.Editions(_microsoftFiles, Locale);
+        Editions = offered.Select(e => new WindowsEdition(1, e.Name, e.Name, 0, e.EditionId)).ToList();
+        Edition = Editions.FirstOrDefault(e => e.EditionId == "Professional") ?? Editions.FirstOrDefault();
+        UpdateWindowsDownloadNote();
+        OnPropertyChanged(nameof(EasyInstallPossible));
+        OnPropertyChanged(nameof(EasyInstallShown));
+        OnPropertyChanged(nameof(ConsumerDisc));
+        NextCommand.NotifyCanExecuteChanged();
+    }
+
+    private void UpdateWindowsDownloadNote()
+    {
+        if (MicrosoftEdition is not { } m)
+        {
+            WindowsDownloadNote = _microsoftFiles.Count == 0 ? WindowsDownloadNote : "Microsoft's catalogue has no Windows for this computer's architecture.";
+            return;
+        }
+
+        var language = CultureInfo.GetCultureInfo(m.File.Language).DisplayName;
+        var tools = WindowsDownload.MissingTools();
+        WindowsDownloadNote = $"From Microsoft: build {m.File.Build}, {language}, {Formats.Bytes(m.File.Size)}, checked against Microsoft's checksum, then made into an installer disc kept for your next Windows machine. Windows Update brings it up to date after installing."
+                              + (tools.Count > 0 ? $" Needs {string.Join(" and ", tools)} first: {Doctor.InstallCommand(Doctor.DetectThisDistro(), "windows-download")}" : "");
+    }
+
+    partial void OnLocaleChanged(string value)
+    {
+        if (IsMicrosoftWindows) UpdateWindowsDownloadNote();
+        OnPropertyChanged(nameof(LocaleChoice));
     }
 
     // ── Recommendations
@@ -611,16 +708,32 @@ public sealed partial class NewMachineViewModel : ObservableObject
         try
         {
             string dir;
-            if (Source == SourceKind.Download && Entry is { } entry)
+            var progress = new Progress<DownloadProgress>(p => Ui.Post(() =>
+            {
+                ProgressKnown = p.ExpectedBytes is > 0;
+                ProgressValue = p.ExpectedBytes is { } e and > 0 ? Math.Min(100, p.Bytes * 100.0 / e) : 0;
+                ProgressText = $"{p.Status} {Formats.Bytes(p.Bytes)}{(p.ExpectedBytes is { } ex ? $" of {Formats.Bytes(ex)}" : "")}";
+            }));
+            if (IsMicrosoftWindows && MicrosoftEdition is { } windows)
+            {
+                // Microsoft's file becomes an installer disc; from there the machine is made exactly as from a disc the person picked.
+                _download = new CancellationTokenSource();
+                var token = _download.Token;
+                var iso = await Task.Run(() => WindowsDownload.BuildDiscAsync(windows, LibraryRoot, progress, token)).ConfigureAwait(false);
+                request = request with
+                {
+                    InstallerIso = iso,
+                    WindowsEasyInstall = request.WindowsEasyInstall is { } w
+                        ? w with { EditionIndex = 1, EditionName = windows.Name, UiLanguage = CultureInfo.GetCultureInfo(windows.File.Language).Name }
+                        : null,
+                };
+                Ui.Post(() => ProgressText = "Creating the machine…");
+                dir = (await Task.Run(() => MachineFactory.Create(request)).ConfigureAwait(false)).Directory;
+            }
+            else if (Source == SourceKind.Download && Entry is { } entry)
             {
                 _download = new CancellationTokenSource();
                 var job = new DownloadJob(entry, LibraryRoot, request.Name);
-                var progress = new Progress<DownloadProgress>(p => Ui.Post(() =>
-                {
-                    ProgressKnown = p.ExpectedBytes is > 0;
-                    ProgressValue = p.ExpectedBytes is { } e and > 0 ? Math.Min(100, p.Bytes * 100.0 / e) : 0;
-                    ProgressText = $"{p.Status} {Formats.Bytes(p.Bytes)}{(p.ExpectedBytes is { } ex ? $" of {Formats.Bytes(ex)}" : "")}";
-                }));
                 var (machine, folder) = await Task.Run(() => job.RunAsync(progress, _download.Token)).ConfigureAwait(false);
                 // The catalogue's machine, with the hardware chosen here.
                 machine.MemoryMiB = request.MemoryMiB;

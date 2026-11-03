@@ -78,7 +78,7 @@
               <TextBlock Text="{Binding IsoPath}" TextWrapping="Wrap" FontFamily="monospace" FontSize="12" IsVisible="{Binding IsoPath, Converter={x:Static ObjectConverters.IsNotNull}}" />
               <StackPanel Orientation="Horizontal" Spacing="8">
                 <Path Classes="icon" Data="{StaticResource IconWarning}" Stroke="{DynamicResource QWarning}" IsVisible="{Binding IsoProblem}" />
-                <Path Classes="icon" Data="{StaticResource IconCheck}" Stroke="{DynamicResource QSuccess}" IsVisible="{Binding !IsoProblem}" />
+                <Path Classes="icon" Data="{StaticResource IconCheck}" Stroke="{DynamicResource QSuccess}" IsVisible="{Binding IsoOk}" />
                 <TextBlock x:Name="IsoSummary" Text="{Binding IsoSummary}" TextWrapping="Wrap" FontWeight="SemiBold" />
               </StackPanel>
               <StackPanel Spacing="6" IsVisible="{Binding HasEditions}">
@@ -107,13 +107,30 @@
                     </DataTemplate>
                   </ListBox.ItemTemplate>
                 </ListBox>
-                <ListBox x:Name="CatalogueEntries" Grid.Column="1" Classes="library" ItemsSource="{Binding System.Entries}" SelectedItem="{Binding Entry}">
-                  <ListBox.ItemTemplate>
-                    <DataTemplate x:DataType="dl:CatalogueEntry">
-                      <TextBlock Text="{Binding Label}" />
-                    </DataTemplate>
-                  </ListBox.ItemTemplate>
-                </ListBox>
+                <!-- The release list, and for Windows what Microsoft's file is and which edition to install. -->
+                <DockPanel Grid.Column="1">
+                  <StackPanel x:Name="MicrosoftWindows" DockPanel.Dock="Bottom" Spacing="10" Margin="4,12,4,0" IsVisible="{Binding IsMicrosoftWindows}">
+                    <StackPanel Spacing="6" IsVisible="{Binding HasEditions}">
+                      <TextBlock Text="Edition to install" FontWeight="SemiBold" />
+                      <ComboBox x:Name="DownloadEdition" ItemsSource="{Binding Editions}" SelectedItem="{Binding Edition}" HorizontalAlignment="Stretch">
+                        <ComboBox.ItemTemplate>
+                          <DataTemplate x:DataType="media:WindowsEdition">
+                            <TextBlock Text="{Binding DisplayName}" />
+                          </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                      </ComboBox>
+                      <TextBlock Text="Pro suits most people. Your licence key decides which edition you may activate." Classes="muted" TextWrapping="Wrap" FontSize="{DynamicResource QFontSmall}" />
+                    </StackPanel>
+                    <TextBlock x:Name="WindowsDownloadNote" Text="{Binding WindowsDownloadNote}" Classes="muted" TextWrapping="Wrap" FontSize="{DynamicResource QFontSmall}" />
+                  </StackPanel>
+                  <ListBox x:Name="CatalogueEntries" Classes="library" ItemsSource="{Binding System.Entries}" SelectedItem="{Binding Entry}">
+                    <ListBox.ItemTemplate>
+                      <DataTemplate x:DataType="dl:CatalogueEntry">
+                        <TextBlock Text="{Binding Label}" />
+                      </DataTemplate>
+                    </ListBox.ItemTemplate>
+                  </ListBox>
+                </DockPanel>
               </Grid>
             </StackPanel>
           </Border>
