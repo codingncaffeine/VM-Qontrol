@@ -221,6 +221,24 @@ public static class MachineRunner
 
         if (ssh is { } bound) PortAllocator.Release(bound);
         var pid = ReadPid(runtime.Pid) ?? throw new StartRefusedException(["QEMU started but wrote no process id."]);
+        // Pinning, as soon as QEMU's threads exist (before the guest runs, when it was started stopped).
+        if (m.Performance.PinnedCpus.Count > 0 || m.Performance.EmulatorCpus.Count > 0)
+        {
+            try
+            {
+                await using var pinQmp = await QmpClient.ConnectAsync(runtime.Control, TimeSpan.FromSeconds(5), ct).ConfigureAwait(false);
+                foreach (var problem in await CpuPinning.ApplyAsync(pinQmp, pid, m.Performance.PinnedCpus, m.Performance.EmulatorCpus, ct).ConfigureAwait(false))
+                {
+                    Log.Warn($"{m.Name}: {problem}");
+                    notices.Add(problem);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or QmpException or System.Net.Sockets.SocketException)
+            {
+                notices.Add($"The machine's processors were not pinned: {ex.Message}");
+            }
+        }
+
         // Before the boot helpers below: they press keys the firmware must see running.
         if (hostDrives && !resuming) notices.AddRange(await ConnectHostDrivesAsync(m, runtime, run: !options.Paused, ct).ConfigureAwait(false));
         else if (hostDrives) notices.Add("The host drives were not connected: a machine carrying on from a saved state keeps the hardware it was saved with.");

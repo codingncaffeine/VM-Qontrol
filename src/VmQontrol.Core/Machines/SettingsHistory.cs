@@ -62,6 +62,12 @@ public static class SettingsHistory
         Diff("Host serial ports", string.Join(", ", before.HostSerialPorts.Select(x => x.Name.Length > 0 ? x.Name : x.Path)), string.Join(", ", after.HostSerialPorts.Select(x => x.Name.Length > 0 ? x.Name : x.Path)), v => (v as string) is { Length: > 0 } t ? t : "none");
         Diff("Microphone", before.Audio.Microphone, after.Audio.Microphone, v => v is true ? "on" : "off");
         Diff("Monitors", before.Display.Monitors ?? 1, after.Display.Monitors ?? 1);
+        Diff("I/O threads", before.Performance.IoThreads, after.Performance.IoThreads, v => v is true ? "on" : "off");
+        Diff("Pinned processors", string.Join(",", before.Performance.PinnedCpus), string.Join(",", after.Performance.PinnedCpus), v => (v as string) is { Length: > 0 } t ? t : "not pinned");
+        Diff("QEMU's own threads on", string.Join(",", before.Performance.EmulatorCpus), string.Join(",", after.Performance.EmulatorCpus), v => (v as string) is { Length: > 0 } t ? t : "any processor");
+        Diff("Huge pages", before.Performance.HugePages, after.Performance.HugePages, v => (v as string) ?? "off");
+        Diff("Looking Glass memory", before.Performance.LookingGlassMiB, after.Performance.LookingGlassMiB, v => v is int i ? $"{i} MiB" : "off");
+        Diff("PCI devices", string.Join(", ", before.Performance.PciDevices), string.Join(", ", after.Performance.PciDevices), v => (v as string) is { Length: > 0 } t ? t : "none");
         Diff("Shared folders", string.Join(", ", before.Shares.Select(x => $"{x.Tag}={x.Path}{(x.ReadOnly ? " (read only)" : "")}")), string.Join(", ", after.Shares.Select(x => $"{x.Tag}={x.Path}{(x.ReadOnly ? " (read only)" : "")}")), v => (v as string) is { Length: > 0 } t ? t : "none");
         Diff("AutoProtect", AutoProtectText(before.AutoProtect), AutoProtectText(after.AutoProtect));
         Diff("Extra QEMU arguments", string.Join(' ', before.ExtraArgs), string.Join(' ', after.ExtraArgs), v => (v as string) is { Length: > 0 } s ? s : "none");

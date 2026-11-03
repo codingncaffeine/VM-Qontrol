@@ -247,10 +247,17 @@ public static class QemuCommandBuilder
         args.AddRange(["-cpu", cpu.ToString(), "-smp", smp, "-m", MemoryArg(memory)]);
         // Shared folders (virtiofs) need the machine's memory shared with virtiofsd.
         var shares = new List<VirtiofsdLaunch>();
+        var hugePages = m.Performance.HugePages is "2M" or "1G" ? m.Performance.HugePages : null;
+        var hugeOptions = hugePages is null ? "" : $",hugetlb=on,hugetlbsize={hugePages}";
         if (m.Shares.Count > 0)
         {
             if (ctx.Virtiofsd is null) errors.Add("Shared folders need virtiofsd, which is not installed. The host check names its package.");
-            args.AddRange(["-object", $"memory-backend-memfd,id=mem,size={MemoryArg(memory)},share=on", "-numa", "node,memdev=mem"]);
+            args.AddRange(["-object", $"memory-backend-memfd,id=mem,size={MemoryArg(memory)},share=on{hugeOptions}", "-numa", "node,memdev=mem"]);
+        }
+        else if (hugePages is not null)
+        {
+            // The machine's memory from the reserved pool; QEMU refuses to start when the pool is too small (said before power on).
+            args.AddRange(["-object", $"memory-backend-memfd,id=mem,size={MemoryArg(memory)}{hugeOptions}", "-numa", "node,memdev=mem"]);
         }
         if (balloon) args.AddRange(["-device", "virtio-balloon"]);
         args.AddRange(["-pidfile", ctx.Runtime.Pid]);
@@ -460,6 +467,7 @@ public static class QemuCommandBuilder
         // Host serial ports follow as the machine's next COM ports (COM2 when the console has COM1).
         for (var i = 0; i < m.HostSerialPorts.Count; i++)
             args.AddRange(["-chardev", $"serial,id=hostserial{i},path={m.HostSerialPorts[i].Path}", "-device", $"isa-serial,chardev=hostserial{i},id=hostserial{i}-port"]);
+        AddPerformance(m, args);
         args.AddRange(m.ExtraArgs);
 
         return new QemuLaunch
@@ -521,6 +529,33 @@ public static class QemuCommandBuilder
     }
 
     /// <summary>A stable MAC for a machine (from its id), in QEMU's 52:54:00 block, so machines on one segment never clash.</summary>
+    /// <summary>The shared-memory file Looking Glass reads the guest's screen from (its client's default).</summary>
+    public static string LookingGlassFile { get; internal set; } = "/dev/shm/looking-glass";
+
+    /// <summary>I/O threads for VirtIO disks, Looking Glass's shared memory and PCI devices (pinning is applied after start).</summary>
+    private static void AddPerformance(MachineConfig m, List<string> args)
+    {
+        var p = m.Performance;
+        if (p.IoThreads)
+        {
+            var n = 0;
+            for (var i = 0; i + 1 < args.Count; i++)
+            {
+                if (args[i] != "-device" || !args[i + 1].StartsWith("virtio-blk-pci,", StringComparison.Ordinal)) continue;
+                args[i + 1] += $",iothread=io{n}";
+                args.InsertRange(i, ["-object", $"iothread,id=io{n}"]);
+                i += 2;
+                n++;
+            }
+        }
+
+        if (p.LookingGlassMiB is > 0 and var mib)
+            args.AddRange(["-object", $"memory-backend-file,id=looking-glass,share=on,mem-path={LookingGlassFile},size={mib}M", "-device", "ivshmem-plain,memdev=looking-glass"]);
+
+        for (var i = 0; i < p.PciDevices.Count; i++)
+            args.AddRange(["-device", $"vfio-pci,host={p.PciDevices[i]},id=hostpci{i}"]);
+    }
+
     /// <summary>The UDP port of a segment's multicast group on this computer (230.0.0.1, loopback only).</summary>
     public static int SegmentPort(string segment) => 20000 + (int)(Fnv(segment) % 20000);
 

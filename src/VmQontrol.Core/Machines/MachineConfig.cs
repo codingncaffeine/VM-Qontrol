@@ -69,6 +69,9 @@ public sealed record MachineConfig
 
     public AutoProtectConfig AutoProtect { get; set; } = new();
 
+    /// <summary>Pinning, hugepages, I/O threads, PCI passthrough and shared memory for Looking Glass; all off by default.</summary>
+    public PerformanceConfig Performance { get; set; } = new();
+
     /// <summary>Boot a kernel directly (an installer's kernel with its answer-file options); <c>null</c> = boot normally.</summary>
     public KernelBootConfig? KernelBoot { get; set; }
 
@@ -370,6 +373,28 @@ public sealed record HostSerialConfig
     public required string Path { get; set; }
 
     public string Name { get; set; } = "";
+}
+
+/// <summary>The settings that trade generality for speed (phase 10); every one is off until chosen.</summary>
+public sealed record PerformanceConfig
+{
+    /// <summary>Each VirtIO disk gets an I/O thread of its own, so disk work leaves the processors' threads alone.</summary>
+    public bool IoThreads { get; set; }
+
+    /// <summary>This computer's processors the machine's processors run on, one per guest processor in order; empty = not pinned.</summary>
+    public List<int> PinnedCpus { get; set; } = [];
+
+    /// <summary>Where QEMU's own threads (devices, disks) run; empty = anywhere.</summary>
+    public List<int> EmulatorCpus { get; set; } = [];
+
+    /// <summary>"2M" or "1G": the machine's memory comes from this computer's reserved huge pages; <c>null</c> = ordinary memory.</summary>
+    public string? HugePages { get; set; }
+
+    /// <summary>Shared memory for Looking Glass (/dev/shm/looking-glass), in MiB; <c>null</c> = none.</summary>
+    public int? LookingGlassMiB { get; set; }
+
+    /// <summary>PCI devices handed to the machine (vfio-pci), by address ("0000:0b:00.0").</summary>
+    public List<string> PciDevices { get; set; } = [];
 }
 
 public sealed record ImportSource(string Kind, string Path);
