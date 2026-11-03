@@ -69,6 +69,7 @@ public partial class MainWindow : Window
         {
             library.ContainerPrepared += (_, e) => e.Container.Focusable = e.Container.DataContext is not GroupHeading;
             WireDragAndDrop(library);
+            WireMultipleSelection(library);
         }
 
         WireFileDrops();
@@ -183,6 +184,11 @@ public partial class MainWindow : Window
                 preferences.CloseCommand.Execute(null);
                 e.Handled = true;
             }
+            else if (e.Key == Key.Escape && DataContext is ShellViewModel { ShowMany: true } many)
+            {
+                many.BackToOne();
+                e.Handled = true;
+            }
         };
     }
 
@@ -245,6 +251,41 @@ public partial class MainWindow : Window
             };
 
     /// <summary>Drag a machine onto a folder's heading (or a machine in it) to move it in; onto LIBRARY to take it out.</summary>
+    /// <summary>
+    /// Ctrl+click and Shift+click select several machines (the list's Multiple mode); folder headings never stay selected.
+    /// The shell shows two or more together; it asks the list back to one (Esc) or none (after a delete).
+    /// </summary>
+    private void WireMultipleSelection(ListBox library)
+    {
+        var resetting = false;
+        library.SelectionChanged += (_, _) =>
+        {
+            if (resetting || DataContext is not ShellViewModel shell) return;
+            var headings = library.SelectedItems?.OfType<GroupHeading>().ToList() ?? [];
+            if (headings.Count > 0)
+            {
+                resetting = true;
+                foreach (var h in headings) library.SelectedItems!.Remove(h);
+                resetting = false;
+            }
+
+            var chosen = library.SelectedItems?.OfType<MachineViewModel>().ToHashSet() ?? [];
+            shell.SetChosen(shell.SidebarItems.OfType<MachineViewModel>().Where(chosen.Contains).ToList());
+        };
+        DataContextChanged += (_, _) =>
+        {
+            if (DataContext is not ShellViewModel shell) return;
+            shell.ChosenReset += keep =>
+            {
+                resetting = true;
+                library.SelectedItems?.Clear();
+                foreach (var m in keep) library.SelectedItems?.Add(m);
+                resetting = false;
+                shell.SetChosen(keep);
+            };
+        };
+    }
+
     /// <summary>
     /// Files dropped anywhere on the window: an installer disc starts the New machine wizard with it, a machine from other
     /// software or a disk opens Import with it (Workstation and VirtualBox take the same drops). A hint says which while

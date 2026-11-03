@@ -68,7 +68,7 @@
             </Grid>
             <TextBlock x:Name="LibraryEmpty" DockPanel.Dock="Top" Text="No machines yet." Classes="muted" Margin="4,0" TextWrapping="Wrap"
                        IsVisible="{Binding LibraryEmpty}" />
-            <ListBox x:Name="Library" AutomationProperties.Name="Machines" Classes="library" ItemsSource="{Binding SidebarItems}" SelectedItem="{Binding SidebarSelection}">
+            <ListBox x:Name="Library" AutomationProperties.Name="Machines" Classes="library" ItemsSource="{Binding SidebarItems}" SelectedItem="{Binding SidebarSelection}" SelectionMode="Multiple">
               <!-- Right-click between machines: New folder. -->
               <ListBox.ContextMenu>
                 <ContextMenu>
@@ -167,6 +167,67 @@
               </DataTemplate>
             </ContentControl.ContentTemplate>
           </ContentControl>
+          <!-- Several machines selected: what can be done to all of them at once. -->
+          <DockPanel x:Name="ManyPage" IsVisible="{Binding ShowMany}" Margin="{DynamicResource QPagePadding}">
+            <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,18">
+              <TextBlock x:Name="ManyTitle" Text="{Binding ManyTitle}" Classes="hero" />
+              <TextBlock Text="{Binding ManySummary}" Classes="muted" TextWrapping="Wrap" />
+            </StackPanel>
+            <WrapPanel DockPanel.Dock="Top" ItemSpacing="8" LineSpacing="8" Margin="0,0,0,18">
+              <Button x:Name="ManyPowerOn" Classes="primary" Command="{Binding PowerOnChosenCommand}" ToolTip.Tip="Power on each machine that is off, without opening their screens (Ctrl+B)">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Path Classes="icon" Data="{StaticResource IconPlay}" Width="14" Height="14" />
+                  <TextBlock Text="{Binding ManyPowerOnText}" />
+                </StackPanel>
+              </Button>
+              <Button x:Name="ManyShutDown" Classes="secondary" Command="{Binding ShutDownChosenCommand}" ToolTip.Tip="Ask each running machine to shut down, as its power button would (Ctrl+E)">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Path Classes="icon" Data="{StaticResource IconPower}" Width="14" Height="14" />
+                  <TextBlock Text="{Binding ManyShutDownText}" />
+                </StackPanel>
+              </Button>
+              <Button x:Name="ManyMove" Classes="secondary" Command="{Binding MoveChosenCommand}" ToolTip.Tip="Put them all in one library folder; no files move">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Path Classes="icon" Data="{StaticResource IconFolder}" Width="14" Height="14" />
+                  <TextBlock Text="Move to folder…" />
+                </StackPanel>
+              </Button>
+              <Button x:Name="ManyFavorite" Classes="secondary" Command="{Binding FavoriteChosenCommand}" ToolTip.Tip="Favorites are listed first">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Path Classes="icon" Data="{StaticResource IconStar}" Width="14" Height="14" />
+                  <TextBlock Text="{Binding ManyFavoriteText}" />
+                </StackPanel>
+              </Button>
+              <Button x:Name="ManyDelete" Classes="secondary danger" Command="{Binding DeleteChosenCommand}" ToolTip.Tip="Delete the machines that are off, after one confirmation that lists each">
+                <TextBlock Text="{Binding ManyDeleteText}" />
+              </Button>
+            </WrapPanel>
+            <Border Classes="card" Padding="0" VerticalAlignment="Top" ClipToBounds="True">
+              <ScrollViewer>
+                <ItemsControl x:Name="ManyList" ItemsSource="{Binding Chosen}" Margin="0,0,0,-1">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:MachineViewModel">
+                      <Border Padding="16,10" BorderBrush="{DynamicResource QBorder}" BorderThickness="0,0,0,1">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                          <Border Classes="badge" Classes.windows="{Binding FamilyWindows}" Classes.linux="{Binding FamilyLinux}" Classes.apple="{Binding FamilyApple}" Classes.bsd="{Binding FamilyBsd}" Width="34" Height="34">
+                            <TextBlock Text="{Binding Badge}" FontSize="13" />
+                          </Border>
+                          <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding LibraryLabel}" Classes="muted" FontSize="{DynamicResource QFontSmall}" TextTrimming="CharacterEllipsis" />
+                          </StackPanel>
+                          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <Ellipse Classes="state" Classes.running="{Binding IsRunning}" Classes.paused="{Binding IsPaused}" />
+                            <TextBlock Text="{Binding StateText}" Classes="muted" VerticalAlignment="Center" />
+                          </StackPanel>
+                        </Grid>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </ScrollViewer>
+            </Border>
+          </DockPanel>
           <ContentControl x:Name="MachinePage" Content="{Binding Selected}" IsVisible="{Binding ShowMachine}">
             <ContentControl.ContentTemplate>
               <DataTemplate x:DataType="vm:MachineViewModel">

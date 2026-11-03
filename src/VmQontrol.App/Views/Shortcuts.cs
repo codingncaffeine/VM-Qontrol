@@ -29,7 +29,8 @@ public static class Shortcuts
     private const string MachineGroup = "The selected machine";
     private const string Move = "Moving around";
 
-    private static MachineViewModel? M(ShellViewModel s) => s.Selected;
+    // With several machines selected, the one-machine keys stand aside: only those that make sense for many act, on all.
+    private static MachineViewModel? M(ShellViewModel s) => s.ShowMany ? null : s.Selected;
 
     public static readonly IReadOnlyList<Shortcut> All =
     [
@@ -46,11 +47,16 @@ public static class Shortcuts
         new("F11", "F11", "Full screen", App, _ => true, (_, w) => w.WindowState = w.WindowState == WindowState.FullScreen ? WindowState.Normal : WindowState.FullScreen),
         new("Ctrl+Q", "Ctrl+Q", "Quit (running machines keep running)", App, _ => true, (_, w) => w.Close()),
 
-        new("Ctrl+B", "Ctrl+B", "Power on", MachineGroup, s => M(s) is { CanPowerOn: true }, (s, _) => M(s)!.PowerOnCommand.Execute(null)),
+        // One entry per key: with several machines selected, Ctrl+B, Ctrl+E and Delete act on all of them (Esc = back to one).
+        new("Ctrl+B", "Ctrl+B", "Power on", MachineGroup,
+            s => s.ShowMany ? s.PowerOnChosenCommand.CanExecute(null) : M(s) is { CanPowerOn: true },
+            (s, _) => { if (s.ShowMany) s.PowerOnChosenCommand.Execute(null); else M(s)!.PowerOnCommand.Execute(null); }),
         new("Ctrl+Shift+B", "Ctrl+Shift+B", "Power on in the background", MachineGroup, s => M(s) is { CanPowerOn: true }, (s, _) => M(s)!.PowerOnInBackgroundCommand.Execute(null)),
         new("Enter", "Enter", "Power on, or open the screen of a running machine", MachineGroup, s => M(s) is { CanPowerOn: true } or { IsActive: true },
             (s, _) => (M(s)!.IsActive ? M(s)!.OpenScreenCommand : M(s)!.PowerOnCommand).Execute(null), WhileTyping: false),
-        new("Ctrl+E", "Ctrl+E", "Shut down", MachineGroup, s => M(s) is { IsRunning: true }, (s, _) => M(s)!.ShutDownCommand.Execute(null)),
+        new("Ctrl+E", "Ctrl+E", "Shut down", MachineGroup,
+            s => s.ShowMany ? s.ShutDownChosenCommand.CanExecute(null) : M(s) is { IsRunning: true },
+            (s, _) => { if (s.ShowMany) s.ShutDownChosenCommand.Execute(null); else M(s)!.ShutDownCommand.Execute(null); }),
         new("Ctrl+Shift+P", "Ctrl+Shift+P", "Pause or resume", MachineGroup, s => M(s) is { CanPause: true } or { IsPaused: true },
             (s, _) => (M(s)!.IsPaused ? M(s)!.ResumeCommand : M(s)!.PauseCommand).Execute(null)),
         new("Ctrl+Z", "Ctrl+Z", "Suspend (save its state and turn off)", MachineGroup, s => M(s) is { IsActive: true }, (s, _) => M(s)!.SuspendCommand.Execute(null), WhileTyping: false),
@@ -61,7 +67,9 @@ public static class Shortcuts
         new("Ctrl+U", "Ctrl+U", "USB devices", MachineGroup, s => M(s) is not null, (s, _) => M(s)!.OpenUsbCommand.Execute(null)),
         new("Ctrl+M", "Ctrl+M", "Take a snapshot (type its name, then Enter)", MachineGroup, s => M(s) is not null, (s, w) => { M(s)!.Tab = 1; w.FocusLater("SnapshotName"); }),
         new("Ctrl+Shift+S", "Ctrl+Shift+S", "Save a screenshot", MachineGroup, s => M(s) is { IsActive: true }, (s, _) => M(s)!.SaveScreenshotCommand.Execute(null)),
-        new("Delete", "Delete", "Delete the machine (asks first)", MachineGroup, s => M(s) is { IsOff: true }, (s, _) => M(s)!.DeleteMachineCommand.Execute(null), WhileTyping: false),
+        new("Delete", "Delete", "Delete the machine (asks first)", MachineGroup,
+            s => s.ShowMany ? s.DeleteChosenCommand.CanExecute(null) : M(s) is { IsOff: true },
+            (s, _) => { if (s.ShowMany) s.DeleteChosenCommand.Execute(null); else M(s)!.DeleteMachineCommand.Execute(null); }, WhileTyping: false),
 
         new("Alt+Down", "Alt+↓", "Next machine", Move, s => s.Machines.Count > 0, (s, _) => s.SelectNext(1)),
         new("Alt+Up", "Alt+↑", "Previous machine", Move, s => s.Machines.Count > 0, (s, _) => s.SelectNext(-1)),

@@ -31,7 +31,7 @@ public sealed partial class ShellViewModel : ObservableObject
 
     /// <summary>The app's preferences while they are open.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowWelcome), nameof(ShowMachine), nameof(ShowPreferences), nameof(ShowSettings), nameof(ShowImport))]
+    [NotifyPropertyChangedFor(nameof(ShowWelcome), nameof(ShowMachine), nameof(ShowMany), nameof(ShowPreferences), nameof(ShowSettings), nameof(ShowImport))]
     private PreferencesViewModel? _preferencesPage;
 
     public bool ShowPreferences => PreferencesPage is not null && Wizard is null;
@@ -157,14 +157,14 @@ public sealed partial class ShellViewModel : ObservableObject
 
     /// <summary>The New Machine wizard while it is open.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowWelcome), nameof(ShowMachine), nameof(ShowWizard), nameof(ShowSettings), nameof(ShowImport), nameof(ShowPreferences))]
+    [NotifyPropertyChangedFor(nameof(ShowWelcome), nameof(ShowMachine), nameof(ShowMany), nameof(ShowWizard), nameof(ShowSettings), nameof(ShowImport), nameof(ShowPreferences))]
     private NewMachineViewModel? _wizard;
 
     public bool ShowWizard => Wizard is not null;
 
     /// <summary>Import a machine (VMware, VirtualBox, OVF, virt-manager, a disk) while it is open.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowWelcome), nameof(ShowMachine), nameof(ShowImport), nameof(ShowSettings), nameof(ShowPreferences))]
+    [NotifyPropertyChangedFor(nameof(ShowWelcome), nameof(ShowMachine), nameof(ShowMany), nameof(ShowImport), nameof(ShowSettings), nameof(ShowPreferences))]
     private ImportViewModel? _importPage;
 
     public bool ShowImport => ImportPage is not null && Wizard is null && PreferencesPage is null;
@@ -185,7 +185,7 @@ public sealed partial class ShellViewModel : ObservableObject
 
     /// <summary>A machine's settings while they are open.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowWelcome), nameof(ShowMachine), nameof(ShowSettings))]
+    [NotifyPropertyChangedFor(nameof(ShowWelcome), nameof(ShowMachine), nameof(ShowMany), nameof(ShowSettings))]
     private SettingsViewModel? _settingsPage;
 
     public bool ShowSettings => SettingsPage is not null && Wizard is null && ImportPage is null && PreferencesPage is null;
@@ -300,7 +300,7 @@ public sealed partial class ShellViewModel : ObservableObject
     });
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowWelcome), nameof(ShowMachine))]
+    [NotifyPropertyChangedFor(nameof(ShowWelcome), nameof(ShowMachine), nameof(ShowMany))]
     private MachineViewModel? _selected;
 
     [ObservableProperty]
@@ -320,9 +320,9 @@ public sealed partial class ShellViewModel : ObservableObject
     [ObservableProperty]
     private bool _scanning;
 
-    public bool ShowWelcome => Selected is null && Wizard is null && SettingsPage is null && ImportPage is null && PreferencesPage is null;
+    public bool ShowWelcome => Selected is null && !ShowMany && Wizard is null && SettingsPage is null && ImportPage is null && PreferencesPage is null;
 
-    public bool ShowMachine => Selected is not null && Wizard is null && SettingsPage is null && ImportPage is null && PreferencesPage is null;
+    public bool ShowMachine => Selected is not null && !ShowMany && Wizard is null && SettingsPage is null && ImportPage is null && PreferencesPage is null;
 
     public bool LibraryEmpty => MachineCount == 0 && !Scanning;
 
@@ -645,6 +645,8 @@ public sealed partial class ShellViewModel : ObservableObject
             .Where(m => term.Length == 0 || m.Name.Contains(term, StringComparison.OrdinalIgnoreCase) || m.LibraryLabel.Contains(term, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(m => m.IsFavorite).ThenBy(m => m.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
         var keep = Selected;
+        // Several selected stay selected through the rebuild (a folder move, a favorite, a library refresh).
+        var keepChosen = Chosen.Count > 1 ? Chosen.ToList() : null;
         var groups = Settings.OrderedGroups();
         Machines.Clear();
         SidebarItems.Clear();
@@ -676,6 +678,7 @@ public sealed partial class ShellViewModel : ObservableObject
         RefreshGroupCounts();
         OnPropertyChanged(nameof(SidebarSelection));
         if (keep is not null && shown.Contains(keep)) Selected = keep;
+        if (keepChosen?.Where(SidebarItems.Contains).ToList() is { Count: > 1 } still) ChosenReset?.Invoke(still);
     }
 
     /// <summary>Each folder heading's machine count and how many of them run.</summary>

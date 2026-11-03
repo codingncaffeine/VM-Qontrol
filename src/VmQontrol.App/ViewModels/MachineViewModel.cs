@@ -832,6 +832,16 @@ public sealed partial class MachineViewModel : ObservableObject
         }
     }
 
+    /// <summary>For deleting several machines at once (worker thread): why this one cannot go, or the files that would.</summary>
+    internal (string? Refusal, IReadOnlyList<string> Files) DeletionPlan(IReadOnlyList<string> roots)
+    {
+        var conf = IsQuickemu ? Entry.Path : null;
+        return (MachineLifecycle.DeleteRefusal(Entry.Directory, conf, roots), MachineLifecycle.FilesToDelete(Machine, Entry.Directory, conf));
+    }
+
+    /// <summary>Deletes this machine's files (worker thread; the caller confirmed, prunes shared disks and refreshes).</summary>
+    internal void DeleteFiles(IReadOnlyList<string> roots) => MachineLifecycle.Delete(Machine, Entry.Directory, IsQuickemu ? Entry.Path : null, roots);
+
     [RelayCommand]
     private async Task DeleteMachineAsync()
     {

@@ -335,4 +335,8 @@
   <Style Selector="ListBox.library ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource QSurfaceRaised}" />
   </Style>
+  <!-- Selected stays selected under the pointer: with several selected, the one just clicked must not look left out. -->
+  <Style Selector="ListBox.library ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource QAccentSoft}" />
+  </Style>
 </Styles>
