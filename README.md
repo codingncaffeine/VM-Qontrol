@@ -29,6 +29,8 @@ what it does and what the recommended value is. No daemon, no root, and one port
 - Import from quickemu, VMware, VirtualBox, OVA and libvirt.
 - A host check that names anything missing and the command that installs it on your distribution.
 
+New here? [Getting started](docs/getting-started.md) and [Troubleshooting](docs/troubleshooting.md).
+
 ## Requirements (Linux)
 
 | Need | Arch | Debian / Ubuntu | Fedora |
