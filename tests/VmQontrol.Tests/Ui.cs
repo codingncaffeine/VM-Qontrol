@@ -97,6 +97,16 @@ internal static class Ui
         frame?.Save(Path.Combine(dir, name + ".png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
     }
 
+    /// <summary>A popup's own frame (a tooltip, a menu), saved like <see cref="Capture"/>.</summary>
+    public static void CaptureTopLevel(Avalonia.Controls.TopLevel top, string batch, string name)
+    {
+        Pump(0.1);
+        var dir = Path.Combine(Path.GetDirectoryName(TestProfile.ScratchRoot)!, "snapshots", batch);
+        Directory.CreateDirectory(dir);
+        using var frame = top.CaptureRenderedFrame();
+        frame?.Save(Path.Combine(dir, name + ".png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+    }
+
     /// <summary>Lets the dispatcher run for <paramref name="seconds"/> (layout, posted work, timers).</summary>
     public static void Pump(double seconds)
     {
