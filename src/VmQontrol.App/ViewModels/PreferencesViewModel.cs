@@ -34,6 +34,11 @@ public sealed partial class PreferencesViewModel : ObservableObject
         ConfirmPowerOff = s.ConfirmPowerOff;
         ConfirmReset = s.ConfirmReset;
         StartMinimised = s.StartMinimised;
+        Size = SizeOptions.FirstOrDefault(o => o.Value == s.NewMachineSize) ?? SizeOptions[1];
+        NewPowerOn = s.NewMachinePowerOn;
+        NewLean = s.NewMachineLean;
+        WarnLowMemory = s.WarnLowMemory;
+        KeepFree = KeepFreeOptions.FirstOrDefault(o => o.Value == s.KeepFreeGB?.ToString(System.Globalization.CultureInfo.InvariantCulture)) ?? KeepFreeOptions[0];
         Refresh();
         _loading = false;
     }
@@ -56,6 +61,38 @@ public sealed partial class PreferencesViewModel : ObservableObject
         new("remote-viewer", "remote-viewer"),
         new("spicy", "spicy"),
     ];
+
+    public static IReadOnlyList<Option> SizeOptions { get; } =
+    [
+        new("lighter", "Lighter"),
+        new("recommended", "Recommended"),
+        new("generous", "Generous"),
+    ];
+
+    public static IReadOnlyList<Option> KeepFreeOptions { get; } =
+    [
+        new(null, "Automatic"),
+        new("2", "2 GB"),
+        new("4", "4 GB"),
+        new("8", "8 GB"),
+        new("16", "16 GB"),
+        new("32", "32 GB"),
+    ];
+
+    [ObservableProperty] private Option _size;
+    [ObservableProperty] private bool _newPowerOn;
+    [ObservableProperty] private bool _newLean;
+    [ObservableProperty] private bool _warnLowMemory;
+    [ObservableProperty] private Option _keepFree;
+    [ObservableProperty] private string _memoryText = "Looking…";
+
+    /// <summary>What the chosen size means, in words.</summary>
+    public string SizeHelp => Size.Value switch
+    {
+        "lighter" => "Half the recommended memory and processors (never below what the system needs), at most a quarter of this computer's memory. For a computer you also work on while machines run.",
+        "generous" => "Twice the recommendation, up to three quarters of this computer's memory and processors. For a computer that mostly runs machines.",
+        _ => "Sized for the system and this computer, leaving at least half of its memory and processors for it. The wizard shows the numbers and why; you can change them there.",
+    };
 
     [ObservableProperty] private Option _theme;
     [ObservableProperty] private Option _viewer;
@@ -81,13 +118,20 @@ public sealed partial class PreferencesViewModel : ObservableObject
 
         var paths = _shell.Paths;
         var home = AutostartHome;
+        var settings = _shell.Settings;
         _ = Task.Run(() =>
         {
+            var (total, available) = MemoryHeadroom.ReadHost();
+            var memory = total <= 0
+                ? "This computer's memory could not be read, so no warning can be given."
+                : $"This computer has {MemoryHeadroom.Gb(total)}; {MemoryHeadroom.Gb(available)} is free now. "
+                  + (settings.KeepFreeGB is null ? $"Automatic keeps {MemoryHeadroom.Gb(MemoryHeadroom.AutomaticKeepFreeMiB(total))} free (an eighth of it, between 4 and 16 GB)." : $"{MemoryHeadroom.Gb(settings.KeepFreeMiB(total))} stays free for it.");
             var autostart = Autostart.IsOn(home);
             var disc = GuestToolsDownload.Existing(paths);
             var size = disc is null ? 0 : new FileInfo(disc).Length;
             Ui.Post(() =>
             {
+                MemoryText = memory;
                 var loading = _loading;
                 _loading = true;
                 StartAtSignIn = autostart;
@@ -128,6 +172,25 @@ public sealed partial class PreferencesViewModel : ObservableObject
     partial void OnConfirmResetChanged(bool value) => Save(s => s with { ConfirmReset = value });
 
     partial void OnStartMinimisedChanged(bool value) => Save(s => s with { StartMinimised = value });
+
+    partial void OnSizeChanged(Option value)
+    {
+        OnPropertyChanged(nameof(SizeHelp));
+        Save(s => s with { NewMachineSize = value.Value ?? "recommended" });
+    }
+
+    partial void OnNewPowerOnChanged(bool value) => Save(s => s with { NewMachinePowerOn = value });
+
+    partial void OnNewLeanChanged(bool value) => Save(s => s with { NewMachineLean = value });
+
+    partial void OnWarnLowMemoryChanged(bool value) => Save(s => s with { WarnLowMemory = value });
+
+    partial void OnKeepFreeChanged(Option value)
+    {
+        if (_loading) return;
+        Save(s => s with { KeepFreeGB = value.Value is { } v ? int.Parse(v, System.Globalization.CultureInfo.InvariantCulture) : null });
+        Refresh();
+    }
 
     partial void OnStartAtSignInChanged(bool value)
     {

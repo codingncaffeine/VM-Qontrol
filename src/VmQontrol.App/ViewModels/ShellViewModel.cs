@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VmQontrol.Core;
+using VmQontrol.Core.Machines;
 using VmQontrol.Core.Devices;
 using VmQontrol.Core.Hosts;
 using VmQontrol.Core.Library;
@@ -265,6 +266,29 @@ public sealed partial class ShellViewModel : ObservableObject
     public Func<string, Task>? Clipboard { get; set; }
 
     public Task<HostCapabilities> HostAsync() => _host.Value;
+
+    /// <summary>
+    /// The memory check before <paramref name="machine"/> powers on (Preferences → Memory), read on a worker: free memory
+    /// now, less what running machines can still claim. <c>null</c> when it fits, the warning is off, or the machine's
+    /// memory comes from reserved huge pages (already set aside).
+    /// </summary>
+    public Task<MemoryShortfall?> MemoryShortfallAsync(MachineViewModel machine, HostCapabilities host)
+    {
+        var settings = Settings;
+        if (!settings.WarnLowMemory || machine.Machine.Performance.HugePages is not null) return Task.FromResult<MemoryShortfall?>(null);
+        var want = machine.Machine.MemoryMiB ?? Recommendations.QuickemuMemoryMiB(host.MemoryGB);
+        var running = Machines.Where(m => m != machine && m.Running is not null)
+            .Select(m => (Memory: m.Machine.MemoryMiB ?? Recommendations.QuickemuMemoryMiB(host.MemoryGB), m.Running!.Pid, Huge: m.Machine.Performance.HugePages is not null))
+            .ToList();
+        return Task.Run(() =>
+        {
+            var (total, available) = MemoryHeadroom.ReadHost();
+            var promised = running.Where(r => !r.Huge).Sum(r => MemoryHeadroom.ResidentMiB(r.Pid) is { } rss ? MemoryHeadroom.Promised(r.Memory, rss) : 0);
+            var shortfall = MemoryHeadroom.Check(want, available, promised, settings.KeepFreeMiB(total));
+            if (shortfall is not null) Log.Info($"{machine.Name}: memory check: wants {want} MiB, {available} MiB available, {promised} MiB promised, keep {shortfall.KeepFreeMiB} MiB free.");
+            return shortfall;
+        });
+    }
 
     /// <summary>The host check again, from scratch (after installing something it said was missing).</summary>
     [RelayCommand]

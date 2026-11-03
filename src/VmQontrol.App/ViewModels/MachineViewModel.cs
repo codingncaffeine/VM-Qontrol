@@ -894,10 +894,21 @@ public sealed partial class MachineViewModel : ObservableObject
     {
         if (Busy || State != PowerState.Off) return;
         Busy = true;
-        _shell.Note($"Starting {Name}…");
         try
         {
             var host = await _shell.HostAsync().ConfigureAwait(false);
+            if (await _shell.MemoryShortfallAsync(this, host).ConfigureAwait(false) is { } shortfall)
+            {
+                var notice = new NoticeViewModel($"{Name} may not have enough memory", MemoryHeadroom.Describe(shortfall, Name), confirm: "Power on anyway", isDanger: true);
+                Ui.Post(() => _shell.Show(notice));
+                if (!await notice.Answer.ConfigureAwait(false))
+                {
+                    Ui.Post(() => _shell.Note($"{Name} was not started."));
+                    return;
+                }
+            }
+
+            Ui.Post(() => _shell.Note($"Starting {Name}…"));
             var running = await Task.Run(() => MachineRunner.StartAsync(Machine, Entry.Directory, _shell.Paths, host, options)).ConfigureAwait(false);
             await AttachAsync(running).ConfigureAwait(false);
             Ui.Post(() =>

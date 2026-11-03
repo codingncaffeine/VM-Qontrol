@@ -8,6 +8,19 @@ public sealed record Recommended<T>(T Value, string Reason, T Minimum);
 
 public sealed record MachineRecommendations(Recommended<long> MemoryMiB, Recommended<int> Cores, Recommended<long> DiskGiB);
 
+/// <summary>How big new machines are made (Preferences → New machines): the recommendation, or a step either side of it.</summary>
+public enum MachineSize
+{
+    /// <summary>Half the recommended memory and processors (never under the system's minimum), at most a quarter of the memory: leaves more for this computer.</summary>
+    Lighter,
+
+    /// <summary>quickemu's band for this computer, at most half of its memory.</summary>
+    Recommended,
+
+    /// <summary>Twice the recommendation, at most three quarters of the memory and of the processors: for a computer that mostly runs machines.</summary>
+    Generous,
+}
+
 /// <summary>
 /// What a new machine should get on this computer: memory, processors and disk, each with why. Sources: the operating
 /// system's own requirements (osinfo-db, and the minimums Windows 11 and macOS enforce), quickemu's bands for the
@@ -28,7 +41,8 @@ public static class Recommendations
     /// <param name="guest">The guest profile.</param>
     /// <param name="os">The osinfo-db entry, when known.</param>
     /// <param name="host">This computer.</param>
-    public static MachineRecommendations For(GuestConfig guest, OsEntry? os, HostCapabilities host, string? displayName = null)
+    /// <param name="size">The person's choice of size for new machines (Preferences).</param>
+    public static MachineRecommendations For(GuestConfig guest, OsEntry? os, HostCapabilities host, string? displayName = null, MachineSize size = MachineSize.Recommended)
     {
         var name = displayName ?? os?.Name ?? guest.Os;
         OsResources? Res(IReadOnlyDictionary<string, OsResources>? d) => d is null ? null : d.GetValueOrDefault("x86_64") ?? d.GetValueOrDefault("all");
@@ -36,7 +50,7 @@ public static class Recommendations
         var osMinimum = Res(os?.Minimum);
 
         // Memory: quickemu's band for this host, raised to what the system recommends, capped at half the host.
-        var band = 1024L * host.MemoryGB switch { >= 128 => 32, >= 64 => 16, >= 16 => 8, >= 8 => 4, _ => 2 };
+        var band = QuickemuMemoryMiB(host.MemoryGB);
         var minimumMiB = guest.Os switch
         {
             "windows" when guest.Release == "11" => 4096L,
@@ -45,15 +59,21 @@ public static class Recommendations
             _ => osMinimum?.RamBytes is { } r ? r / (1024 * 1024) : 512,
         };
         var wanted = Math.Max(band, osRecommended?.RamBytes is { } rr ? rr / (1024 * 1024) : 0);
-        // Half of this computer, in whole gigabytes (a 16 GB computer offers 8 GB, never 7.8).
-        var cap = Math.Max(minimumMiB, host.MemoryGB / 2 * 1024L);
+        wanted = size switch { MachineSize.Lighter => wanted / 2, MachineSize.Generous => wanted * 2, _ => wanted };
+        // Half of this computer (a quarter, three quarters), in whole gigabytes (a 16 GB computer offers 8 GB, never 7.8).
+        var share = size switch { MachineSize.Lighter => (1, 4), MachineSize.Generous => (3, 4), _ => (1, 2) };
+        var cap = Math.Max(minimumMiB, host.MemoryGB * share.Item1 / share.Item2 * 1024L);
         var memory = Math.Max(minimumMiB, Math.Min(wanted, cap));
+        var leaves = size switch { MachineSize.Lighter => "three quarters", MachineSize.Generous => "a quarter", _ => "half" };
         var memoryReason = memory == minimumMiB && wanted > memory
             ? $"{name} needs at least {Gb(minimumMiB)}; this computer cannot comfortably spare more."
-            : $"Comfortable for {name} on a computer with {host.MemoryGB} GB, leaving at least half for the computer itself.";
+            : memory == minimumMiB && size == MachineSize.Lighter
+                ? $"The least {name} needs; you chose lighter machines in Preferences."
+                : $"Comfortable for {name} on a computer with {host.MemoryGB} GB, leaving at least {leaves} for the computer itself.";
 
         // Processors: quickemu's band, at least what the system needs (Windows 11 refuses to install on one).
         var cores = host.LogicalCpus switch { >= 32 => 16, >= 16 => 8, >= 8 => 4, >= 4 => 2, _ => 1 };
+        cores = size switch { MachineSize.Lighter => cores / 2, MachineSize.Generous => Math.Min(cores * 2, Math.Max(1, host.LogicalCpus * 3 / 4)), _ => cores };
         var minCores = guest.Os == "windows" && guest.Release == "11" ? 2 : osMinimum?.Cpus ?? 1;
         cores = Math.Max(cores, minCores);
         if (guest.Os == "macos")
@@ -65,7 +85,12 @@ public static class Recommendations
 
         var coresReason = guest.Os == "macos"
             ? "macOS only starts with a power-of-two number of processors."
-            : $"Half of this computer's {host.LogicalCpus} processors, so it stays responsive while the machine runs.";
+            : size switch
+            {
+                MachineSize.Lighter => $"A quarter of this computer's {host.LogicalCpus} processors (lighter machines, Preferences), so it stays quick while machines run.",
+                MachineSize.Generous => $"Up to three quarters of this computer's {host.LogicalCpus} processors (generous machines, Preferences); the rest keeps the desktop responsive.",
+                _ => $"Half of this computer's {host.LogicalCpus} processors, so it stays responsive while the machine runs.",
+            };
 
         // Disk: what the system recommends, with room to work; the file only grows as it is used.
         var minDisk = guest.Os switch { "windows" when guest.Release == "11" => 64L, "windows" or "windows-server" => 32L, "macos" => 64L, _ => osMinimum?.StorageBytes is { } s ? Math.Max(8, s / (1L << 30)) : 8 };
@@ -80,6 +105,9 @@ public static class Recommendations
 
         return new MachineRecommendations(new(memory, memoryReason, minimumMiB), new(cores, coresReason, minCores), new(disk, diskReason, minDisk));
     }
+
+    /// <summary>quickemu's memory for a machine on a computer with <paramref name="hostGb"/> GB (also what a machine with no memory set gets).</summary>
+    public static long QuickemuMemoryMiB(int hostGb) => 1024L * hostGb switch { >= 128 => 32, >= 64 => 16, >= 16 => 8, >= 8 => 4, _ => 2 };
 
     private static string Gb(long mib) => mib % 1024 == 0 ? $"{mib / 1024} GB" : $"{mib} MB";
 }

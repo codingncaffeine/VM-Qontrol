@@ -109,6 +109,8 @@ public sealed class WizardWindowTests
             Ui.Pump(0.2);
             var onEasyInstall = wizard.Step == 2;
             Ui.Capture(window, "phase4", "windows-2-easy-install");
+            // Without the VirtIO drivers Windows Setup sees only a SATA disk (and nothing is downloaded).
+            wizard.InstallDrivers = false;
             WalkToSummary(window, wizard, "phase4-windows");
             wizard.PowerOnAfter = false;
             Ui.Click(window, Named<Button>(window, "Next"));

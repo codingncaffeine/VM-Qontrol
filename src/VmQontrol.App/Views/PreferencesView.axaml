@@ -96,6 +96,63 @@
           </StackPanel>
         </Border>
 
+        <TextBlock Text="NEW MACHINES" Classes="section" Margin="2,14,0,0" />
+        <Border Classes="group">
+          <StackPanel>
+            <Border Classes="row first">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel>
+                  <TextBlock Text="Size of new machines" Classes="label" />
+                  <TextBlock Text="{Binding SizeHelp}" Classes="help" />
+                </StackPanel>
+                <ComboBox x:Name="SizeChoice" Grid.Column="1" ItemsSource="{x:Static vm:PreferencesViewModel.SizeOptions}" SelectedItem="{Binding Size}" Width="260" VerticalAlignment="Center" />
+              </Grid>
+            </Border>
+            <Border Classes="row">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel>
+                  <TextBlock Text="Power on when created" Classes="label" />
+                  <TextBlock Text="Whether the wizard's last page starts with “Power on the machine when it is created” ticked, so a machine with an installer disc begins installing at once. You can still change it there." Classes="help" />
+                </StackPanel>
+                <ToggleSwitch x:Name="NewPowerOn" Grid.Column="1" IsChecked="{Binding NewPowerOn}" />
+              </Grid>
+            </Border>
+            <Border Classes="row">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel>
+                  <TextBlock Text="Lean Windows" Classes="label" />
+                  <TextBlock Text="Windows downloaded or installed by Easy Install leaves out Xbox, news, Teams, Copilot, ads and suggested apps. Store, Edge and the everyday apps stay." Classes="help" />
+                </StackPanel>
+                <ToggleSwitch Grid.Column="1" IsChecked="{Binding NewLean}" />
+              </Grid>
+            </Border>
+          </StackPanel>
+        </Border>
+
+        <TextBlock Text="MEMORY" Classes="section" Margin="2,14,0,0" />
+        <Border Classes="group">
+          <StackPanel>
+            <Border Classes="row first">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel>
+                  <TextBlock Text="Warn when memory is short" Classes="label" />
+                  <TextBlock Text="Before a machine powers on, check that this computer keeps enough memory for itself, counting what running machines can still take. When memory runs out, Linux stops the largest program." Classes="help" />
+                </StackPanel>
+                <ToggleSwitch x:Name="WarnLowMemory" Grid.Column="1" IsChecked="{Binding WarnLowMemory}" />
+              </Grid>
+            </Border>
+            <Border Classes="row" IsEnabled="{Binding WarnLowMemory}">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel>
+                  <TextBlock Text="Keep free for this computer" Classes="label" />
+                  <TextBlock Text="{Binding MemoryText}" Classes="help" />
+                </StackPanel>
+                <ComboBox x:Name="KeepFreeChoice" Grid.Column="1" ItemsSource="{x:Static vm:PreferencesViewModel.KeepFreeOptions}" SelectedItem="{Binding KeepFree}" Width="260" VerticalAlignment="Center" />
+              </Grid>
+            </Border>
+          </StackPanel>
+        </Border>
+
         <TextBlock Text="CONFIRMATIONS" Classes="section" Margin="2,14,0,0" />
         <Border Classes="group">
           <StackPanel>

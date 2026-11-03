@@ -47,6 +47,9 @@ public sealed partial class NewMachineViewModel : ObservableObject
         TimeZone = TimeZoneInfo.TryConvertIanaIdToWindowsId(TimeZoneInfo.Local.Id, out var tz) ? tz : "UTC";
         UserName = Environment.UserName is { Length: > 0 } u ? char.ToUpperInvariant(u[0]) + u[1..] : "User";
         Templates = shell.Templates;
+        // Preferences → New machines.
+        PowerOnAfter = shell.Settings.NewMachinePowerOn;
+        LeanWindows = shell.Settings.NewMachineLean;
         _ = Task.Run(async () =>
         {
             var host = await shell.HostAsync().ConfigureAwait(false);
@@ -68,6 +71,8 @@ public sealed partial class NewMachineViewModel : ObservableObject
         : this(shell)
     {
         _existing = (machine, directory);
+        // Asked from the machine's own install card: installing now is the point, whatever new machines do.
+        PowerOnAfter = true;
         Name = machine.Name;
         LibraryRoot = Path.GetDirectoryName(directory) ?? LibraryRoot;
         if (machine.Media.FirstOrDefault(x => x.Role == MediaRole.Installer) is { } installer)
@@ -724,7 +729,7 @@ public sealed partial class NewMachineViewModel : ObservableObject
     {
         if (_host is null) return;
         var os = Guest.OsInfoId is { } id ? _osinfo?.Find(id) : null;
-        var r = Recommendations.For(Guest, os, _host, GuestLabel);
+        var r = Recommendations.For(Guest, os, _host, GuestLabel, _shell.Settings.Size);
         MemoryGb = Math.Max(1, r.MemoryMiB.Value / 1024m);
         MemoryMinimumGb = Math.Max(0.5m, r.MemoryMiB.Minimum / 1024m);
         MemoryMaximumGb = Math.Max(MemoryGb, _host.MemoryGB * 1000 / 1024 * 3 / 4);

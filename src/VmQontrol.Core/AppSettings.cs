@@ -43,6 +43,28 @@ public sealed record AppSettings
     /// <summary>Open the app minimised when it starts at sign-in.</summary>
     public bool StartMinimised { get; set; }
 
+    /// <summary>Warn before powering on a machine that would leave this computer short of memory.</summary>
+    public bool WarnLowMemory { get; set; } = true;
+
+    /// <summary>Memory kept free for the computer itself, in GB; <c>null</c> = automatic (an eighth of it, 4–16 GB).</summary>
+    public int? KeepFreeGB { get; set; }
+
+    /// <summary>"lighter", "recommended" or "generous": how big the wizard makes new machines.</summary>
+    public string NewMachineSize { get; set; } = "recommended";
+
+    /// <summary>The wizard's "Power on the machine when it is created" starts ticked.</summary>
+    public bool NewMachinePowerOn { get; set; } = true;
+
+    /// <summary>The wizard's Lean Windows switch starts on.</summary>
+    public bool NewMachineLean { get; set; } = true;
+
+    /// <summary>The size choice as the recommendations take it.</summary>
+    [JsonIgnore]
+    public Machines.MachineSize Size => NewMachineSize switch { "lighter" => Machines.MachineSize.Lighter, "generous" => Machines.MachineSize.Generous, _ => Machines.MachineSize.Recommended };
+
+    /// <summary>What stays free for this computer, in MiB, for a computer with <paramref name="totalMiB"/>.</summary>
+    public long KeepFreeMiB(long totalMiB) => KeepFreeGB is { } gb ? gb * 1024L : Hosts.MemoryHeadroom.AutomaticKeepFreeMiB(totalMiB);
+
     public static AppSettings Load(QontrolPaths paths)
     {
         try
