@@ -39,6 +39,9 @@ internal static class Commands
           shutdown MACHINE    Ask the guest to shut down (the power button).
           poweroff MACHINE    Turn the machine off at once (unsaved work in the guest is lost).
           suspend MACHINE     Save the running machine's state to its folder and turn it off; start carries on from it.
+          keep-changes / discard-changes MACHINE
+                              For a machine whose changes are not kept at power off (Settings → Hard disks): write the
+                              last session's changes into its disks, or throw them away.
           discard-suspended MACHINE
                               Throw the saved state away: the next start begins afresh, as after a power cut.
           pause / resume / reset MACHINE
@@ -130,7 +133,17 @@ internal static class Commands
                         await MachineRunner.PowerOffAsync(r).ConfigureAwait(false);
                         await MachineRunner.WaitForExitAsync(r, TimeSpan.FromSeconds(10)).ConfigureAwait(false);
                         // Clears the runtime folder the machine left.
-                        if (Resolve(args[1], paths)?.Machine is { } stopped) MachineRunner.Find(stopped, paths);
+                        if (Resolve(args[1], paths) is { Machine: { } stopped } stoppedEntry)
+                        {
+                            MachineRunner.Find(stopped, paths);
+                            if (stopped.OnPowerOff == DiscardMode.Discard && DiscardSession.Exists(stoppedEntry.Directory))
+                            {
+                                DiscardSession.Discard(stoppedEntry.Directory);
+                                output.WriteLine($"{stopped.Name}: this session's changes were discarded.");
+                            }
+                            else if (DiscardSession.Exists(stoppedEntry.Directory))
+                                output.WriteLine($"{stopped.Name}: this session's changes wait: 'vmq keep-changes {args[1]}' writes them into its disks, 'vmq discard-changes {args[1]}' throws them away.");
+                        }
                     });
                 case "suspend" when args.Length > 1:
                     return Control(args[1], paths, output, error, async r =>
@@ -138,6 +151,32 @@ internal static class Commands
                         await MachineSuspend.SuspendAsync(r, new Progress<string>(output.WriteLine)).ConfigureAwait(false);
                         output.WriteLine($"{r.Name} is suspended; 'vmq start {args[1]}' carries on from here.");
                     });
+                case "keep-changes" or "discard-changes" when args.Length > 1:
+                {
+                    var entry = Resolve(args[1], paths);
+                    if (entry?.Machine is not { } sm)
+                    {
+                        error.WriteLine($"vmq: no machine called '{args[1]}'.");
+                        return 1;
+                    }
+
+                    if (MachineRunner.Find(sm, paths) is not null)
+                    {
+                        error.WriteLine($"{sm.Name} is running; power it off first.");
+                        return 1;
+                    }
+
+                    if (MachineSuspend.IsSuspended(entry.Directory) || !DiscardSession.Exists(entry.Directory))
+                    {
+                        error.WriteLine(MachineSuspend.IsSuspended(entry.Directory) ? $"{sm.Name} is suspended in the middle of its session; resume it and power it off first." : $"{sm.Name} has no changes waiting.");
+                        return 1;
+                    }
+
+                    if (command == "keep-changes") DiscardSession.KeepAsync(sm, entry.Directory).GetAwaiter().GetResult();
+                    else DiscardSession.Discard(entry.Directory);
+                    output.WriteLine(command == "keep-changes" ? $"{sm.Name}: the changes are written into its disks." : $"{sm.Name}: the changes are thrown away.");
+                    return 0;
+                }
                 case "discard-suspended" when args.Length > 1:
                     return DiscardSuspended(args[1], paths, output, error);
                 case "pause" when args.Length > 1:

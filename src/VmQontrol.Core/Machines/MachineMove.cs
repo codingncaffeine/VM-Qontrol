@@ -17,6 +17,7 @@ public static class MachineMove
         if (running) return "Shut the machine down first: a machine moves only while it is off.";
         if (quickemu) return "A quickemu machine stays where quickemu keeps it; import it into the library to move it.";
         if (MachineSuspend.IsSuspended(directory)) return "The machine is suspended. Resume it and shut it down, or discard the suspended state, first.";
+        if (DiscardSession.Exists(directory)) return "The machine's last session waits to be kept or discarded (its changes name the disks where they are now). Power it on and off, or use vmq keep-changes / discard-changes, first.";
         var source = Path.GetFullPath(directory).TrimEnd('/');
         var parent = Path.GetFullPath(targetParent).TrimEnd('/');
         if (parent == Path.GetDirectoryName(source)) return "The machine is already in that folder.";

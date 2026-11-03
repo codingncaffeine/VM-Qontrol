@@ -59,11 +59,14 @@ public static class MachineExport
             {
                 var relative = Path.GetRelativePath(directory, file);
                 if (diskFiles.Contains(Path.GetFullPath(file)) || Local.Contains(relative) || relative == MachineStore.FileName) continue;
+                // A session waiting for Keep or Discard belongs to this computer (its overlays name the disks by full path).
+                if (relative.StartsWith(DiscardSession.FolderName + "/", StringComparison.Ordinal)) continue;
                 var to = Path.Combine(target, relative);
                 Directory.CreateDirectory(Path.GetDirectoryName(to)!);
                 File.Copy(file, to);
             }
 
+            if (DiscardSession.Exists(directory)) notes.Add("The machine's last session was neither kept nor discarded; the copy has its disks as they were before it.");
             if (MachineSuspend.IsSuspended(directory)) notes.Add("The machine was suspended; the copy starts afresh (its saved state stays on this computer).");
             var media = new List<MediaConfig>();
             foreach (var x in m.Media)

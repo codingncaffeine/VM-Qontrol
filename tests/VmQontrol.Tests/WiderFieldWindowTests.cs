@@ -256,4 +256,63 @@ public sealed class WiderFieldWindowTests
         Assert.NotNull(seen.Result);
         Assert.True(new FileInfo(seen.Result!).Length > 100);
     }
+
+    [Trait("Tier", "Window")]
+    [Fact]
+    public async Task A_machine_that_asks_shows_its_mark_and_asks_keep_or_discard_at_power_off()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var profile = new TestProfile("discard-ui");
+        var dir = Path.Combine(profile.Paths.DefaultLibrary, "Try");
+        Directory.CreateDirectory(dir);
+        var m = new MachineConfig { Name = "Try", MemoryMiB = 256, Cpu = new CpuConfig { Cores = 1 }, Firmware = new FirmwareConfig { Kind = FirmwareKind.Bios },
+            Disks = [new DiskConfig { File = "disk0.qcow2", SizeGiB = 1 }], OnPowerOff = DiscardMode.Ask };
+        await QemuImg.CreateAsync(Path.Combine(dir, "disk0.qcow2"), "qcow2", 1, ct: ct);
+        MachineStore.Save(m, Path.Combine(dir, "vm.json"));
+        var running = await MachineRunner.StartAsync(m, dir, profile.Paths, HostProbe.Probe(), new StartOptions { Headless = true }, ct);
+        Assert.True(DiscardSession.Exists(dir));
+        try
+        {
+            var seen = await Ui.Run(() =>
+            {
+                var shell = new ShellViewModel(profile.Paths, AppSettings.Load(profile.Paths)) { WatchUsb = false };
+                var window = new MainWindow { DataContext = shell, Width = 1320, Height = 860 };
+                Avalonia.Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
+                window.Show();
+                _ = shell.StartAsync();
+                Ui.PumpUntil(() => shell.Machines.Count == 1, "the library");
+                Ui.Click(window, window.GetVisualDescendants().OfType<ListBox>().First(l => l.Name == "Library").GetVisualDescendants().OfType<ListBoxItem>().First());
+                Ui.PumpUntil(() => shell.Selected is { IsRunning: true }, "the running machine", 20);
+                Ui.Pump(0.3);
+                var page = window.GetVisualDescendants().OfType<MachineView>().Single();
+                var pill = page.GetVisualDescendants().OfType<Border>().First(b => b.Name == "DiscardPill").IsEffectivelyVisible;
+                Ui.Capture(window, "phase17", "discard-pill");
+                MachineRunner.PowerOffAsync(running, CancellationToken.None).GetAwaiter().GetResult();
+                Ui.PumpUntil(() => shell.Notice is not null, "the keep-or-discard question", 20);
+                Ui.Pump(0.3);
+                var title = shell.Notice!.Title;
+                Ui.Capture(window, "phase17", "discard-ask-dark");
+                Avalonia.Application.Current!.RequestedThemeVariant = ThemeVariant.Light;
+                Ui.Pump(0.3);
+                Ui.Capture(window, "phase17", "discard-ask-light");
+                Ui.Click(window, window.GetVisualDescendants().OfType<Button>().First(b => b.Name == "NoticeDismiss" && b.IsEffectivelyVisible));
+                Ui.PumpUntil(() => !DiscardSession.Exists(dir), "the session to be discarded", 20);
+
+                shell.Selected!.OpenSettingsCommand.Execute(null);
+                Ui.PumpUntil(() => shell.SettingsPage is not null, "the settings");
+                shell.SettingsPage!.Section = shell.SettingsPage.Sections.First(s => s.Key == "disks");
+                Ui.Pump(0.4);
+                Ui.Capture(window, "phase17", "discard-setting");
+                window.Close();
+                return (pill, title);
+            });
+
+            Assert.True(seen.pill, "the 'Changes are not kept' mark shows while it runs");
+            Assert.Equal("Keep what changed in Try?", seen.title);
+        }
+        finally
+        {
+            if (MachineRunner.Find(m, profile.Paths) is { } left) await MachineRunner.PowerOffAsync(left, CancellationToken.None);
+        }
+    }
 }

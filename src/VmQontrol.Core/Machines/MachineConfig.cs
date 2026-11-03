@@ -87,6 +87,9 @@ public sealed record MachineConfig
     /// machine page says so until the guest reports it has finished (<see cref="Install.InstallSignal"/>).</summary>
     public EasyInstallConfig? EasyInstall { get; set; }
 
+    /// <summary>What happens to the machine's changes at power off (<see cref="DiscardSession"/>).</summary>
+    public DiscardMode OnPowerOff { get; set; } = DiscardMode.Keep;
+
     /// <summary>The machine this one was copied from by an import (VMware, VirtualBox, OVF, libvirt, a disk); the source was only read.</summary>
     public ImportSource? CopiedFrom { get; set; }
 }

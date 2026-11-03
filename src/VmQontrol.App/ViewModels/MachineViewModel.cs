@@ -110,7 +110,7 @@ public sealed partial class MachineViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StateText), nameof(IsRunning), nameof(IsOff), nameof(IsPaused), nameof(CanPause), nameof(IsActive), nameof(ScreenPlaceholder),
         nameof(CanOpenFirmware), nameof(CanDiscardSuspended), nameof(CanPowerOn), nameof(CanMakeTemplate), nameof(GuestToolsStatus), nameof(GuestToolsDot), nameof(GuestToolsWarn), nameof(GuestToolsOk),
-        nameof(CanConnectCable), nameof(CanDisconnectCable), nameof(CanCapture))]
+        nameof(CanConnectCable), nameof(CanDisconnectCable), nameof(CanCapture), nameof(DiscardsChanges))]
     private PowerState _state = PowerState.Off;
 
     /// <summary>Off with its state saved: Power on carries on from where it was.</summary>
@@ -546,6 +546,39 @@ public sealed partial class MachineViewModel : ObservableObject
         _shell.Paths.Isolated ? Path.Combine(_shell.Paths.Data, name)
         : Environment.GetFolderPath(folder) is { Length: > 0 } f ? f : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), name);
 
+    // ── Discard changes at power off (Parallels' rollback mode, UTM's disposable mode).
+
+    /// <summary>The running machine writes to a throwaway layer: its changes go at power off unless kept.</summary>
+    public bool DiscardsChanges => IsActive && Machine.OnPowerOff != DiscardMode.Keep;
+
+    /// <summary>Throws the session away, or asks Keep or Discard, once the machine is off (never for a suspended one).</summary>
+    private async Task EndSessionAsync(DiscardMode mode)
+    {
+        var dir = Entry.Directory;
+        if (await Task.Run(() => MachineSuspend.IsSuspended(dir) || !DiscardSession.Exists(dir)).ConfigureAwait(false)) return;
+        var keep = false;
+        if (mode == DiscardMode.Ask)
+        {
+            var notice = new NoticeViewModel($"Keep what changed in {Name}?",
+                ["This machine is set to ask at power off. Keep writes everything done in this session into its disks; Discard puts them back as they were at power on.",
+                 "Nobody answering counts as Discard: the next power on starts from the disks as they were."],
+                confirm: "Keep the changes", dismiss: "Discard them");
+            Ui.Post(() => _shell.Show(notice));
+            keep = await notice.Answer.ConfigureAwait(false);
+        }
+
+        try
+        {
+            if (keep) await Task.Run(() => DiscardSession.KeepAsync(Machine, dir)).ConfigureAwait(false);
+            else await Task.Run(() => DiscardSession.Discard(dir)).ConfigureAwait(false);
+            Ui.Post(() => _shell.Note(keep ? $"{Name}'s changes were written into its disks." : $"{Name}'s changes were discarded; it starts from its disks as they were."));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            Ui.Post(() => _shell.Show(new NoticeViewModel(keep ? "The changes could not be kept" : "The changes could not be discarded", [ex.Message, "They wait in the machine's session folder; the next power on asks again or discards them."], isError: true)));
+        }
+    }
+
     // ── Network cable and traffic capture (Workstation's Connected, VirtualBox's network trace).
 
     /// <summary>The running machine's network cable is pulled out.</summary>
@@ -904,6 +937,7 @@ public sealed partial class MachineViewModel : ObservableObject
         CableOut = false;
         CaptureFile = null;
         _shell.Note(_suspending ? $"{Name} is suspended." : $"{Name} powered off.");
+        if (!_suspending && Machine.OnPowerOff != DiscardMode.Keep) _ = EndSessionAsync(Machine.OnPowerOff);
         _suspending = false;
         _ = RefreshSuspendedAsync();
         _ = RefreshInstallAsync();
@@ -1029,7 +1063,7 @@ public sealed partial class MachineViewModel : ObservableObject
             await Task.WhenAny(watcher.Exited, Task.Delay(TimeSpan.FromMinutes(1))).ConfigureAwait(false);
             if (watcher.Exited.IsCompleted || _suspending || watcher.Machine is not { } running) return;
             var config = Machine.AutoProtect;
-            if (!config.Enabled) continue;
+            if (!config.Enabled || Machine.OnPowerOff != DiscardMode.Keep) continue;
             try
             {
                 var taken = await Task.Run(() => AutoProtect.RunIfDueAsync(Snapshots.Store, config, watcher, running.Started, DateTimeOffset.Now)).ConfigureAwait(false);

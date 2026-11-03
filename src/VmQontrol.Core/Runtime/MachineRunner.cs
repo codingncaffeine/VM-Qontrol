@@ -74,6 +74,14 @@ public static class MachineRunner
                 await QemuImg.CreateAsync(Full(m.Disks[i].File), m.Disks[i].Format, m.Disks[i].SizeGiB, m.Disks[i].Preallocation, ct).ConfigureAwait(false);
         }
 
+        // Discard changes at power off: QEMU writes to an overlay of each disk, never the disk itself (DiscardSession).
+        // A machine carrying on from a suspended session keeps its overlays (its saved state names them).
+        var systemDisk = m.Disks.Count > 0 ? Full(m.Disks[0].File) : null;
+        var suspendedSession = MachineSuspend.IsSuspended(machineDirectory) && !options.FirmwareSetup && DiscardSession.Exists(machineDirectory);
+        if (!suspendedSession && DiscardSession.Exists(machineDirectory) && m.OnPowerOff == DiscardMode.Keep)
+            await DiscardSession.KeepAsync(m, machineDirectory, ct).ConfigureAwait(false); // switched to Keep with a session waiting: keep it
+        if (m.OnPowerOff != DiscardMode.Keep && !suspendedSession) m = await DiscardSession.BeginAsync(m, machineDirectory, ct).ConfigureAwait(false);
+
         // Devices the machine always connects that this account may not open yet: spice-gtk's helper opens them to it
         // long enough for QEMU to take them (what virt-viewer does); a refusal is logged and the machine still starts.
         if (m.Usb.Passthrough.Count > 0)
@@ -126,7 +134,7 @@ public static class MachineRunner
             MachineDirectory = machineDirectory,
             Runtime = runtime,
             SshHostPort = ssh ?? 22220,
-            SystemDiskUsed = m.Disks.Count > 0 && DiskState.IsUsed(Full(m.Disks[0].File)),
+            SystemDiskUsed = systemDisk is not null && DiskState.IsUsed(systemDisk),
             Headless = options.Headless,
             NatSubnet = appSettings.NatSubnet is { } nat && Runtime.SegmentSubnet.Parse(nat) is { } natNet ? natNet.ToString() : null,
             FirmwareMenu = options.FirmwareSetup && m.Firmware.Kind == FirmwareKind.Bios && m.Guest.Os != "macos",
@@ -263,7 +271,7 @@ public static class MachineRunner
         // Before the boot helpers below: they press keys the firmware must see running.
         if ((hostDrives || cableOut) && !resuming) notices.AddRange(await PrepareStoppedAsync(m, runtime, cableOut, run: !options.Paused, ct).ConfigureAwait(false));
         else if (hostDrives) notices.Add("The host drives were not connected: a machine carrying on from a saved state keeps the hardware it was saved with.");
-        var installing = !resuming && !(m.Disks.Count > 0 && DiskState.IsUsed(Full(m.Disks[0].File)))
+        var installing = !resuming && !(systemDisk is not null && DiskState.IsUsed(systemDisk))
                          && m.Media.Any(x => x.Role == MediaRole.Installer && x.Connect != Connect.Never);
         var assist = options.FirmwareSetup && !options.Paused
             ? PressKeysAsync(runtime, m.Name, "esc", 24, "open the firmware screen")

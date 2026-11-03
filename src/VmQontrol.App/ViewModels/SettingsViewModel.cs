@@ -181,6 +181,16 @@ public sealed partial class SettingsViewModel : ObservableObject
         new(nameof(Connect.Never), "Disconnected"),
     ];
 
+    public static readonly IReadOnlyList<Option> PowerOffOptions =
+    [
+        new(nameof(DiscardMode.Keep), "Keep them (recommended)"),
+        new(nameof(DiscardMode.Discard), "Discard them: start fresh every time"),
+        new(nameof(DiscardMode.Ask), "Ask each time"),
+    ];
+
+    /// <summary>What happens to the machine's changes when it powers off.</summary>
+    [ObservableProperty] private Option _onPowerOff = PowerOffOptions[0];
+
     public static readonly IReadOnlyList<Option> BusOptions =
     [
         new(nameof(DiskBus.Auto), "Automatic (fastest the system supports)"),
@@ -290,6 +300,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         Original = m;
         Name = m.Name;
         Notes = m.Notes;
+        OnPowerOff = PowerOffOptions.First(o => o.Value == m.OnPowerOff.ToString());
         Guest = GuestChoices.FirstOrDefault(g => g.Os == m.Guest.Os && g.Release == m.Guest.Release) ?? GuestChoices.FirstOrDefault(g => g.Os == m.Guest.Os);
         MemoryAuto = m.MemoryMiB is null;
         MemoryGb = m.MemoryMiB is { } mib ? mib / 1024m : RecommendedMemoryGb();
@@ -776,6 +787,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             Name = Name.Trim().Length > 0 ? Name.Trim() : o.Name,
             Notes = Notes,
+            OnPowerOff = Enum.Parse<DiscardMode>(OnPowerOff.Value!),
             Guest = Guest is { } g ? o.Guest with { Os = g.Os, Release = g.Release } : o.Guest,
             MemoryMiB = MemoryAuto ? null : (long)(MemoryGb * 1024),
             Cpu = new CpuConfig

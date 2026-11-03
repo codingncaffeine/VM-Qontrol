@@ -331,6 +331,17 @@
             <TextBlock Text="Hard disks" Classes="h1" />
             <Border Grid.Column="1" Classes="badge-next"><TextBlock Text="Applies at next power on" /></Border>
           </Grid>
+          <Border Classes="group">
+            <Border Classes="row first">
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+                <StackPanel>
+                  <TextBlock Text="Changes at power off" Classes="label" />
+                  <TextBlock Text="Recommended: keep them, as a real computer does. Discard starts every power on from the disks as they are now, whatever happens inside (for testing software, or a machine for guests); Ask offers both each time. While changes can be discarded, snapshots and AutoProtect are off: they would go with the changes." Classes="help" />
+                </StackPanel>
+                <ComboBox x:Name="OnPowerOff" Grid.Column="1" ItemsSource="{x:Static vm:SettingsViewModel.PowerOffOptions}" SelectedItem="{Binding OnPowerOff}" VerticalAlignment="Center" />
+              </Grid>
+            </Border>
+          </Border>
           <ItemsControl ItemsSource="{Binding Disks}">
             <ItemsControl.ItemsPanel>
               <ItemsPanelTemplate><StackPanel Spacing="12" /></ItemsPanelTemplate>

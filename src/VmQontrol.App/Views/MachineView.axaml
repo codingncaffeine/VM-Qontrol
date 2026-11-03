@@ -30,6 +30,10 @@
                 </Button>
               </StackPanel>
             </Border>
+            <Border x:Name="DiscardPill" Classes="pill" IsVisible="{Binding DiscardsChanges}" VerticalAlignment="Center"
+                    ToolTip.Tip="This machine's changes are thrown away at power off (or it asks); Settings → Hard disks changes that">
+              <TextBlock Text="Changes are not kept" VerticalAlignment="Center" />
+            </Border>
             <Border x:Name="CablePill" Classes="pill warn" IsVisible="{Binding CableOut}" VerticalAlignment="Center" Padding="8,2,4,2">
               <StackPanel Orientation="Horizontal" Spacing="6">
                 <TextBlock Text="Cable out" VerticalAlignment="Center" />

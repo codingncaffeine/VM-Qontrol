@@ -76,6 +76,8 @@ public sealed class SnapshotStore(MachineConfig machine, string machineDirectory
     /// <summary>Takes a snapshot; <paramref name="watcher"/> is the running machine's connection, or <c>null</c> when it is off.</summary>
     public async Task<Snapshot> TakeAsync(string name, string description, MachineWatcher? watcher, CancellationToken ct = default, bool auto = false)
     {
+        if (machine.OnPowerOff != DiscardMode.Keep)
+            throw new InvalidOperationException("This machine throws its changes away at power off, and a snapshot would go with them. Set Settings → Hard disks → Changes at power off to Keep to take snapshots.");
         if (machine.Disks.Any(d => d.Format != "qcow2"))
             throw new InvalidOperationException("Snapshots need every disk in qcow2 format; this machine has a raw disk.");
         var list = Load();

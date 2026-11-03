@@ -30,6 +30,7 @@ public static class SettingsHistory
         Diff("Notes", before.Notes.Length, after.Notes.Length, _ => "edited");
         Diff("Easy Install", before.EasyInstall is null, after.EasyInstall is null, v => (bool?)v == true ? "off" : "on");
         Diff("Template", before.IsTemplate, after.IsTemplate, v => (bool?)v == true ? "yes" : "no");
+        Diff("Changes at power off", before.OnPowerOff, after.OnPowerOff, v => v switch { DiscardMode.Discard => "discarded", DiscardMode.Ask => "ask each time", _ => "kept" });
         Diff("Memory", before.MemoryMiB, after.MemoryMiB, Mib);
         Diff("Processors", before.Cpu.Cores, after.Cpu.Cores);
         Diff("Processor model", before.Cpu.Model, after.Cpu.Model, v => v?.ToString() ?? "automatic");
