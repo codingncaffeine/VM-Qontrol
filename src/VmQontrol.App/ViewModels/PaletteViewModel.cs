@@ -77,6 +77,7 @@ public sealed partial class PaletteViewModel(ShellViewModel shell) : ObservableO
         var items = new List<PaletteItem>
         {
             new("New machine", "Create", shell.NewMachine),
+            new("Preferences", "The app's own settings", shell.OpenPreferences),
             new("Import a machine", "From VMware, VirtualBox, an OVF appliance, virt-manager or a disk", shell.OpenImport),
             new("Refresh the library", "Library", () => _ = shell.RefreshAsync()),
             new("Show the host check", "Welcome", () => shell.Selected = null),

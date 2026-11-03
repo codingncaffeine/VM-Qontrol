@@ -936,6 +936,12 @@ public sealed partial class MachineViewModel : ObservableObject
     [RelayCommand]
     private async Task PowerOffAsync()
     {
+        if (!_shell.Settings.ConfirmPowerOff)
+        {
+            await ControlAsync("powered off", MachineRunner.PowerOffAsync).ConfigureAwait(false);
+            return;
+        }
+
         var notice = new NoticeViewModel($"Power off {Name}?",
             ["This turns the machine off at once, like pulling the plug. Anything not saved inside it is lost.", "Shut Down asks the guest to close its programs and turn itself off instead."],
             confirm: "Power off", isDanger: true);
@@ -1030,6 +1036,12 @@ public sealed partial class MachineViewModel : ObservableObject
     [RelayCommand]
     private async Task ResetAsync()
     {
+        if (!_shell.Settings.ConfirmReset)
+        {
+            await ControlAsync("reset", MachineRunner.ResetAsync).ConfigureAwait(false);
+            return;
+        }
+
         var notice = new NoticeViewModel($"Reset {Name}?", ["This restarts the machine at once, like a computer's reset button. Anything not saved inside it is lost."], confirm: "Reset", isDanger: true);
         _shell.Show(notice);
         if (await notice.Answer.ConfigureAwait(false)) await ControlAsync("reset", MachineRunner.ResetAsync).ConfigureAwait(false);

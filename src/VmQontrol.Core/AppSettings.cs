@@ -34,6 +34,15 @@ public sealed record AppSettings
     /// <summary>The NAT network inside machines, when QEMU's 10.0.2.0/24 clashes with a network a guest must reach; <c>null</c> = QEMU's.</summary>
     public string? NatSubnet { get; set; }
 
+    /// <summary>Ask before Power off (pulling the plug).</summary>
+    public bool ConfirmPowerOff { get; set; } = true;
+
+    /// <summary>Ask before Reset.</summary>
+    public bool ConfirmReset { get; set; } = true;
+
+    /// <summary>Open the app minimised when it starts at sign-in.</summary>
+    public bool StartMinimised { get; set; }
+
     public static AppSettings Load(QontrolPaths paths)
     {
         try

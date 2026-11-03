@@ -41,7 +41,10 @@ public class App : Application
         {
             var paths = Paths ?? QontrolPaths.ForCurrentUser();
             var shell = new ViewModels.ShellViewModel(paths, Settings ?? AppSettings.Load(paths)) { OpenOnStart = OpenOnStart };
-            desktop.MainWindow = new MainWindow { DataContext = shell };
+            var settings = shell.Settings;
+            // Started at sign-in (the autostart entry) with "start minimised": the window waits on the taskbar.
+            var minimised = settings.StartMinimised && (desktop.Args ?? []).Contains(VmQontrol.Core.Hosts.Autostart.Argument);
+            desktop.MainWindow = new MainWindow { DataContext = shell, WindowState = minimised ? Avalonia.Controls.WindowState.Minimized : Avalonia.Controls.WindowState.Normal };
             _ = shell.StartAsync();
         }
         base.OnFrameworkInitializationCompleted();

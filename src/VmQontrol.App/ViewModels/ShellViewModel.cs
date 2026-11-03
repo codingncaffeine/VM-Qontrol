@@ -23,6 +23,36 @@ public sealed partial class ShellViewModel : ObservableObject
         Paths = paths;
         Settings = settings;
         Palette = new PaletteViewModel(this);
+        // The theme chosen in Preferences, unless VMQONTROL_THEME pins one (screenshots, bug reports).
+        if (Environment.GetEnvironmentVariable("VMQONTROL_THEME") is null or "" && settings.Theme != "system")
+            Ui.Post(() => PreferencesViewModel.ApplyTheme(settings.Theme));
+    }
+
+    /// <summary>The app's preferences while they are open.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowWelcome), nameof(ShowMachine), nameof(ShowPreferences), nameof(ShowSettings), nameof(ShowImport))]
+    private PreferencesViewModel? _preferencesPage;
+
+    public bool ShowPreferences => PreferencesPage is not null && Wizard is null;
+
+    [RelayCommand]
+    public void OpenPreferences()
+    {
+        if (Wizard is not null) return;
+        if (PreferencesPage is { } open)
+        {
+            open.Refresh();
+            return;
+        }
+
+        var page = new PreferencesViewModel(this);
+        page.Closed += () => Ui.Post(() =>
+        {
+            if (PreferencesPage == page) PreferencesPage = null;
+        });
+        SettingsPage = null;
+        if (ImportPage is { Busy: false }) ImportPage = null;
+        PreferencesPage = page;
     }
 
     public PaletteViewModel Palette { get; }
@@ -58,17 +88,17 @@ public sealed partial class ShellViewModel : ObservableObject
 
     /// <summary>The New Machine wizard while it is open.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowWelcome), nameof(ShowMachine), nameof(ShowWizard), nameof(ShowSettings))]
+    [NotifyPropertyChangedFor(nameof(ShowWelcome), nameof(ShowMachine), nameof(ShowWizard), nameof(ShowSettings), nameof(ShowImport), nameof(ShowPreferences))]
     private NewMachineViewModel? _wizard;
 
     public bool ShowWizard => Wizard is not null;
 
     /// <summary>Import a machine (VMware, VirtualBox, OVF, virt-manager, a disk) while it is open.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowWelcome), nameof(ShowMachine), nameof(ShowImport), nameof(ShowSettings))]
+    [NotifyPropertyChangedFor(nameof(ShowWelcome), nameof(ShowMachine), nameof(ShowImport), nameof(ShowSettings), nameof(ShowPreferences))]
     private ImportViewModel? _importPage;
 
-    public bool ShowImport => ImportPage is not null && Wizard is null;
+    public bool ShowImport => ImportPage is not null && Wizard is null && PreferencesPage is null;
 
     [RelayCommand]
     public void OpenImport()
@@ -80,6 +110,7 @@ public sealed partial class ShellViewModel : ObservableObject
             if (ImportPage == page) ImportPage = null;
         });
         SettingsPage = null;
+        PreferencesPage = null;
         ImportPage = page;
     }
 
@@ -88,7 +119,7 @@ public sealed partial class ShellViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(ShowWelcome), nameof(ShowMachine), nameof(ShowSettings))]
     private SettingsViewModel? _settingsPage;
 
-    public bool ShowSettings => SettingsPage is not null && Wizard is null && ImportPage is null;
+    public bool ShowSettings => SettingsPage is not null && Wizard is null && ImportPage is null && PreferencesPage is null;
 
     /// <summary>A typed-answer question while it is open (clone, delete).</summary>
     [ObservableProperty]
@@ -220,9 +251,9 @@ public sealed partial class ShellViewModel : ObservableObject
     [ObservableProperty]
     private bool _scanning;
 
-    public bool ShowWelcome => Selected is null && Wizard is null && SettingsPage is null && ImportPage is null;
+    public bool ShowWelcome => Selected is null && Wizard is null && SettingsPage is null && ImportPage is null && PreferencesPage is null;
 
-    public bool ShowMachine => Selected is not null && Wizard is null && SettingsPage is null && ImportPage is null;
+    public bool ShowMachine => Selected is not null && Wizard is null && SettingsPage is null && ImportPage is null && PreferencesPage is null;
 
     public bool LibraryEmpty => MachineCount == 0 && !Scanning;
 
@@ -426,6 +457,7 @@ public sealed partial class ShellViewModel : ObservableObject
     partial void OnSelectedChanged(MachineViewModel? oldValue, MachineViewModel? newValue)
     {
         SettingsPage = null;
+        PreferencesPage = null;
         // Picking a machine leaves the import page, unless it is copying (its progress stays on screen).
         if (newValue is not null && ImportPage is { Busy: false }) ImportPage = null;
         OnPropertyChanged(nameof(SidebarSelection));
@@ -466,13 +498,20 @@ public sealed partial class ShellViewModel : ObservableObject
         return s with { UsbNeverAsk = set };
     });
 
-    /// <summary>Changes the app's settings and saves them on a worker. Any thread.</summary>
-    public void UpdateSettings(Func<AppSettings, AppSettings> change) => Ui.Post(() =>
+    /// <summary>Changes the app's settings and saves them on a worker. Any thread; at once on the UI thread.</summary>
+    public void UpdateSettings(Func<AppSettings, AppSettings> change)
     {
-        Settings = change(Settings);
-        var settings = Settings;
-        _ = Task.Run(() => settings.Save(Paths));
-    });
+        void Apply()
+        {
+            Settings = change(Settings);
+            OnPropertyChanged(nameof(LibraryText));
+            var settings = Settings;
+            _ = Task.Run(() => settings.Save(Paths));
+        }
+
+        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) Apply();
+        else Ui.Post(Apply);
+    }
 
     /// <summary>The virtual network editor while it is open.</summary>
     [ObservableProperty]

@@ -25,13 +25,18 @@
         <!-- Library sidebar. -->
         <Border Background="{DynamicResource QSidebar}" BorderBrush="{DynamicResource QBorder}" BorderThickness="0,0,1,0">
           <DockPanel Margin="14,16">
-            <Button DockPanel.Dock="Top" Classes="icononly" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                    Command="{Binding ShowHomeCommand}" Margin="0,0,0,16" ToolTip.Tip="The welcome page and the host check">
-              <StackPanel Orientation="Horizontal" Spacing="10">
-                <Image Source="avares://vmqontrol/Assets/logo-64.png" Width="34" Height="34" />
-                <TextBlock Text="VM Qontrol" Classes="h1" VerticalAlignment="Center" />
-              </StackPanel>
-            </Button>
+            <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,16">
+              <Button Classes="icononly" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                      Command="{Binding ShowHomeCommand}" ToolTip.Tip="The welcome page and the host check">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                  <Image Source="avares://vmqontrol/Assets/logo-64.png" Width="34" Height="34" />
+                  <TextBlock Text="VM Qontrol" Classes="h1" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+              <Button x:Name="OpenPreferences" Grid.Column="1" Classes="icononly" VerticalAlignment="Center" Command="{Binding OpenPreferencesCommand}" ToolTip.Tip="Preferences">
+                <Path Classes="icon" Data="{StaticResource IconSettings}" Width="16" Height="16" />
+              </Button>
+            </Grid>
             <Button x:Name="NewMachine" DockPanel.Dock="Top" Classes="primary" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                     Command="{Binding NewMachineCommand}" Margin="0,0,0,12" ToolTip.Tip="Create a virtual machine, step by step">
               <TextBlock Text="+  New machine" />
@@ -96,6 +101,13 @@
             <ContentControl.ContentTemplate>
               <DataTemplate x:DataType="vm:NewMachineViewModel">
                 <views:NewMachineView />
+              </DataTemplate>
+            </ContentControl.ContentTemplate>
+          </ContentControl>
+          <ContentControl x:Name="PreferencesPage" Content="{Binding PreferencesPage}" IsVisible="{Binding ShowPreferences}">
+            <ContentControl.ContentTemplate>
+              <DataTemplate x:DataType="vm:PreferencesViewModel">
+                <views:PreferencesView />
               </DataTemplate>
             </ContentControl.ContentTemplate>
           </ContentControl>

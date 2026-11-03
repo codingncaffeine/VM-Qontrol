@@ -1,0 +1,174 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:VmQontrol.App.ViewModels"
+             x:Class="VmQontrol.App.Views.PreferencesView"
+             x:DataType="vm:PreferencesViewModel">
+  <UserControl.Styles>
+    <Style Selector="Border.group">
+      <Setter Property="Background" Value="{DynamicResource QSurface}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource QBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{DynamicResource QRadiusLarge}" />
+    </Style>
+    <Style Selector="Border.row">
+      <Setter Property="Padding" Value="18,14" />
+      <Setter Property="BorderBrush" Value="{DynamicResource QBorder}" />
+      <Setter Property="BorderThickness" Value="0,1,0,0" />
+    </Style>
+    <Style Selector="Border.row.first">
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="TextBlock.label">
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="TextBlock.help">
+      <Setter Property="Foreground" Value="{DynamicResource QTextMuted}" />
+      <Setter Property="FontSize" Value="{DynamicResource QFontSmall}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Margin" Value="0,3,24,0" />
+    </Style>
+  </UserControl.Styles>
+  <DockPanel Margin="{DynamicResource QPagePadding}">
+    <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,20">
+      <TextBlock Text="Preferences" Classes="hero" />
+      <TextBlock Text="How VM Qontrol itself behaves. Every change applies at once and is kept." Classes="muted" TextWrapping="Wrap" />
+    </StackPanel>
+    <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource QBorder}" BorderThickness="0,1,0,0" Padding="0,14,0,0" Margin="0,16,0,0">
+      <Button x:Name="ClosePreferences" Classes="secondary" Content="Close" Command="{Binding CloseCommand}" HorizontalAlignment="Right" />
+    </Border>
+    <ScrollViewer>
+      <StackPanel Spacing="10" MaxWidth="900" HorizontalAlignment="Left">
+
+        <TextBlock Text="APPEARANCE" Classes="section" Margin="2,4,0,0" />
+        <Border Classes="group">
+          <StackPanel>
+            <Border Classes="row first">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel>
+                  <TextBlock Text="Theme" Classes="label" />
+                  <TextBlock Text="Light or dark; following the desktop changes with it." Classes="help" />
+                </StackPanel>
+                <ComboBox x:Name="ThemeChoice" Grid.Column="1" ItemsSource="{x:Static vm:PreferencesViewModel.ThemeOptions}" SelectedItem="{Binding Theme}" Width="260" VerticalAlignment="Center" />
+              </Grid>
+            </Border>
+            <Border Classes="row">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel>
+                  <TextBlock Text="Screen viewer" Classes="label" />
+                  <TextBlock Text="The window Open screen uses. Automatic picks remote-viewer (virt-viewer) when it is installed, else spicy (spice-gtk)." Classes="help" />
+                </StackPanel>
+                <ComboBox Grid.Column="1" ItemsSource="{x:Static vm:PreferencesViewModel.ViewerOptions}" SelectedItem="{Binding Viewer}" Width="260" VerticalAlignment="Center" />
+              </Grid>
+            </Border>
+          </StackPanel>
+        </Border>
+
+        <TextBlock Text="LIBRARY" Classes="section" Margin="2,14,0,0" />
+        <Border Classes="group">
+          <StackPanel>
+            <ItemsControl x:Name="Roots" ItemsSource="{Binding Roots}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:LibraryRootRow">
+                  <Border Classes="row" BorderThickness="0,0,0,1">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+                      <Path Classes="icon" Data="{StaticResource IconFolder}" Width="18" Height="18" VerticalAlignment="Center" />
+                      <StackPanel Grid.Column="1">
+                        <TextBlock Text="{Binding Path}" FontFamily="monospace" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding Detail}" Classes="help" />
+                      </StackPanel>
+                      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <Button Classes="tool" Content="Make default" IsVisible="{Binding CanRemove}" ToolTip.Tip="New machines are made in this folder"
+                                Command="{Binding $parent[UserControl].((vm:PreferencesViewModel)DataContext).MakeDefaultCommand}" CommandParameter="{Binding}" />
+                        <Button Classes="tool danger" Content="Remove" IsVisible="{Binding CanRemove}" ToolTip.Tip="Stop listing this folder's machines; nothing on the disk changes"
+                                Command="{Binding $parent[UserControl].((vm:PreferencesViewModel)DataContext).RemoveRootCommand}" CommandParameter="{Binding}" />
+                      </StackPanel>
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Border Classes="row first">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="Machines in other folders (a drive, a backup) are listed once their folder is added." Classes="help" VerticalAlignment="Center" />
+                <Button x:Name="AddRoot" Grid.Column="1" Classes="tool" Content="Add a folder…" />
+              </Grid>
+            </Border>
+          </StackPanel>
+        </Border>
+
+        <TextBlock Text="CONFIRMATIONS" Classes="section" Margin="2,14,0,0" />
+        <Border Classes="group">
+          <StackPanel>
+            <Border Classes="row first">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel>
+                  <TextBlock Text="Ask before Power off" Classes="label" />
+                  <TextBlock Text="Power off is pulling the plug: anything unsaved in the machine is lost." Classes="help" />
+                </StackPanel>
+                <ToggleSwitch x:Name="ConfirmPowerOff" Grid.Column="1" IsChecked="{Binding ConfirmPowerOff}" />
+              </Grid>
+            </Border>
+            <Border Classes="row">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel>
+                  <TextBlock Text="Ask before Reset" Classes="label" />
+                  <TextBlock Text="Reset restarts the machine at once, like a computer's reset button." Classes="help" />
+                </StackPanel>
+                <ToggleSwitch Grid.Column="1" IsChecked="{Binding ConfirmReset}" />
+              </Grid>
+            </Border>
+            <Border Classes="row">
+              <TextBlock Text="Deleting a machine always asks for its name: it cannot be undone." Classes="help" />
+            </Border>
+          </StackPanel>
+        </Border>
+
+        <TextBlock Text="STARTUP" Classes="section" Margin="2,14,0,0" />
+        <Border Classes="group">
+          <StackPanel>
+            <Border Classes="row first">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel>
+                  <TextBlock Text="Open when I sign in" Classes="label" />
+                  <TextBlock Text="Adds VM Qontrol to the desktop's startup applications (GNOME, KDE Plasma, Xfce and others)." Classes="help" />
+                </StackPanel>
+                <ToggleSwitch x:Name="StartAtSignIn" Grid.Column="1" IsChecked="{Binding StartAtSignIn}" />
+              </Grid>
+            </Border>
+            <Border Classes="row" IsEnabled="{Binding StartAtSignIn}">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel>
+                  <TextBlock Text="Start minimised" Classes="label" />
+                  <TextBlock Text="When it opens at sign-in, it waits on the taskbar instead of opening its window." Classes="help" />
+                </StackPanel>
+                <ToggleSwitch Grid.Column="1" IsChecked="{Binding StartMinimised}" />
+              </Grid>
+            </Border>
+          </StackPanel>
+        </Border>
+
+        <TextBlock Text="DOWNLOADS AND PRIVACY" Classes="section" Margin="2,14,0,0" />
+        <Border Classes="group">
+          <StackPanel>
+            <Border Classes="row first">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel>
+                  <TextBlock Text="Windows guest tools disc" Classes="label" />
+                  <TextBlock x:Name="GuestToolsText" Text="{Binding GuestToolsText}" Classes="help" />
+                </StackPanel>
+                <Button Grid.Column="1" Classes="tool" Content="Remove" IsVisible="{Binding GuestToolsHere}" VerticalAlignment="Center"
+                        ToolTip.Tip="Free the space; it is downloaded again when a machine needs it" Command="{Binding RemoveGuestToolsCommand}" />
+              </Grid>
+            </Border>
+            <Border Classes="row">
+              <StackPanel>
+                <TextBlock Text="What VM Qontrol connects to" Classes="label" />
+                <TextBlock Classes="help" Text="Nothing, unless you ask: it goes online only to download a system you chose, Windows from Microsoft, or the guest tools. It sends no usage data and checks for no updates." />
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>
