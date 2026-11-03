@@ -48,8 +48,17 @@ public sealed class QuickemuConf
             if (rest.StartsWith('('))
             {
                 // An array may run over several lines until its closing parenthesis.
+                // Only each new line is scanned (the quote state carries over), so an array left open costs one pass.
                 var body = new StringBuilder(rest[1..]);
-                while (!EndsArray(body.ToString()) && i + 1 < lines.Length) body.Append(' ').Append(lines[++i].Trim());
+                var quote = '\0';
+                var closed = EndsArray(rest.AsSpan(1), ref quote);
+                while (!closed && i + 1 < lines.Length)
+                {
+                    var next = lines[++i].Trim();
+                    body.Append(' ').Append(next);
+                    closed = EndsArray(next, ref quote);
+                }
+
                 var inner = body.ToString();
                 var close = inner.LastIndexOf(')');
                 arrays[key] = Words(close >= 0 ? inner[..close] : inner);
@@ -74,9 +83,9 @@ public sealed class QuickemuConf
         return true;
     }
 
-    private static bool EndsArray(string s)
+    /// <summary>Whether this piece closes the array; <paramref name="quote"/> carries an open quote between pieces.</summary>
+    private static bool EndsArray(ReadOnlySpan<char> s, ref char quote)
     {
-        var quote = '\0';
         foreach (var c in s)
         {
             if (quote != '\0') { if (c == quote) quote = '\0'; }
