@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:VmQontrol.App.ViewModels"
+             xmlns:ctl="using:VmQontrol.App.Controls"
              x:Class="VmQontrol.App.Views.WelcomeView"
              x:DataType="vm:ShellViewModel">
   <ScrollViewer>
@@ -72,6 +73,26 @@
               <TextBlock Text="Check again" />
             </StackPanel>
           </Button>
+        </Grid>
+        <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
+          <Border Classes="card">
+            <StackPanel Spacing="4">
+              <TextBlock Text="PROCESSORS" Classes="section" />
+              <TextBlock x:Name="HostCpu" Text="{Binding Welcome.HostCpuText}" Classes="hero" />
+              <TextBlock Text="Busy across all of this computer's processors" Classes="muted" FontSize="{DynamicResource QFontSmall}" />
+              <ctl:LiveChart Height="100" Margin="0,8,0,0" Series1="{Binding Welcome.HostCpuSeries}" Maximum="100" Format="{Binding Welcome.PercentFormat}"
+                             Series1Brush="{DynamicResource QSeries1}" GridBrush="{DynamicResource QGrid}" TextBrush="{DynamicResource QTextMuted}" SurfaceBrush="{DynamicResource QSurface}" />
+            </StackPanel>
+          </Border>
+          <Border Grid.Column="1" Classes="card">
+            <StackPanel Spacing="4">
+              <TextBlock Text="MEMORY" Classes="section" />
+              <TextBlock x:Name="HostMemory" Text="{Binding Welcome.HostMemoryText}" Classes="hero" TextTrimming="CharacterEllipsis" />
+              <TextBlock Text="In use on this computer, and how much of it running machines hold" Classes="muted" FontSize="{DynamicResource QFontSmall}" />
+              <ctl:LiveChart Height="100" Margin="0,8,0,0" Series1="{Binding Welcome.HostMemorySeries}" Maximum="{Binding Welcome.HostMemoryMaximum}" Format="{Binding Welcome.BytesFormat}"
+                             Series1Brush="{DynamicResource QSeries1}" GridBrush="{DynamicResource QGrid}" TextBrush="{DynamicResource QTextMuted}" SurfaceBrush="{DynamicResource QSurface}" />
+            </StackPanel>
+          </Border>
         </Grid>
         <TextBlock x:Name="CheckSummary" Text="{Binding Welcome.Summary}" TextWrapping="Wrap" FontWeight="SemiBold" />
         <Border Classes="card" Padding="0">

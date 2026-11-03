@@ -39,6 +39,36 @@ public sealed partial class WelcomeViewModel : ObservableObject
     [ObservableProperty]
     private bool _rechecking;
 
+    // This computer's last minute (virt-manager's host graphs), sampled once a second for as long as the app runs.
+    private readonly Queue<double> _cpu = new(), _memory = new();
+
+    public Func<double, string> PercentFormat { get; } = Formats.Percent;
+
+    public Func<double, string> BytesFormat { get; } = v => Formats.Bytes(v * 1024 * 1024);
+
+    [ObservableProperty] private IReadOnlyList<double> _hostCpuSeries = [];
+    [ObservableProperty] private IReadOnlyList<double> _hostMemorySeries = [];
+    [ObservableProperty] private string _hostCpuText = "–";
+    [ObservableProperty] private string _hostMemoryText = "–";
+    [ObservableProperty] private double _hostMemoryMaximum = 1;
+
+    public void AddLoad(HostLoadSample s)
+    {
+        static IReadOnlyList<double> Push(Queue<double> q, double v)
+        {
+            q.Enqueue(v);
+            while (q.Count > Controls.LiveChart.Capacity) q.Dequeue();
+            return q.ToArray();
+        }
+
+        HostMemoryMaximum = s.MemoryTotalBytes / (1024.0 * 1024);
+        HostCpuSeries = Push(_cpu, s.CpuPercent);
+        HostMemorySeries = Push(_memory, s.MemoryUsedBytes / (1024.0 * 1024));
+        HostCpuText = Formats.Percent(s.CpuPercent);
+        HostMemoryText = $"{Formats.Bytes(s.MemoryUsedBytes)} of {Formats.Bytes(s.MemoryTotalBytes)}" +
+                         (s.MachinesBytes > 0 ? $" · machines {Formats.Bytes(s.MachinesBytes)}" : "");
+    }
+
     public void Show(IReadOnlyList<DoctorCheck> checks)
     {
         Checks = checks.Select(c => new CheckRow(c.Title, c.Detail, c.Fix, c.Status)).OrderByDescending(r => r.Status).ToList();

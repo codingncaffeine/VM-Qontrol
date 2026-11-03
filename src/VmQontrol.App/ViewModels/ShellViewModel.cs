@@ -320,6 +320,7 @@ public sealed partial class ShellViewModel : ObservableObject
         var checks = await Task.Run(() => Doctor.Run(host, Doctor.DetectThisDistro(), Settings.LibraryRoots[0])).ConfigureAwait(false);
         Ui.Post(() => Welcome.Show(checks));
         await RefreshAsync().ConfigureAwait(false);
+        _ = WatchHostLoadAsync();
         if (WatchUsb && _hotplug is null)
         {
             _hotplug = new UsbHotplug();
@@ -329,6 +330,35 @@ public sealed partial class ShellViewModel : ObservableObject
     }
 
     private UsbHotplug? _hotplug;
+    private int[] _runningPids = [];
+    private CancellationTokenSource? _load;
+
+    /// <summary>This computer's load once a second, on a worker; the running machines' process ids come back with each post.</summary>
+    private async Task WatchHostLoadAsync()
+    {
+        if (_load is not null) return;
+        _load = new CancellationTokenSource();
+        var ct = _load.Token;
+        var load = new HostLoad();
+        while (!ct.IsCancellationRequested)
+        {
+            var pids = _runningPids;
+            if (await Task.Run(() => load.Sample(pids)).ConfigureAwait(false) is { } s)
+                Ui.Post(() =>
+                {
+                    Welcome.AddLoad(s);
+                    _runningPids = _all.Where(m => m.Running is not null).Select(m => m.Running!.Pid).ToArray();
+                });
+            try
+            {
+                await Task.Delay(1000, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+        }
+    }
 
     /// <summary>Whether USB devices plugged in while the app runs are offered to the running machine (tests turn it off).</summary>
     public bool WatchUsb { get; init; } = true;
@@ -350,11 +380,12 @@ public sealed partial class ShellViewModel : ObservableObject
         }, TaskScheduler.Default);
     }
 
-    /// <summary>The window closed: stop watching for USB devices.</summary>
+    /// <summary>The window closed: stop watching for USB devices and this computer's load.</summary>
     public void Stop()
     {
         _hotplug?.Dispose();
         _hotplug = null;
+        _load?.Cancel();
     }
 
     /// <summary>
