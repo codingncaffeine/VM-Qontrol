@@ -1,6 +1,8 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Platform.Storage;
 using Avalonia.VisualTree;
 using VmQontrol.App.Platform;
 using VmQontrol.App.ViewModels;
@@ -68,6 +70,8 @@ public partial class MainWindow : Window
             library.ContainerPrepared += (_, e) => e.Container.Focusable = e.Container.DataContext is not GroupHeading;
             WireDragAndDrop(library);
         }
+
+        WireFileDrops();
 
         // Every Opened, not once: a window shown again gets a new Wayland toplevel that needs its app id again.
         Opened += (_, _) =>
@@ -241,6 +245,43 @@ public partial class MainWindow : Window
             };
 
     /// <summary>Drag a machine onto a folder's heading (or a machine in it) to move it in; onto LIBRARY to take it out.</summary>
+    /// <summary>
+    /// Files dropped anywhere on the window: an installer disc starts the New machine wizard with it, a machine from other
+    /// software or a disk opens Import with it (Workstation and VirtualBox take the same drops). A hint says which while
+    /// dragging; the wizard's own disc box and the library's folder moves handle their drops first.
+    /// </summary>
+    private void WireFileDrops()
+    {
+        DragDrop.SetAllowDrop(this, true);
+        static string? FirstFile(DragEventArgs e) => e.DataTransfer.TryGetFiles()?.FirstOrDefault()?.TryGetLocalPath();
+        AddHandler(DragDrop.DragOverEvent, (_, e) =>
+        {
+            if (DataContext is not ShellViewModel shell) return;
+            if (e.Handled)
+            {
+                shell.DropHint = null;
+                return;
+            }
+
+            var hint = FirstFile(e) is { } path ? ShellViewModel.HintFor(path) : null;
+            e.DragEffects = hint is null ? DragDropEffects.None : DragDropEffects.Copy;
+            shell.DropHint = hint;
+        });
+        AddHandler(DragDrop.DragLeaveEvent, (_, e) =>
+        {
+            // Leaving a child for another child also raises this: only the pointer leaving the window clears the hint.
+            if (DataContext is ShellViewModel shell && !new Rect(Bounds.Size).Contains(e.GetPosition(this))) shell.DropHint = null;
+        });
+        AddHandler(DragDrop.DropEvent, (_, e) =>
+        {
+            if (DataContext is not ShellViewModel shell) return;
+            shell.DropHint = null;
+            if (e.Handled || FirstFile(e) is not { } path) return;
+            e.Handled = true;
+            _ = shell.OpenDroppedAsync(path);
+        });
+    }
+
     private void WireDragAndDrop(ListBox library)
     {
         var heading = this.FindControl<Grid>("LibraryHeading")!;
@@ -269,7 +310,9 @@ public partial class MainWindow : Window
             DragDrop.SetAllowDrop(target, true);
             target.AddHandler(DragDrop.DragOverEvent, (_, e) =>
             {
-                var group = Carried(e) is not null ? TargetGroup(e.Source, heading) : null;
+                // Files from the desktop are the window's (a new machine or an import), not a folder move.
+                if (Carried(e) is null) return;
+                var group = TargetGroup(e.Source, heading);
                 e.DragEffects = group is null ? DragDropEffects.None : DragDropEffects.Move;
                 (DataContext as ShellViewModel)?.MarkDrop(group);
                 e.Handled = true;
@@ -277,6 +320,7 @@ public partial class MainWindow : Window
             target.AddHandler(DragDrop.DragLeaveEvent, (_, _) => (DataContext as ShellViewModel)?.MarkDrop(null));
             target.AddHandler(DragDrop.DropEvent, (_, e) =>
             {
+                if (Carried(e) is null) return;
                 e.Handled = true;
                 if (DataContext is not ShellViewModel shell) return;
                 shell.MarkDrop(null);

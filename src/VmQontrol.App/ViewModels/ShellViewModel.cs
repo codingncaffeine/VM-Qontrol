@@ -56,6 +56,67 @@ public sealed partial class ShellViewModel : ObservableObject
         PreferencesPage = page;
     }
 
+    /// <summary>While files are dragged over the window: what dropping them does; <c>null</c> = nothing is being dragged.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowDropHint))]
+    private string? _dropHint;
+
+    public bool ShowDropHint => DropHint is not null;
+
+    /// <summary>The hint for a file being dragged in, from its name; <c>null</c> when it is nothing VM Qontrol takes.</summary>
+    public static string? HintFor(string path) => Core.Media.DroppedFile.Guess(path) switch
+    {
+        Core.Media.DropKind.Installer => $"Drop to make a new machine from {Path.GetFileName(path)}",
+        Core.Media.DropKind.Import => $"Drop to import {Path.GetFileName(path)}",
+        _ => null,
+    };
+
+    /// <summary>
+    /// A file dropped on the window: an installer disc opens the New machine wizard with it (or goes into the open wizard),
+    /// a machine file, disk or export opens Import with it read. The file is looked at on a worker.
+    /// </summary>
+    public async Task OpenDroppedAsync(string path)
+    {
+        var kind = await Task.Run(() => Core.Media.DroppedFile.Classify(path)).ConfigureAwait(false);
+        var tcs = new TaskCompletionSource<Task>();
+        Ui.Post(() =>
+        {
+            DropHint = null;
+            switch (kind)
+            {
+                case Core.Media.DropKind.Installer when Wizard is { ForExisting: true }:
+                    Note("Finish or close the Easy Install setup first, then drop the disc again.");
+                    tcs.SetResult(Task.CompletedTask);
+                    return;
+                case Core.Media.DropKind.Installer:
+                    if (Wizard is null) NewMachine();
+                    // Back on the first page, where the disc shows: a later page would change under the person.
+                    Wizard!.Step = 0;
+                    tcs.SetResult(Wizard.UseIsoAsync(path));
+                    return;
+                case Core.Media.DropKind.Import when Wizard is not null:
+                    Note("Close the New machine wizard first to import a machine.");
+                    break;
+                case Core.Media.DropKind.Import:
+                    OpenImport();
+                    if (ImportPage is { Busy: false } import)
+                    {
+                        tcs.SetResult(import.ReadAsync(path));
+                        return;
+                    }
+
+                    Note("An import is still copying; drop the file again when it has finished.");
+                    break;
+                default:
+                    Note($"{Path.GetFileName(path)} is not something VM Qontrol opens: drop an installer disc (.iso), a machine from other software (.vmx, .vbox, .ova, .ovf) or a disk (.qcow2, .vmdk, .vdi, .vhdx).");
+                    break;
+            }
+
+            tcs.SetResult(Task.CompletedTask);
+        });
+        await (await tcs.Task.ConfigureAwait(false)).ConfigureAwait(false);
+    }
+
     /// <summary>Preferences, scrolled to About (version, updates, links).</summary>
     public void OpenAbout()
     {

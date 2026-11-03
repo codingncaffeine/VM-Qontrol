@@ -179,6 +179,21 @@
     </DockPanel>
 
     <!-- A question with a typed answer (clone, delete). -->
+    <!-- Files dragged over the window: what dropping them does. Never hit-tested, so the drop reaches the window. -->
+    <Panel x:Name="DropLayer" IsVisible="{Binding ShowDropHint}" IsHitTestVisible="False" Background="{DynamicResource QScrim}">
+      <Border Background="{DynamicResource QSurfaceRaised}" BorderBrush="{DynamicResource QAccent}" BorderThickness="2"
+              BoxShadow="0 12 40 0 #40000000" CornerRadius="{DynamicResource QRadiusLarge}" Padding="36,28" MaxWidth="560"
+              HorizontalAlignment="Center" VerticalAlignment="Center">
+        <StackPanel Spacing="12" HorizontalAlignment="Center">
+          <Border Background="{DynamicResource QAccentSoft}" CornerRadius="28" Width="56" Height="56" HorizontalAlignment="Center">
+            <Path Classes="icon" Data="{StaticResource IconDisc}" Stroke="{DynamicResource QAccent}" Width="26" Height="26" />
+          </Border>
+          <TextBlock x:Name="DropHintText" Text="{Binding DropHint}" Classes="h1" TextWrapping="Wrap" TextAlignment="Center" />
+          <TextBlock Text="An installer disc starts the New machine wizard; a machine from other software or a disk opens Import."
+                     Classes="muted" TextWrapping="Wrap" TextAlignment="Center" />
+        </StackPanel>
+      </Border>
+    </Panel>
     <Panel x:Name="PromptLayer" IsVisible="{Binding Prompt, Converter={x:Static ObjectConverters.IsNotNull}}" Background="{DynamicResource QScrim}">
       <Border Classes="card" Width="560" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="22,18"
               DataContext="{Binding Prompt}" x:DataType="vm:PromptViewModel" BoxShadow="0 12 40 0 #60000000">

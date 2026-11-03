@@ -33,9 +33,14 @@ public partial class NewMachineView : UserControl
             }
         };
         var drop = this.FindControl<Border>("DropZone")!;
-        drop.AddHandler(DragDrop.DragOverEvent, (_, e) => e.DragEffects = e.DataTransfer.TryGetFiles() is { Length: > 0 } ? DragDropEffects.Copy : DragDropEffects.None);
+        drop.AddHandler(DragDrop.DragOverEvent, (_, e) =>
+        {
+            e.DragEffects = e.DataTransfer.TryGetFiles() is { Length: > 0 } ? DragDropEffects.Copy : DragDropEffects.None;
+            e.Handled = true; // the disc box itself: the window's "drop anywhere" hint stays away
+        });
         drop.AddHandler(DragDrop.DropEvent, async (_, e) =>
         {
+            e.Handled = true;
             if (e.DataTransfer.TryGetFiles()?.FirstOrDefault()?.TryGetLocalPath() is { } path && DataContext is NewMachineViewModel vm) await vm.UseIsoAsync(path);
         });
     }
