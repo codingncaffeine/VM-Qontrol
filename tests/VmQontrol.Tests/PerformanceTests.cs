@@ -105,7 +105,7 @@ public sealed class PerformanceTests
     public async Task Pinning_IO_threads_and_Looking_Glass_memory_on_a_running_machine()
     {
         var ct = TestContext.Current.CancellationToken;
-        Assert.SkipWhen(Environment.ProcessorCount < 5, "needs five processors");
+        Assert.SkipWhen(CpuTopology.List().Count < 5, "needs a computer with five processors"); // the computer's, not this process's (the gate runs on two)
         using var profile = new TestProfile("pinning");
         var glFile = $"/dev/shm/vmq-test-looking-glass-{Guid.NewGuid():N}";
         QemuCommandBuilder.LookingGlassFile = glFile;
