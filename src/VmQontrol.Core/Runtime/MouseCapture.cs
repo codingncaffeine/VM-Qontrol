@@ -18,6 +18,16 @@ public static class MouseCapture
         && spice["mouse-mode"]?.GetValue<string>() == "server"
         && spice["channels"] is JsonArray { Count: > 0 };
 
+    /// <summary>From query-spice: a viewer is connected to the machine's screen.</summary>
+    public static bool ViewerConnected(JsonNode? spice) => spice?["enabled"]?.GetValue<bool>() == true && spice["channels"] is JsonArray { Count: > 0 };
+
+    /// <summary>One query: whether a viewer is connected, and whether it can hold the mouse.</summary>
+    public static async Task<(bool Viewer, bool Capture)> ReadAsync(MachineWatcher watcher, CancellationToken ct = default)
+    {
+        var spice = await watcher.ExecuteAsync("query-spice", ct: ct).ConfigureAwait(false);
+        return (ViewerConnected(spice), CanCapture(spice));
+    }
+
     public static async Task<bool> CanCaptureAsync(MachineWatcher watcher, CancellationToken ct = default) =>
         CanCapture(await watcher.ExecuteAsync("query-spice", ct: ct).ConfigureAwait(false));
 }

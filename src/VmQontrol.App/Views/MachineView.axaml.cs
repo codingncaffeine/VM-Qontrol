@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Platform.Storage;
 using Avalonia.Controls;
 using VmQontrol.App.ViewModels;
@@ -8,11 +9,29 @@ public partial class MachineView : UserControl
 {
     private ConsoleViewModel? _console;
 
+    private MachineViewModel? _revealing;
+
+    /// <summary>After the page has laid out the opened steps, the Guest tools card scrolls into view.</summary>
+    private void OnRevealGuestTools(object? sender, EventArgs e) =>
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            _revealing?.TakeRevealRequest();
+            var card = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(this).OfType<Border>().FirstOrDefault(b => b.Name == "GuestToolsCard" && b.IsEffectivelyVisible);
+            var scroller = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(this).OfType<ScrollViewer>().FirstOrDefault();
+            if (card is null || scroller?.Content is not Visual content || card.TranslatePoint(new Point(0, 0), content) is not { } at) return;
+            // The card's top a little below the page's top, as far as the page can scroll.
+            scroller.Offset = new Vector(scroller.Offset.X, Math.Clamp(at.Y - 16, 0, Math.Max(0, scroller.Extent.Height - scroller.Viewport.Height)));
+        }, Avalonia.Threading.DispatcherPriority.Background);
+
     public MachineView()
     {
         InitializeComponent();
         DataContextChanged += (_, _) =>
         {
+            if (_revealing is not null) _revealing.GuestToolsRevealed -= OnRevealGuestTools;
+            _revealing = DataContext as MachineViewModel;
+            if (_revealing is not null) _revealing.GuestToolsRevealed += OnRevealGuestTools;
+            if (_revealing?.TakeRevealRequest() == true) OnRevealGuestTools(this, EventArgs.Empty);
             if (_console is not null) _console.OutputAdded -= OnOutput;
             _console = (DataContext as MachineViewModel)?.Console;
             if (_console is not null) _console.OutputAdded += OnOutput;

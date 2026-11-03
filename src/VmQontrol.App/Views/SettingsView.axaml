@@ -760,7 +760,7 @@
                 <Grid ColumnDefinitions="*,Auto">
                   <StackPanel>
                     <TextBlock Text="Copy and paste" Classes="label" />
-                    <TextBlock Text="Text and pictures copied here paste in the machine, and back. Needs the guest tools. Turn it off to keep the machine apart from your desktop (recommended for untrusted software). Applies from the next power on." Classes="help" />
+                    <TextBlock Text="Text and pictures copied here paste in the machine, and back. Needs the guest tools in the machine (its Summary page puts them in; a Windows machine made with Easy Install has them). Turn it off to keep the machine apart from your desktop (recommended for untrusted software). Applies from the next power on." Classes="help" />
                   </StackPanel>
                   <ToggleSwitch x:Name="CopyPaste" Grid.Column="1" IsChecked="{Binding CopyPaste}" />
                 </Grid>

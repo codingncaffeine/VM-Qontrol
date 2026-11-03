@@ -800,6 +800,26 @@ public sealed partial class ShellViewModel : ObservableObject
             ? $"releases the mouse from {m.Name}. Once its system is installed, the mouse moves freely by itself."
             : null;
 
+    /// <summary>The status bar's hint while paste cannot work in a machine shown in a viewer (no guest tools in it).</summary>
+    [ObservableProperty] private string? _clipboardHint;
+
+    private MachineViewModel? _clipboardMachine;
+
+    public void ClipboardChanged()
+    {
+        _clipboardMachine = _all.FirstOrDefault(m => m.ClipboardNeedsTools);
+        ClipboardHint = _clipboardMachine is { } m ? $"needs the guest tools in {m.Name}. Its Summary page puts them in." : null;
+    }
+
+    /// <summary>The hint's click: the machine's Summary, with the guest tools steps open.</summary>
+    [RelayCommand]
+    private void ShowClipboardMachine()
+    {
+        if (_clipboardMachine is not { } m) return;
+        Selected = m;
+        m.RevealGuestTools();
+    }
+
     public void Note(string text)
     {
         Status = text;

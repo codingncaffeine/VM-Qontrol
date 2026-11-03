@@ -274,6 +274,27 @@ public sealed partial class MachineViewModel : ObservableObject
     [RelayCommand]
     private void ToggleGuestToolsSteps() => ShowGuestToolsSteps = !ShowGuestToolsSteps;
 
+    /// <summary>The page shows its Guest tools card (scrolled into view), with the steps open.</summary>
+    public event EventHandler? GuestToolsRevealed;
+
+    public void RevealGuestTools()
+    {
+        Tab = 0;
+        ShowGuestToolsSteps = true;
+        _revealPending = true;
+        GuestToolsRevealed?.Invoke(this, EventArgs.Empty);
+    }
+
+    private bool _revealPending;
+
+    /// <summary>A reveal asked for before the page existed (the hint clicked from another page), taken once by the page.</summary>
+    public bool TakeRevealRequest()
+    {
+        var pending = _revealPending;
+        _revealPending = false;
+        return pending;
+    }
+
     [RelayCommand]
     private void CopyGuestToolsCommand()
     {
@@ -1008,6 +1029,27 @@ public sealed partial class MachineViewModel : ObservableObject
         }
     }
 
+    /// <summary>How long a machine may boot before a missing guest agent counts as missing guest tools.</summary>
+    internal static TimeSpan ClipboardGrace { get; set; } = TimeSpan.FromSeconds(90);
+
+    /// <summary>
+    /// A viewer shows the machine, copy and paste is on, the system has SPICE guest tools, and its agent does not answer:
+    /// paste in the guest is greyed out until they are in (the SPICE agent comes with them; the QEMU guest agent, which
+    /// is what answers here, comes in the same installer on Windows and the same package set on Linux).
+    /// </summary>
+    public bool ClipboardNeedsTools { get; private set; }
+
+    private bool NeedsToolsForClipboard() =>
+        GuestToolsAnswering == false && Machine.Display.CopyPaste && GuestToolsAdvice is { } advice && (advice.Steps.Count > 0 || advice.Command is not null);
+
+    private void SetClipboardNeedsTools(bool value)
+    {
+        if (value == ClipboardNeedsTools) return;
+        ClipboardNeedsTools = value;
+        Log.Info(value ? $"{Name}: a viewer is open and the guest tools do not answer; copy and paste hint shown." : $"{Name}: copy and paste hint removed.");
+        _shell.ClipboardChanged();
+    }
+
     /// <summary>A viewer is connected and a click in it captures the mouse (see <see cref="MouseCapture"/>).</summary>
     public bool CanHoldMouse { get; private set; }
 
@@ -1021,15 +1063,18 @@ public sealed partial class MachineViewModel : ObservableObject
         {
             while (!watcher.Exited.IsCompleted)
             {
-                bool capture;
+                bool capture, viewer;
                 try
                 {
-                    capture = await MouseCapture.CanCaptureAsync(watcher).ConfigureAwait(false);
+                    (viewer, capture) = await MouseCapture.ReadAsync(watcher).ConfigureAwait(false);
                 }
                 catch (Exception ex) when (ex is QmpException or IOException or ObjectDisposedException or InvalidOperationException)
                 {
-                    capture = false;
+                    (viewer, capture) = (false, false);
                 }
+
+                var running = watcher.Machine is { } r ? DateTimeOffset.Now - r.Started : TimeSpan.Zero;
+                Ui.Post(() => SetClipboardNeedsTools(viewer && running > ClipboardGrace && NeedsToolsForClipboard()));
 
                 if (capture != CanHoldMouse)
                 {
@@ -1044,7 +1089,11 @@ public sealed partial class MachineViewModel : ObservableObject
         }
         finally
         {
-            Ui.Post(() => SetCanHoldMouse(false));
+            Ui.Post(() =>
+            {
+                SetCanHoldMouse(false);
+                SetClipboardNeedsTools(false);
+            });
         }
     }
 
