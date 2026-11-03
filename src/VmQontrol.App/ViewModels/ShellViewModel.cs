@@ -267,7 +267,7 @@ public sealed partial class ShellViewModel : ObservableObject
 
         if (Settings.UsbNeverAsk.Contains(device.Id))
         {
-            Note($"{device.Name} was plugged in (you asked not to be offered it; its USB devices panel can change that).");
+            Note($"{device.Name} was plugged in. It is set not to be offered to machines; its row in USB devices can change that.");
             return;
         }
 

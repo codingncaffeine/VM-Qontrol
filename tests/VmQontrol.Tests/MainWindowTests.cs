@@ -448,7 +448,7 @@ public sealed class MainWindowTests
             Assert.False(seen.askedAgain);
             Assert.Contains("always connects there", seen.status, StringComparison.Ordinal);
             Assert.False(seen.askedAboutEveryDay);
-            Assert.Contains("you asked not to be offered it", seen.everyDayStatus, StringComparison.Ordinal);
+            Assert.Contains("set not to be offered to machines", seen.everyDayStatus, StringComparison.Ordinal);
             Assert.Contains("ffff:fffa", VmQontrol.Core.AppSettings.Load(profile.Paths).UsbNeverAsk);
             var saved = MachineStore.Load(Path.Combine(dir, "vm.json"));
             Assert.Equal(new UsbDevice("ffff", "fffc", "Test Stick"), Assert.Single(saved.Usb.Passthrough));
