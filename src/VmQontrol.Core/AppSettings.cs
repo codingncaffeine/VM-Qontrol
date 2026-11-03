@@ -79,6 +79,9 @@ public sealed record AppSettings
     /// <summary>Open the app minimized when it starts at sign-in.</summary>
     public bool StartMinimized { get; set; }
 
+    /// <summary>An icon in the desktop's tray with the machines; the window's close button then keeps VM Qontrol there.</summary>
+    public bool TrayIcon { get; set; }
+
     /// <summary>Settings saved before 2026-11-03 spelled it "startMinimised": read once, never written.</summary>
     [JsonPropertyName("startMinimised")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

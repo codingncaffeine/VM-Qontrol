@@ -50,6 +50,7 @@ public class App : Application
             var window = new MainWindow { DataContext = shell, WindowState = minimized ? Avalonia.Controls.WindowState.Minimized : Avalonia.Controls.WindowState.Normal };
             window.RestorePlacement(settings.MainWindow);
             desktop.MainWindow = window;
+            window.Tray = new Platform.TrayController(this, () => desktop.Shutdown(), shell, window);
             // The window's size is saved as it closes; the save runs on a worker, so the exit waits a moment for it.
             desktop.Exit += (_, _) => AppSettings.WaitForSaves(TimeSpan.FromSeconds(2));
             // SIGTERM (a desktop logging out, systemd, kill) closes the window as its close button does, so what is saved
@@ -57,7 +58,7 @@ public class App : Application
             _sigterm = System.Runtime.InteropServices.PosixSignalRegistration.Create(System.Runtime.InteropServices.PosixSignal.SIGTERM, signal =>
             {
                 signal.Cancel = true;
-                Avalonia.Threading.Dispatcher.UIThread.Post(() => desktop.Shutdown());
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => window.Quit());
             });
             _ = shell.StartAsync();
         }

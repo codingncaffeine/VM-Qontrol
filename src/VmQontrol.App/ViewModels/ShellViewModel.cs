@@ -706,6 +706,7 @@ public sealed partial class ShellViewModel : ObservableObject
         void Apply()
         {
             Settings = change(Settings);
+            OnPropertyChanged(nameof(Settings));
             OnPropertyChanged(nameof(LibraryText));
             var settings = Settings;
             settings.SaveInBackground(Paths);

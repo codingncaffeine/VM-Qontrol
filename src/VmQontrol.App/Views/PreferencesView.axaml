@@ -201,6 +201,15 @@
                 <ToggleSwitch Grid.Column="1" IsChecked="{Binding StartMinimized}" />
               </Grid>
             </Border>
+            <Border Classes="row">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel>
+                  <TextBlock Text="Keep in the tray" Classes="label" />
+                  <TextBlock Text="An icon in the panel's tray lists your machines with Power on, Open screen and Shut down. Closing the window then keeps VM Qontrol there; Quit in its menu or Ctrl+Q ends it. Machines keep running either way. GNOME shows tray icons only with the AppIndicator extension (Ubuntu includes it)." Classes="help" />
+                </StackPanel>
+                <ToggleSwitch x:Name="TrayIcon" Grid.Column="1" IsChecked="{Binding TrayIcon}" />
+              </Grid>
+            </Border>
           </StackPanel>
         </Border>
 

@@ -11,6 +11,16 @@ namespace VmQontrol.App.Views;
 
 public partial class MainWindow : Window
 {
+    /// <summary>The tray icon, when the app runs with one (null in tests that build the window alone).</summary>
+    internal TrayController? Tray { get; set; }
+
+    /// <summary>Ends the app: through the tray when it keeps the app running, else by closing the window.</summary>
+    public void Quit()
+    {
+        if (Tray is { } tray) tray.Quit();
+        else Close();
+    }
+
     private Avalonia.Size? _normalSize;
     private Avalonia.PixelPoint? _normalPosition;
 
@@ -91,10 +101,17 @@ public partial class MainWindow : Window
         {
             if (WindowState == WindowState.Normal) _normalPosition = e.Point;
         };
-        Closing += (_, _) =>
+        Closing += (_, e) =>
         {
             if (DataContext is ShellViewModel shell && Placement() is { } placement)
                 shell.UpdateSettings(s => s with { MainWindow = placement });
+            // With the tray icon on, the close button (only the person's own close) hides to the tray.
+            if (Tray is { KeepsRunning: true, Quitting: false } && !e.IsProgrammatic && e.CloseReason == WindowCloseReason.WindowClosing)
+            {
+                e.Cancel = true;
+                Hide();
+                (DataContext as ShellViewModel)?.Note("VM Qontrol is in the tray; Quit from its menu ends it.");
+            }
         };
         DataContextChanged += (_, _) =>
         {

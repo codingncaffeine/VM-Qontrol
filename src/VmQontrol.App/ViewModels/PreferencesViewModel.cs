@@ -34,6 +34,7 @@ public sealed partial class PreferencesViewModel : ObservableObject
         ConfirmPowerOff = s.ConfirmPowerOff;
         ConfirmReset = s.ConfirmReset;
         StartMinimized = s.StartMinimized;
+        TrayIcon = s.TrayIcon;
         Size = SizeOptions.FirstOrDefault(o => o.Value == s.NewMachineSize) ?? SizeOptions[1];
         NewPowerOn = s.NewMachinePowerOn;
         NewLean = s.NewMachineLean;
@@ -100,6 +101,7 @@ public sealed partial class PreferencesViewModel : ObservableObject
     [ObservableProperty] private bool _confirmReset;
     [ObservableProperty] private bool _startAtSignIn;
     [ObservableProperty] private bool _startMinimized;
+    [ObservableProperty] private bool _trayIcon;
     [ObservableProperty] private string _guestToolsText = "Looking…";
     [ObservableProperty] private bool _guestToolsHere;
 
@@ -172,6 +174,8 @@ public sealed partial class PreferencesViewModel : ObservableObject
     partial void OnConfirmResetChanged(bool value) => Save(s => s with { ConfirmReset = value });
 
     partial void OnStartMinimizedChanged(bool value) => Save(s => s with { StartMinimized = value });
+
+    partial void OnTrayIconChanged(bool value) => Save(s => s with { TrayIcon = value });
 
     partial void OnSizeChanged(Option value)
     {

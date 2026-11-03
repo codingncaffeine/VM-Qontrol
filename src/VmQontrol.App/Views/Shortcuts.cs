@@ -45,7 +45,7 @@ public static class Shortcuts
         new("Ctrl+Shift+OemQuestion", "Ctrl+?", "Keyboard shortcuts", App, _ => true, (s, _) => s.ShowShortcuts = !s.ShowShortcuts),
         new("Ctrl+OemQuestion", "Ctrl+/", "Keyboard shortcuts", App, _ => true, (s, _) => s.ShowShortcuts = !s.ShowShortcuts),
         new("F11", "F11", "Full screen", App, _ => true, (_, w) => w.WindowState = w.WindowState == WindowState.FullScreen ? WindowState.Normal : WindowState.FullScreen),
-        new("Ctrl+Q", "Ctrl+Q", "Quit (running machines keep running)", App, _ => true, (_, w) => w.Close()),
+        new("Ctrl+Q", "Ctrl+Q", "Quit (running machines keep running)", App, _ => true, (_, w) => w.Quit()),
 
         // One entry per key: with several machines selected, Ctrl+B, Ctrl+E and Delete act on all of them (Esc = back to one).
         new("Ctrl+B", "Ctrl+B", "Power on", MachineGroup,
