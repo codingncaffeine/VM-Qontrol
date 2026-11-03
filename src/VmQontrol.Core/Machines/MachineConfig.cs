@@ -84,6 +84,9 @@ public sealed record MachineConfig
     /// <summary>Set when VM Qontrol wrote this machine's answer file: the machine installs its system by itself, and the
     /// machine page says so until the guest reports it has finished (<see cref="Install.InstallSignal"/>).</summary>
     public EasyInstallConfig? EasyInstall { get; set; }
+
+    /// <summary>The machine this one was copied from by an import (VMware, VirtualBox, OVF, libvirt, a disk); the source was only read.</summary>
+    public ImportSource? CopiedFrom { get; set; }
 }
 
 /// <summary>What Easy Install was asked to do, for the "Installing for you" card.</summary>
@@ -196,6 +199,12 @@ public enum DiskBus
     Virtio,
     Sata,
     Ide,
+
+    /// <summary>An NVMe drive (VMware Workstation's default for Windows 10 and 11; Windows has the driver built in).</summary>
+    Nvme,
+
+    /// <summary>VMware's paravirtual SCSI controller, for machines imported from VMware whose system has its driver.</summary>
+    Pvscsi,
 }
 
 public sealed record DiskConfig

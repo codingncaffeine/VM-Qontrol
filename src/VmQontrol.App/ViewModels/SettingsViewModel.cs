@@ -160,6 +160,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         new(nameof(DiskBus.Virtio), "VirtIO (fastest; needs drivers on Windows)"),
         new(nameof(DiskBus.Sata), "SATA (works everywhere)"),
         new(nameof(DiskBus.Ide), "IDE (very old systems)"),
+        new(nameof(DiskBus.Nvme), "NVMe (Windows 10 and 11 have its driver; VMware's default)"),
+        new(nameof(DiskBus.Pvscsi), "VMware paravirtual SCSI (machines brought over from VMware)"),
     ];
 
     public IReadOnlyList<SettingsSection> Sections { get; } =

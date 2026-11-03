@@ -325,7 +325,7 @@ public static class QemuCommandBuilder
                 args.AddRange(["-nic", "none"]);
                 break;
             case NetMode.Restricted:
-                args.AddRange(["-device", $"{nicModel},netdev=nic", "-netdev", $"{net},restrict=y,id=nic"]);
+                args.AddRange(["-device", $"{nicModel},netdev=nic{MacOption(nic)}", "-netdev", $"{net},restrict=y,id=nic"]);
                 break;
             case NetMode.Segment:
             {
@@ -346,7 +346,7 @@ public static class QemuCommandBuilder
                 break;
             }
             default:
-                args.AddRange(["-device", $"{nicModel},netdev=nic", "-netdev", $"{net},id=nic"]);
+                args.AddRange(["-device", $"{nicModel},netdev=nic{MacOption(nic)}", "-netdev", $"{net},id=nic"]);
                 break;
         }
 
@@ -388,7 +388,9 @@ public static class QemuCommandBuilder
         {
             var disk = m.Disks[0];
             var diskPath = File(disk.File);
-            var device0 = disk.Bus switch { DiskBus.Virtio => "virtio-blk-pci", DiskBus.Sata or DiskBus.Ide => "ide-hd", _ => null };
+            var device0 = disk.Bus switch { DiskBus.Virtio => "virtio-blk-pci", DiskBus.Sata or DiskBus.Ide => "ide-hd", DiskBus.Nvme => "nvme,serial=vmqdisk0", DiskBus.Pvscsi => "scsi-hd,bus=pvscsi0.0", _ => null };
+            // VMware's paravirtual SCSI controller, for machines imported with it (D30): their system has its driver.
+            if (m.Disks.Any(x => x.Bus == DiskBus.Pvscsi)) args.AddRange(["-device", "pvscsi,id=pvscsi0"]);
             if (os == "macos")
             {
                 var loader = m.Media.FirstOrDefault(x => x.Role == MediaRole.Bootloader);
@@ -411,7 +413,7 @@ public static class QemuCommandBuilder
             for (var i = 1; i < m.Disks.Count; i++)
             {
                 var extra = m.Disks[i];
-                var dev = extra.Bus is DiskBus.Sata or DiskBus.Ide ? "ide-hd" : "virtio-blk-pci";
+                var dev = extra.Bus switch { DiskBus.Sata or DiskBus.Ide => "ide-hd", DiskBus.Nvme => $"nvme,serial=vmqdisk{i}", DiskBus.Pvscsi => "scsi-hd,bus=pvscsi0.0", _ => "virtio-blk-pci" };
                 args.AddRange(["-device", $"{dev},drive=Disk{i}", "-drive", $"id=Disk{i},if=none,format={extra.Format},file={File(extra.File)},{optimisations}"]);
             }
         }
@@ -588,6 +590,9 @@ public static class QemuCommandBuilder
     }
 
     /// <summary>QEMU option values escape a comma by doubling it.</summary>
+    /// <summary>The adapter's own address when the machine has one (an imported machine keeps its MAC).</summary>
+    private static string MacOption(NicConfig nic) => nic.Mac is { } mac ? ",mac=" + mac : "";
+
     private static string EscapeOption(string value) => value.Replace(",", ",,", StringComparison.Ordinal);
 
     private static string Rot13(string s) => new(s.Select(c => c switch
