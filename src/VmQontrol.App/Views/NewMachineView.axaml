@@ -190,7 +190,7 @@
           </Border>
           <StackPanel Spacing="6">
             <TextBlock Text="If this is wrong, choose the system here" FontWeight="SemiBold" />
-            <ComboBox ItemsSource="{Binding GuestChoices}" SelectedItem="{Binding GuestOverride}" PlaceholderText="Keep the detected system" MinWidth="320" />
+            <ComboBox ItemsSource="{Binding GuestChoices}" SelectedItem="{Binding GuestOverride}" AutomationProperties.Name="Operating system, if the detected one is wrong" PlaceholderText="Keep the detected system" MinWidth="320" />
             <TextBlock Text="The system decides the virtual hardware: the processor features, the disk and network adapters, and the firmware. The detected choice is right for almost every disc." Classes="muted" TextWrapping="Wrap" />
           </StackPanel>
         </StackPanel>
@@ -198,31 +198,31 @@
         <!-- 2 Easy Install -->
         <StackPanel Spacing="14" IsVisible="{Binding Step, Converter={x:Static vm:Text.Is}, ConverterParameter=2}">
           <TextBlock Text="{Binding EasyInstallTitle}" Classes="h1" />
-          <ToggleSwitch x:Name="EasyInstall" IsVisible="{Binding !ForExisting}" IsChecked="{Binding EasyInstall}" OnContent="Yes: install it with no questions" OffContent="No: I will answer the installer myself" />
+          <ToggleSwitch x:Name="EasyInstall" AutomationProperties.Name="Easy Install: install with no questions" IsVisible="{Binding !ForExisting}" IsChecked="{Binding EasyInstall}" OnContent="Yes: install it with no questions" OffContent="No: I will answer the installer myself" />
           <TextBlock Text="{Binding EasyInstallExplain}" Classes="muted" TextWrapping="Wrap" />
           <Border Classes="card" IsVisible="{Binding EasyInstallShown}">
             <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="12">
               <TextBlock Text="User name" VerticalAlignment="Center" />
-              <TextBox x:Name="UserName" Grid.Column="1" Text="{Binding UserName}" />
+              <TextBox x:Name="UserName" AutomationProperties.Name="User name" Grid.Column="1" Text="{Binding UserName}" />
               <TextBlock Grid.Row="1" Text="Password" VerticalAlignment="Center" />
               <StackPanel Grid.Row="1" Grid.Column="1" Spacing="4">
-                <TextBox x:Name="Password" Text="{Binding Password}" PasswordChar="●" RevealPassword="{Binding #ShowPassword.IsChecked}" />
+                <TextBox x:Name="Password" AutomationProperties.Name="Password" Text="{Binding Password}" PasswordChar="●" RevealPassword="{Binding #ShowPassword.IsChecked}" />
                 <CheckBox x:Name="ShowPassword" Content="Show password" />
                 <TextBlock Text="{Binding PasswordNote}" Classes="muted" Classes.warn="{Binding PasswordRequired}" TextWrapping="Wrap" FontSize="{DynamicResource QFontSmall}" />
               </StackPanel>
               <TextBlock Grid.Row="2" Text="Product key" VerticalAlignment="Center" IsVisible="{Binding IsWindowsEasy}" />
               <StackPanel Grid.Row="2" Grid.Column="1" Spacing="4" IsVisible="{Binding IsWindowsEasy}">
-                <TextBox Text="{Binding ProductKey}" PlaceholderText="Optional: XXXXX-XXXXX-XXXXX-XXXXX-XXXXX" />
+                <TextBox Text="{Binding ProductKey}" AutomationProperties.Name="Product key (optional)" PlaceholderText="Optional: XXXXX-XXXXX-XXXXX-XXXXX-XXXXX" />
                 <TextBlock Text="{Binding KeyNote}" Classes="muted" Classes.warn="{Binding NeedsOwnKey}" TextWrapping="Wrap" FontSize="{DynamicResource QFontSmall}" />
               </StackPanel>
               <TextBlock Grid.Row="3" Text="Language and region" VerticalAlignment="Center" />
-              <ComboBox Grid.Row="3" Grid.Column="1" ItemsSource="{Binding Locales}" SelectedItem="{Binding LocaleChoice}" HorizontalAlignment="Stretch" MaxDropDownHeight="360" />
+              <ComboBox Grid.Row="3" Grid.Column="1" AutomationProperties.Name="Language and region" ItemsSource="{Binding Locales}" SelectedItem="{Binding LocaleChoice}" HorizontalAlignment="Stretch" MaxDropDownHeight="360" />
               <TextBlock Grid.Row="4" Text="Time zone" VerticalAlignment="Center" />
-              <ComboBox Grid.Row="4" Grid.Column="1" ItemsSource="{Binding TimeZones}" SelectedItem="{Binding TimeZoneChoice}" HorizontalAlignment="Stretch" MaxDropDownHeight="360" IsVisible="{Binding IsWindowsEasy}" />
+              <ComboBox Grid.Row="4" Grid.Column="1" AutomationProperties.Name="Time zone" ItemsSource="{Binding TimeZones}" SelectedItem="{Binding TimeZoneChoice}" HorizontalAlignment="Stretch" MaxDropDownHeight="360" IsVisible="{Binding IsWindowsEasy}" />
               <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding IanaTimeZone}" VerticalAlignment="Center" IsVisible="{Binding IsLinuxEasy}" />
               <TextBlock Grid.Row="5" Text="Guest tools" VerticalAlignment="Top" Margin="0,6,0,0" IsVisible="{Binding IsWindowsEasy}" />
               <StackPanel Grid.Row="5" Grid.Column="1" Spacing="4" IsVisible="{Binding IsWindowsEasy}">
-                <ToggleSwitch x:Name="InstallDrivers" IsChecked="{Binding InstallDrivers}" OnContent="Recommended: install them" OffContent="Without them" />
+                <ToggleSwitch x:Name="InstallDrivers" AutomationProperties.Name="Install the guest tools" IsChecked="{Binding InstallDrivers}" OnContent="Recommended: install them" OffContent="Without them" />
                 <TextBlock Classes="muted" TextWrapping="Wrap" FontSize="{DynamicResource QFontSmall}"
                            Text="The VirtIO drivers and guest tools give Windows the fast disk and network, copy and paste, a screen that follows the window, and the machine's address. Without them Windows uses slower standard hardware it already knows." />
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" IsVisible="{Binding InstallDrivers}">
@@ -232,7 +232,7 @@
               </StackPanel>
               <TextBlock Grid.Row="6" Text="Lean Windows" VerticalAlignment="Top" Margin="0,6,0,0" IsVisible="{Binding IsWindowsEasy}" />
               <StackPanel Grid.Row="6" Grid.Column="1" Spacing="4" IsVisible="{Binding IsWindowsEasy}">
-                <ToggleSwitch x:Name="LeanWindows" IsChecked="{Binding LeanWindows}" OnContent="Recommended: without the extras" OffContent="Everything Windows comes with" />
+                <ToggleSwitch x:Name="LeanWindows" AutomationProperties.Name="Lean Windows: leave out the extras" IsChecked="{Binding LeanWindows}" OnContent="Recommended: without the extras" OffContent="Everything Windows comes with" />
                 <TextBlock Text="{Binding LeanNote}" Classes="muted" TextWrapping="Wrap" FontSize="{DynamicResource QFontSmall}" />
               </StackPanel>
             </Grid>
@@ -242,7 +242,7 @@
         <!-- 3 Name -->
         <StackPanel Spacing="14" IsVisible="{Binding Step, Converter={x:Static vm:Text.Is}, ConverterParameter=3}">
           <TextBlock Text="Name the machine" Classes="h1" />
-          <TextBox x:Name="MachineName" Text="{Binding Name}" FontSize="18" />
+          <TextBox x:Name="MachineName" AutomationProperties.Name="Machine name" Text="{Binding Name}" FontSize="18" />
           <TextBlock Text="The name shows in the library and in the window title. It can be changed later." Classes="muted" TextWrapping="Wrap" />
           <Border Classes="card">
             <StackPanel Spacing="6">
@@ -260,13 +260,13 @@
           <Border Classes="card">
             <Grid ColumnDefinitions="160,160,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="16" ColumnSpacing="12">
               <TextBlock Text="Memory (GB)" VerticalAlignment="Center" FontWeight="SemiBold" />
-              <NumericUpDown x:Name="MemoryGb" Grid.Column="1" VerticalContentAlignment="Center" Value="{Binding MemoryGb}" Minimum="{Binding MemoryMinimumGb}" Maximum="{Binding MemoryMaximumGb}" Increment="1" FormatString="0" />
+              <NumericUpDown x:Name="MemoryGb" AutomationProperties.Name="Memory in gigabytes" Grid.Column="1" VerticalContentAlignment="Center" Value="{Binding MemoryGb}" Minimum="{Binding MemoryMinimumGb}" Maximum="{Binding MemoryMaximumGb}" Increment="1" FormatString="0" />
               <TextBlock Grid.Column="2" Text="{Binding MemoryReason}" Classes="muted" TextWrapping="Wrap" VerticalAlignment="Center" />
               <TextBlock Grid.Row="1" Text="Processors" VerticalAlignment="Center" FontWeight="SemiBold" />
-              <NumericUpDown Grid.Row="1" Grid.Column="1" VerticalContentAlignment="Center" Value="{Binding Cores}" Minimum="1" Maximum="{Binding CoresMaximum}" Increment="1" FormatString="0" />
+              <NumericUpDown Grid.Row="1" Grid.Column="1" AutomationProperties.Name="Processors" VerticalContentAlignment="Center" Value="{Binding Cores}" Minimum="1" Maximum="{Binding CoresMaximum}" Increment="1" FormatString="0" />
               <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding CoresReason}" Classes="muted" TextWrapping="Wrap" VerticalAlignment="Center" />
               <TextBlock Grid.Row="2" Text="Disk (GB)" VerticalAlignment="Center" FontWeight="SemiBold" />
-              <NumericUpDown Grid.Row="2" Grid.Column="1" VerticalContentAlignment="Center" Value="{Binding DiskGb}" Minimum="{Binding DiskMinimumGb}" Maximum="8192" Increment="8" FormatString="0" />
+              <NumericUpDown Grid.Row="2" Grid.Column="1" AutomationProperties.Name="Disk size in gigabytes" VerticalContentAlignment="Center" Value="{Binding DiskGb}" Minimum="{Binding DiskMinimumGb}" Maximum="8192" Increment="8" FormatString="0" />
               <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding DiskReason}" Classes="muted" TextWrapping="Wrap" VerticalAlignment="Center" />
             </Grid>
           </Border>

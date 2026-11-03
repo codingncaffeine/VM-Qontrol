@@ -88,4 +88,58 @@ public sealed class AccessibleNamesTests
         File.WriteAllLines(report, found);
         Assert.True(found.Count == 0, $"{found.Count} controls have no accessible name (list in {report}):\n" + string.Join("\n", found.Take(40)));
     }
+
+    /// <summary>Every wizard page, Easy Install included (with the Windows 10 disc from the dev folder when it is there).</summary>
+    [Trait("Tier", "Window")]
+    [Fact]
+    public async Task Every_wizard_page_names_every_control()
+    {
+        using var profile = new TestProfile("a11y-wizard");
+        Directory.CreateDirectory(profile.Paths.DefaultLibrary);
+        var windowsIso = Path.Combine(Path.GetDirectoryName(TestProfile.ScratchRoot)!, "Win10_22H2_English_x64v1.iso");
+        var found = await Ui.Run(() =>
+        {
+            var list = new List<string>();
+            var shell = new ShellViewModel(profile.Paths, AppSettings.Load(profile.Paths)) { WatchUsb = false };
+            var window = new MainWindow { DataContext = shell, Width = 1320, Height = 900 };
+            window.Show();
+            _ = shell.StartAsync();
+            Ui.PumpUntil(() => shell.Welcome.Checked, "the host check");
+            shell.NewMachine();
+            Ui.PumpUntil(() => shell.Wizard is not null, "the wizard");
+            var wizard = shell.Wizard!;
+            foreach (var kind in new[] { SourceKind.Download, SourceKind.Later, SourceKind.Disc })
+            {
+                wizard.ChooseSourceCommand.Execute(kind);
+                Ui.Pump(0.4);
+                list.AddRange(Unnamed(window, $"wizard/0-{kind}"));
+            }
+
+            if (File.Exists(windowsIso))
+            {
+                _ = wizard.UseIsoAsync(windowsIso);
+                Ui.PumpUntil(() => wizard.Editions.Count > 0, "the editions", 20);
+            }
+            else
+            {
+                wizard.ChooseSourceCommand.Execute(SourceKind.Later);
+            }
+
+            Ui.PumpUntil(() => wizard.MemoryReason.Length > 0, "the recommendations", 20);
+            for (var guard = 0; wizard.Step < 5 && guard < 8; guard++)
+            {
+                var before = wizard.Step;
+                wizard.NextCommand.Execute(null);
+                Ui.Pump(0.4);
+                if (wizard.Step == before) { list.Add($"wizard: cannot continue from {wizard.StepTitle}"); break; }
+                list.AddRange(Unnamed(window, $"wizard/{wizard.Step}-{wizard.StepTitle}"));
+            }
+
+            list.Add(File.Exists(windowsIso) ? "" : "note: Easy Install page not walked (no Windows disc)");
+            window.Close();
+            return list.Where(x => x.Length > 0 && !x.StartsWith("note:", StringComparison.Ordinal)).Distinct().ToList();
+        });
+
+        Assert.True(found.Count == 0, $"{found.Count} wizard controls have no accessible name:\n" + string.Join("\n", found.Take(40)));
+    }
 }
