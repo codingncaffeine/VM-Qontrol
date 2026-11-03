@@ -18,7 +18,9 @@ what it does and what the recommended value is. No daemon, no root, and one port
   for Windows and the major Linux distributions. "Lean Windows" leaves out the bundled promotions, games and ads while
   installing Microsoft's own, untouched Windows.
 - A settings dialog covering the whole machine: memory, processors, disks, CD/DVD, network, USB, sound, display,
-  TPM, firmware and boot options. Each setting shows when it takes effect.
+  TPM, firmware and boot options. Each setting shows when it takes effect; memory and processors can be added while
+  the machine runs. Disks on VirtIO, VirtIO SCSI, NVMe or SATA, grown or compacted; nested virtualization; a VirtIO
+  socket for SSH without a network.
 - Snapshots taken while a machine runs, full and linked clones, templates, suspend and resume.
 - USB passthrough, host drives (a whole disk, a partition or a CD/DVD drive, read-only unless you allow writing),
   host serial ports, shared folders, clipboard sharing, NAT with port forwarding, bridged networking and private
