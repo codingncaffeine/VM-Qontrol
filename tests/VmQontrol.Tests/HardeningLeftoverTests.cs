@@ -41,6 +41,12 @@ public sealed class HardeningLeftoverTests
         File.SetUnixFileMode(dir, UnixFileMode.UserRead | UnixFileMode.UserExecute);
         try
         {
+            // Probe: root (the Alpine CI container) writes through any folder mode, so there is no fault to see there.
+            var probe = Path.Combine(dir, "probe");
+            var writable = true;
+            try { File.WriteAllText(probe, ""); File.Delete(probe); }
+            catch (UnauthorizedAccessException) { writable = false; }
+            Assert.SkipWhen(writable, "this user writes through folder permissions (root)");
             var failed = Assert.Throws<DownloadFailedException>(() => DownloadWrite.Open(Path.Combine(dir, "x.part"), append: false));
             Assert.Contains("no permission", failed.Message);
         }
