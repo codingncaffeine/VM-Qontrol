@@ -114,7 +114,6 @@ public static class LibvirtReader
         var tpm = devices?.Elements().Any(e => e.Name.LocalName == "tpm") == true;
         if (tpm) notes.Add("The machine had a TPM; it gets a new, empty one. If Windows used BitLocker, have its recovery key at hand.");
         if (devices?.Elements().Any(e => e.Name.LocalName == "hostdev") == true) notes.Add("Devices passed through from this computer were left out; add them again in Settings.");
-        if (disks.Count == 0) notes.Add("No disk was found in the description.");
         var name = Path1("name")?.Value ?? "Imported machine";
 
         return new ForeignMachine

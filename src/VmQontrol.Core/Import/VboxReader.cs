@@ -88,7 +88,6 @@ public static class VboxReader
         if (osType.StartsWith("Windows", StringComparison.OrdinalIgnoreCase) || osType.Contains("Linux", StringComparison.OrdinalIgnoreCase) || osType.Contains("Ubuntu", StringComparison.OrdinalIgnoreCase))
             notes.Add("VirtualBox Guest Additions stay installed in the guest; they do nothing here. Uninstall them and install the QEMU guest tools (Summary, Guest tools).");
         if (Attr(machine, "stateFile") is { Length: > 0 }) notes.Add("The machine was saved (suspended) in VirtualBox; it starts afresh here. Start and shut it down in VirtualBox first to keep what was open.");
-        if (disks.Count == 0 && problems.Count == 0) notes.Add("No disk was found in the machine file.");
 
         return new ForeignMachine
         {

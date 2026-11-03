@@ -43,6 +43,10 @@ internal static class Commands
                               Throw the saved state away: the next start begins afresh, as after a power cut.
           pause / resume / reset MACHINE
           screenshot MACHINE FILE.png
+          import FILE [--name NAME]
+                      Copy a machine from VMware (.vmx), VirtualBox (.vbox), an OVF appliance (.ovf, .ova), libvirt
+                      (.xml), a disk on its own, or a VM Qontrol export (.tar) into the library. The original is only read.
+          doctor              Check this computer: what VM Qontrol needs, what is missing, and the command that installs it.
           version             Print the version and licence.
           help                Show this help.
 
@@ -72,6 +76,10 @@ internal static class Commands
                 case "help" or "--help" or "-h":
                     output.WriteLine(Usage);
                     return 0;
+                case "import" when args.Length > 1:
+                    return Import(args, paths, output, error);
+                case "doctor":
+                    return Doctor(paths, host(), output);
                 case "list":
                     return List(args.Length > 1 ? args[1] : paths.DefaultLibrary, paths, output);
                 case "inspect" when args.Length > 1:
@@ -490,4 +498,69 @@ internal static class Commands
     }
 
     private static string Quote(string s) => s.Any(c => c is ' ' or '(' or ')' or '\'' or '"' or '$') ? $"'{s.Replace("'", "'\\''", StringComparison.Ordinal)}'" : s;
+
+    /// <summary>The host check, as the welcome page shows it: one line per check, the install command under what is missing. Exit 1 when something is missing.</summary>
+    private static int Doctor(QontrolPaths paths, HostCapabilities host, TextWriter output)
+    {
+        var distro = Core.Hosts.Doctor.DetectThisDistro();
+        var checks = Core.Hosts.Doctor.Run(host, distro, AppSettings.Load(paths).LibraryRoots[0]);
+        foreach (var c in checks.OrderByDescending(c => c.Status))
+        {
+            var badge = c.Status switch { CheckStatus.Ok => "ok      ", CheckStatus.Optional => "optional", CheckStatus.Warning => "attention", _ => "MISSING " };
+            output.WriteLine($"{badge}  {c.Title}: {c.Detail}");
+            if (c.Fix is { } fix && c.Status != CheckStatus.Ok) output.WriteLine($"          {fix}");
+        }
+
+        var missing = checks.Count(c => c.Status == CheckStatus.Missing);
+        output.WriteLine(missing == 0 ? $"Ready ({distro})." : $"{missing} missing ({distro}).");
+        return missing == 0 ? 0 : 1;
+    }
+
+    private static int Import(string[] args, QontrolPaths paths, TextWriter output, TextWriter error)
+    {
+        paths.EnsureCreated();
+        var file = Path.GetFullPath(args[1]);
+        var root = AppSettings.Load(paths).LibraryRoots[0];
+        Directory.CreateDirectory(root);
+        try
+        {
+            if (file.EndsWith(".tar", StringComparison.OrdinalIgnoreCase))
+            {
+                var dir = MachineExport.UnpackAsync(file, root, CancellationToken.None).GetAwaiter().GetResult();
+                output.WriteLine($"Brought in {Path.GetFileName(dir)} in {dir} (every file checked against its manifest).");
+                return 0;
+            }
+
+            var f = Core.Import.MachineImporter.Read(file, root);
+            if (Array.IndexOf(args, "--name") is var n and >= 0 && n + 1 < args.Length) f = f with { Name = args[n + 1] };
+            foreach (var note in f.Notes) output.WriteLine($"note: {note}");
+            if (f.Problems.Count > 0)
+            {
+                foreach (var p in f.Problems) error.WriteLine(p);
+                return 1;
+            }
+
+            var last = -1;
+            var progress = new SyncProgress(p =>
+            {
+                var step = (int)p.Percent / 10;
+                if (step == last) return;
+                last = step;
+                output.WriteLine($"{p.Status} {p.Percent:0}%");
+            });
+            var (m, folder) = Core.Import.MachineImporter.ImportAsync(f, root, progress, CancellationToken.None).GetAwaiter().GetResult();
+            output.WriteLine($"Imported {m.Name} from {f.Kind} in {folder}.");
+            return 0;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or InvalidOperationException or System.Xml.XmlException)
+        {
+            error.WriteLine($"{Path.GetFileName(file)} was not imported: {ex.Message}");
+            return 1;
+        }
+    }
+
+    private sealed class SyncProgress(Action<Core.Import.ImportProgress> report) : IProgress<Core.Import.ImportProgress>
+    {
+        public void Report(Core.Import.ImportProgress value) => report(value);
+    }
 }

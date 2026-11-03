@@ -122,7 +122,6 @@ public static class OvfReader
         var config = All(system, "Config").ToDictionary(e => AttrLocal(e, "key") ?? "", e => AttrLocal(e, "value") ?? "", StringComparer.OrdinalIgnoreCase);
         var efi = config.TryGetValue("firmware", out var fw) && fw.Equals("efi", StringComparison.OrdinalIgnoreCase);
         if (!efi && All(doc, "Firmware").FirstOrDefault() is { } vboxFw && (AttrLocal(vboxFw, "type") ?? "").StartsWith("EFI", StringComparison.OrdinalIgnoreCase)) efi = true;
-        if (disks.Count == 0 && problems.Count == 0) notes.Add("No disk was found in the appliance.");
 
         return new ForeignMachine
         {

@@ -90,7 +90,6 @@ public static class VmxReader
             notes.Add("Only the machine's current state is imported; its VMware snapshots are not.");
         if (Get("checkpoint.vmState") is { Length: > 0 } || Directory.EnumerateFiles(dir, "*.vmss").Any())
             notes.Add("The machine was suspended in VMware; it starts afresh here (anything open in it is lost). Resume and shut it down in VMware first to keep it.");
-        if (disks.Count == 0) notes.Add("No disk was found in the .vmx.");
 
         return new ForeignMachine
         {

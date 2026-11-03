@@ -21,6 +21,15 @@ public static class MachineImporter
     /// <summary>Reads any supported file. An .ova is unpacked into <paramref name="libraryRoot"/>/.importing first.</summary>
     public static ForeignMachine Read(string file, string libraryRoot)
     {
+        var f = ReadAny(file, libraryRoot);
+        // A machine without a disk is no machine to bring over (its disk may sit on a drive that is not connected).
+        if (f.Disks.Count == 0 && f.Problems.Count == 0)
+            f.Problems.Add($"No disk of this machine was found{(f.Kind == "disk" ? "" : $" in {Path.GetFileName(f.Source)}")}. If its disk lives on another drive, connect that drive and import again.");
+        return f;
+    }
+
+    private static ForeignMachine ReadAny(string file, string libraryRoot)
+    {
         file = Path.GetFullPath(file);
         var ext = Path.GetExtension(file).ToLowerInvariant();
         switch (ext)
