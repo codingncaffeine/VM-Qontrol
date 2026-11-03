@@ -31,6 +31,19 @@ public partial class MachineView : UserControl
                         // Logged by the picker.
                     }
                 };
+        if (this.FindControl<MenuItem>("MoveTo") is { } move)
+            move.Click += async (_, _) =>
+            {
+                if (DataContext is not MachineViewModel m) return;
+                try
+                {
+                    if (await Pickers.FolderAsync(this, $"Where should {m.Name} move to?") is { } path) _ = Task.Run(() => m.MoveAsync(path));
+                }
+                catch (PickerFailedException)
+                {
+                    // Logged by the picker.
+                }
+            };
         if (this.FindControl<Button>("ChooseDriversDisc") is { } choose)
             choose.Click += async (_, _) =>
             {

@@ -643,6 +643,23 @@ public sealed partial class ShellViewModel : ObservableObject
         if (powerOn) vm.PowerOnCommand.Execute(null);
     }
 
+    /// <summary>After a move: the new folder joins the library if it is not in it yet, and the machine stays selected.</summary>
+    public async Task FinishMoveAsync(string directory)
+    {
+        if (Path.GetDirectoryName(Path.GetFullPath(directory)) is { } parent && !IsLibraryRoot(parent))
+            await AddRootAsync(parent, "a machine was moved there").ConfigureAwait(false);
+
+        await RefreshAsync().ConfigureAwait(false);
+        Ui.Post(() =>
+        {
+            if (_all.FirstOrDefault(m => m.Folder == directory) is { } moved)
+            {
+                Selected = moved;
+                Note($"{moved.Name} is now in {directory}.");
+            }
+        });
+    }
+
     /// <summary>After the wizard: the new machine appears selected in the library and, if asked, powers on.</summary>
     public async Task FinishNewMachineAsync(string directory, bool powerOn)
     {

@@ -305,6 +305,31 @@ public sealed partial class MachineViewModel : ObservableObject
         }
     }
 
+    /// <summary>Moves the machine's folder into <paramref name="parent"/> (machine off); the library follows it there.</summary>
+    public async Task MoveAsync(string parent)
+    {
+        var machine = Machine;
+        var dir = Folder;
+        if (await Task.Run(() => MachineMove.Refusal(dir, parent, !IsOff, IsQuickemu)).ConfigureAwait(false) is { } why)
+        {
+            Ui.Post(() => _shell.Show(new NoticeViewModel($"{Name} was not moved", [why], isError: true)));
+            return;
+        }
+
+        Ui.Post(() => _shell.Note($"Moving {Name}… (a move to another drive copies every disk)"));
+        try
+        {
+            var moved = await Task.Run(() => MachineMove.MoveAsync(machine, dir, parent)).ConfigureAwait(false);
+            Log.Info($"{Name}: moved from {dir} to {moved}.");
+            await _shell.FinishMoveAsync(moved).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Warn($"{Name}: move failed ({ex.Message}).");
+            Ui.Post(() => _shell.Show(new NoticeViewModel($"{Name} was not moved", [ex.Message], isError: true)));
+        }
+    }
+
     [RelayCommand]
     private async Task ExportQuickemuAsync()
     {
@@ -899,7 +924,10 @@ public sealed partial class MachineViewModel : ObservableObject
         try
         {
             var host = await _shell.HostAsync().ConfigureAwait(false);
-            if (await _shell.MemoryShortfallAsync(this, host).ConfigureAwait(false) is { } shortfall)
+            // A machine that cannot start (a missing disc, no disk) says why at once; the memory question comes only
+            // for one that would otherwise start.
+            var startable = !Machine.IsTemplate && await Task.Run(() => MachineChecks.Problems(Machine, Entry.Directory).Count == 0).ConfigureAwait(false);
+            if (startable && await _shell.MemoryShortfallAsync(this, host).ConfigureAwait(false) is { } shortfall)
             {
                 var notice = new NoticeViewModel($"{Name} may not have enough memory", MemoryHeadroom.Describe(shortfall, Name), confirm: "Power on anyway", isDanger: true);
                 Ui.Post(() => _shell.Show(notice));

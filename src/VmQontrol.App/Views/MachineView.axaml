@@ -161,6 +161,8 @@
                 <MenuItem x:Name="ExportTar" Header="As one file (.tar)…" ToolTip.Tip="The same portable copy in one file, to move or back up; Import a machine brings it back" />
                 <MenuItem Header="As a quickemu .conf" Command="{Binding ExportQuickemuCommand}" ToolTip.Tip="A .conf beside the machine's folder that runs this disk with quickemu" />
               </MenuItem>
+              <MenuItem x:Name="MoveTo" Header="Move to…" IsVisible="{Binding !IsQuickemu}"
+                        ToolTip.Tip="Moves the machine's folder to another folder or drive (the machine must be off); a linked machine keeps its shared disk" />
               <MenuItem Header="Open the machine's folder" Command="{Binding OpenFolderCommand}" />
               <MenuItem Header="Copy the QEMU command line" Command="{Binding CopyCommandLineCommand}" />
               <MenuItem Header="{Binding IsFavourite, Converter={x:Static vm:Text.FavouriteToggle}}" Command="{Binding ToggleFavouriteCommand}" />

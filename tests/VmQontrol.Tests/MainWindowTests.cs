@@ -34,6 +34,10 @@ public sealed class MainWindowTests
         Directory.CreateDirectory(Path.Combine(lib, "windows-11"));
         foreach (var n in new[] { "windows-11", "linux" })
             File.Copy(Path.Combine(RecordedHost.FixtureDirectory, n + ".conf"), Path.Combine(lib, n + ".conf"));
+        // The memory check would warn on any computer: a machine that cannot start says why first, never asks about memory.
+        var settings = AppSettings.Load(profile.Paths);
+        settings.KeepFreeGB = 1_000_000;
+        settings.Save(profile.Paths);
 
         var seen = await Ui.Run(() =>
         {
