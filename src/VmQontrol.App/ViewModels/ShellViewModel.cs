@@ -58,7 +58,7 @@ public sealed partial class ShellViewModel : ObservableObject
 
     /// <summary>The New Machine wizard while it is open.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowWelcome), nameof(ShowMachine), nameof(ShowWizard))]
+    [NotifyPropertyChangedFor(nameof(ShowWelcome), nameof(ShowMachine), nameof(ShowWizard), nameof(ShowSettings))]
     private NewMachineViewModel? _wizard;
 
     public bool ShowWizard => Wizard is not null;
