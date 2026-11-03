@@ -183,7 +183,7 @@ public sealed class SettingsTests
             return pages;
         });
 
-        Assert.Equal(18, seen.Count);
+        Assert.Equal(19, seen.Count);
         Assert.All(seen, p => Assert.True(p.Visible == 1, $"{p.Key}: {p.Visible} pages visible"));
         Assert.Equal(before, File.ReadAllText(Path.Combine(dir, "vm.json")));
     }

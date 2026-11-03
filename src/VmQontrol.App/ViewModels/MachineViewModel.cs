@@ -837,7 +837,7 @@ public sealed partial class MachineViewModel : ObservableObject
             {
                 _shell.Note(IsSuspended ? $"{Name} carried on where it was." : openScreen ? $"{Name} is running." : $"{Name} is running in the background. Open screen shows it.");
                 IsSuspended = false;
-                if (running.Notices.Count > 0) _shell.Show(new NoticeViewModel($"{Name} started without some host drives", running.Notices, isError: false));
+                if (running.Notices.Count > 0) _shell.Show(new NoticeViewModel($"{Name} started, with something left out", running.Notices, isError: false));
             });
             if (openScreen && Machine.Display.Backend == DisplayBackend.Spice) OpenScreen();
         }

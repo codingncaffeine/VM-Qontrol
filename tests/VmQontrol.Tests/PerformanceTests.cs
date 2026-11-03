@@ -1,3 +1,4 @@
+using VmQontrol.Core.Devices;
 using VmQontrol.Core.Hosts;
 using VmQontrol.Core.Machines;
 using VmQontrol.Core.Qemu;
@@ -138,5 +139,41 @@ public sealed class PerformanceTests
             QemuCommandBuilder.LookingGlassFile = "/dev/shm/looking-glass";
             File.Delete(glFile);
         }
+    }
+}
+
+/// <summary>This computer's own PCI devices and huge page pool, read as the passthrough picker reads them (nothing is changed).</summary>
+public sealed class HostPassthroughTests
+{
+    [Fact]
+    public void Devices_this_computer_needs_say_why()
+    {
+        var all = PciHost.List();
+        Assert.SkipWhen(all.Count == 0 || all.All(d => d.Group is null), "no PCI devices with IOMMU groups here (a container, or the IOMMU is off)");
+        // The screen it boots on, and the controller under "/", are never offered without a reason.
+        foreach (var d in all.Where(d => File.Exists($"/sys/bus/pci/devices/{d.Address}/boot_vga") && File.ReadAllText($"/sys/bus/pci/devices/{d.Address}/boot_vga").Trim() == "1"))
+            Assert.Equal("it shows this computer's screen", d.HostUse);
+        var root = HostDrives.List().FirstOrDefault(d => d.HoldsSystem && d.Kind == HostDriveKind.Disk);
+        if (root is not null)
+        {
+            var path = File.ResolveLinkTarget($"/sys/class/block/{root.Name}", true)!.FullName;
+            var holders = all.Where(d => path.Contains("/" + d.Address + "/", StringComparison.Ordinal) && !d.IsBridge).ToList();
+            Assert.NotEmpty(holders);
+            Assert.All(holders, d => Assert.Equal("it holds this computer's system disk", d.HostUse));
+        }
+
+        Assert.All(all, d => Assert.False(string.IsNullOrWhiteSpace(d.Name)));
+        // A group goes whole: nothing that shares a group with a needed device is free to go.
+        foreach (var d in all.Where(d => d.Group is not null && !d.IsBridge))
+            if (all.Any(o => o.Group == d.Group && !o.IsBridge && o.HostUse is not null)) Assert.NotNull(d.Blocked);
+    }
+
+    [Fact]
+    public void The_huge_page_pool_is_read_per_size()
+    {
+        var sizes = HugePagePool.Sizes();
+        Assert.SkipWhen(sizes.Count == 0, "no huge page support here");
+        Assert.Contains(sizes, s => s.Label == "2M" && s.PageBytes == 2 << 20);
+        Assert.Equal(2048, sizes.Single(s => s.Label == "2M").PagesFor(4096));
     }
 }

@@ -131,7 +131,7 @@ public sealed record SettingsSection(string Key, string Title, string Group)
     {
         ["general"] = "IconInfo", ["memory"] = "IconMemory", ["processors"] = "IconCpu", ["disks"] = "IconDisk", ["media"] = "IconDisc",
         ["network"] = "IconNetwork", ["usb"] = "IconUsb", ["hostdrives"] = "IconDisk", ["sound"] = "IconSound", ["display"] = "IconScreen", ["input"] = "IconKeyboard",
-        ["firmware"] = "IconShield", ["serial"] = "IconTerminal", ["boot"] = "IconBoot", ["shares"] = "IconFolder",
+        ["firmware"] = "IconShield", ["serial"] = "IconTerminal", ["boot"] = "IconBoot", ["performance"] = "IconCpu", ["shares"] = "IconFolder",
         ["autoprotect"] = "IconClock", ["advanced"] = "IconCode", ["history"] = "IconHistory",
     };
 
@@ -178,6 +178,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         new("firmware", "Firmware and TPM", "Hardware"),
         new("serial", "Serial port", "Hardware"),
         new("boot", "Boot and devices", "Hardware"),
+        new("performance", "Performance", "Hardware"),
         new("shares", "Shared folders", "Options"),
         new("autoprotect", "AutoProtect", "Options"),
         new("advanced", "Advanced", "Options"),
@@ -283,6 +284,10 @@ public sealed partial class SettingsViewModel : ObservableObject
         UsbController = UsbControllers.FirstOrDefault(o => o.Value == m.Usb.Controller) ?? UsbControllers[0];
         foreach (var u in m.Usb.Passthrough) UsbRules.Add(new UsbRuleRow(u));
         foreach (var d in m.HostDrives) HostDrives.Add(new HostDriveRow(d));
+        Perf = new PerformanceSettingsViewModel(m.Performance,
+            () => (int)(CoresAuto ? RecommendedCores() : Cores),
+            () => (long)((MemoryAuto ? RecommendedMemoryGb() : MemoryGb) * 1024),
+            () => Width > 0 && Height > 0 ? ((int)Width, (int)Height) : (1920, 1080));
         LoadSerialPorts(m);
         SoundCard = SoundCards.FirstOrDefault(o => o.Value == m.Audio.Device) ?? SoundCards[0];
         DisplayBackend = DisplayBackends.First(o => o.Value == m.Display.Backend.ToString());
@@ -390,6 +395,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     public ObservableCollection<UsbRuleRow> UsbRules { get; } = [];
 
     public ObservableCollection<HostDriveRow> HostDrives { get; } = [];
+
+    /// <summary>Settings → Performance.</summary>
+    public PerformanceSettingsViewModel Perf { get; }
 
     /// <summary>The virtual network editor, over these settings.</summary>
     [RelayCommand]
@@ -573,6 +581,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             ExtraArgs = ExtraArgs.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList(),
             Shares = Shares.Where(x => x.Path.Trim().Length > 0).Select(x => x.ToConfig()).ToList(),
             HostDrives = HostDrives.Select(d => d.Drive).ToList(),
+            Performance = Perf.ToConfig(),
             HostSerialPorts = SerialPorts.Where(p => p.Connected).Select(p => new HostSerialConfig { Path = p.Port.StablePath, Name = p.Port.Description.Replace(" (not connected)", "", StringComparison.Ordinal) }).ToList(),
             Devices = new DevicesConfig
             {
