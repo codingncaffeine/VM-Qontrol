@@ -265,6 +265,12 @@ public sealed partial class ShellViewModel : ObservableObject
             return;
         }
 
+        if (Settings.UsbNeverAsk.Contains(device.Id))
+        {
+            Note($"{device.Name} was plugged in (you asked not to be offered it; its USB devices panel can change that).");
+            return;
+        }
+
         var target = Selected is { Watcher: not null } s ? s : running.Count == 1 ? running[0] : null;
         if (target is null || Notice is not null || Prompt is not null || Wizard is not null)
         {
@@ -281,11 +287,19 @@ public sealed partial class ShellViewModel : ObservableObject
         var notice = new NoticeViewModel("New USB device",
             [$"Connect it to {target.Name}? It leaves this computer until you give it back or {target.Name} stops."],
             confirm: $"Connect to {target.Name}", dismiss: "Keep it on this computer", checkText: $"Always connect it to {target.Name}",
-            icon: "IconUsb", itemTitle: device.Name, itemDetail: $"{device.Id} · {device.Speed} · port {device.Port}");
+            icon: "IconUsb", itemTitle: device.Name, itemDetail: $"{device.Id} · {device.Speed} · port {device.Port}", aside: "Don't ask about this device");
         Show(notice);
         _ = Task.Run(async () =>
         {
-            if (!await notice.Answer.ConfigureAwait(false) || target.Watcher is not { } watcher) return;
+            var yes = await notice.Answer.ConfigureAwait(false);
+            if (notice.AsideChosen)
+            {
+                SetUsbNeverAsk(device.Id, true);
+                Ui.Post(() => Note($"{device.Name} stays on this computer when plugged in; its USB devices panel can offer it again."));
+                return;
+            }
+
+            if (!yes || target.Watcher is not { } watcher) return;
             try
             {
                 // A rule takes the device by kind, so it also follows when it is unplugged and plugged back.
@@ -381,6 +395,15 @@ public sealed partial class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(SidebarSelection));
         if (keep is not null && shown.Contains(keep)) Selected = keep;
     }
+
+    /// <summary>Whether a device is offered to machines when it is plugged in. Any thread.</summary>
+    public void SetUsbNeverAsk(string id, bool never) => UpdateSettings(s =>
+    {
+        var set = new HashSet<string>(s.UsbNeverAsk, StringComparer.Ordinal);
+        if (never) set.Add(id);
+        else set.Remove(id);
+        return s with { UsbNeverAsk = set };
+    });
 
     /// <summary>Changes the app's settings and saves them on a worker. Any thread.</summary>
     public void UpdateSettings(Func<AppSettings, AppSettings> change) => Ui.Post(() =>

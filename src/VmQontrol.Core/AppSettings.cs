@@ -25,6 +25,9 @@ public sealed record AppSettings
     /// <summary>The VirtIO driver disc (virtio-win.iso) last chosen, offered again for the next Windows machine.</summary>
     public string? DriversIso { get; set; }
 
+    /// <summary>USB devices ("vendor:product") never offered to a machine when plugged in (Don't ask about this device).</summary>
+    public HashSet<string> UsbNeverAsk { get; set; } = [];
+
     /// <summary>Private segments' subnets and address servers (the virtual network editor); a segment not listed gets the defaults.</summary>
     public List<Runtime.SegmentConfig> Segments { get; set; } = [];
 

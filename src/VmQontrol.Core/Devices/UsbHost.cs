@@ -22,6 +22,12 @@ public sealed record HostUsbDevice(string VendorId, string ProductId, string Nam
     public string RuleId => UsbHost.RuleId(VendorId, ProductId);
 
     public string Speed => SpeedMbps switch { >= 10000 => "USB 3.2", >= 5000 => "USB 3", >= 480 => "USB 2", _ => "USB 1" };
+
+    /// <summary>The USB classes of the device and its interfaces (3 input, 8 storage, 0x0e video…), from sysfs.</summary>
+    public IReadOnlyList<int> Classes { get; init; } = [];
+
+    /// <summary>What to know before handing this kind of device to a machine, or <c>null</c> for nothing special.</summary>
+    public string? Advice => UsbHost.Advice(Classes);
 }
 
 /// <summary>
@@ -33,6 +39,21 @@ public static class UsbHost
 {
     private const string SysUsb = "/sys/bus/usb/devices";
     private static readonly Lazy<Dictionary<string, string>> Names = new(LoadUsbIds);
+
+    /// <summary>
+    /// Advice by device class, the most telling first: what the person loses on this computer, and what the guest needs.
+    /// </summary>
+    public static string? Advice(IReadOnlyList<int> classes) =>
+        classes.Contains(0x08) ? "A storage device: it leaves this computer, so unmount it first. Host drives can hand over the disk alone, read-only if you like."
+        : classes.Contains(0x0e) ? "A webcam: video over a passed-through device needs a USB 3 port to run smoothly; the guest uses its own camera driver."
+        : classes.Contains(0x01) ? "An audio device: its sound plays in the guest only, and may crackle when this computer is busy."
+        : classes.Contains(0x06) ? "A phone or camera: the guest opens it (MTP). Unlock the phone and allow file access when it asks."
+        : classes.Contains(0xe0) ? "A Bluetooth adapter: this computer has no Bluetooth while the guest has it."
+        : classes.Contains(0x0b) ? "A smart card reader: the guest needs its smart card driver; this computer cannot use the card meanwhile."
+        : classes.Contains(0x07) ? "A printer: the guest needs the printer's own driver."
+        : classes.Contains(0x02) || classes.Contains(0x0a) ? "A serial or network adapter: the guest needs its driver. Settings, Serial port, can hand over just the port instead."
+        : classes.Contains(0x03) ? "It counts as an input device (a keyboard, mouse, controller, or a lighting or control panel): this computer cannot use it while the machine has it."
+        : null;
 
     public static IReadOnlyList<HostUsbDevice> List(string sysRoot = SysUsb, Func<string, bool>? writable = null)
     {
@@ -53,7 +74,15 @@ public static class UsbHost
             if (name.Length == 0 || name.All(c => c is '-' or '_'))
                 name = Names.Value.GetValueOrDefault($"{vendor}:{product}") ?? Names.Value.GetValueOrDefault(vendor) ?? $"USB device {vendor}:{product}";
             var speed = int.TryParse(Read("speed").Split('.')[0], NumberStyles.None, CultureInfo.InvariantCulture, out var sp) ? sp : 12;
-            devices.Add(new HostUsbDevice(vendor, product, name, bus, dev, port, speed, writable($"/dev/bus/usb/{bus}/{dev}"), Read("bDeviceClass") == "09"));
+            var classes = new List<int>();
+            if (int.TryParse(Read("bDeviceClass"), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var deviceClass) && deviceClass != 0) classes.Add(deviceClass);
+            foreach (var iface in Directory.EnumerateDirectories(sysRoot, port + ":*"))
+            {
+                var f = Path.Combine(iface, "bInterfaceClass");
+                if (File.Exists(f) && int.TryParse(File.ReadAllText(f).Trim(), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var c) && !classes.Contains(c)) classes.Add(c);
+            }
+
+            devices.Add(new HostUsbDevice(vendor, product, name, bus, dev, port, speed, writable($"/dev/bus/usb/{bus}/{dev}"), deviceClass == 9) { Classes = classes });
         }
 
         return devices.Where(d => !d.IsHub).OrderBy(d => d.Name, StringComparer.CurrentCultureIgnoreCase).ToList();

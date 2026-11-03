@@ -417,6 +417,14 @@ public sealed partial class MachineViewModel : ObservableObject
     [RelayCommand]
     private Task SendCtrlAltDelAsync() => ControlAsync("got Ctrl+Alt+Del", (r, ct) => MachineRunner.SendKeysAsync(r, ["ctrl", "alt", "delete"], ct));
 
+    /// <summary>
+    /// Key combinations this computer would take for itself if typed in the viewer (as virt-manager's Send Key menu):
+    /// a QEMU key code list in the parameter, joined by "+" ("ctrl+alt+f2").
+    /// </summary>
+    [RelayCommand]
+    private Task SendKeysAsync(string keys) =>
+        ControlAsync($"got {Text.KeyLabel(keys)}", (r, ct) => MachineRunner.SendKeysAsync(r, keys.Split('+'), ct));
+
     /// <summary>Saves the machine's screen as a picture in the Pictures folder.</summary>
     [RelayCommand]
     private async Task SaveScreenshotAsync()

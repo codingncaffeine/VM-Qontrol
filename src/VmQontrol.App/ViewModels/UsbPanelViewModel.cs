@@ -15,6 +15,21 @@ public sealed partial class UsbRow(HostUsbDevice device, UsbPanelViewModel panel
 
     public string Detail => $"{Device.Id} · {Device.Speed} · port {Device.Port}";
 
+    public string? Advice => Device.Advice;
+
+    public bool HasAdvice => Advice is not null;
+
+    /// <summary>Not offered to a machine when plugged in (the person chose Don't ask about this device).</summary>
+    [ObservableProperty]
+    private bool _neverAsk;
+
+    [RelayCommand]
+    private void OfferAgain()
+    {
+        NeverAsk = false;
+        panel.OfferAgain(this);
+    }
+
     /// <summary>Only when this computer lacks spice-gtk's USB helper: otherwise Connect opens the device itself.</summary>
     public bool NeedsPermission => !Device.Writable && !UsbAccess.Available;
 
@@ -117,6 +132,7 @@ public sealed partial class UsbPanelViewModel : ObservableObject
                     ByRule = byRule,
                     InMachine = attached.Contains(d.QemuId) || byRule,
                     Automatic = _machine.Machine.Usb.Passthrough.Any(u => u.VendorId == d.VendorId && u.ProductId == d.ProductId),
+                    NeverAsk = _shell.Settings.UsbNeverAsk.Contains(d.Id),
                 });
             }
 
@@ -173,6 +189,12 @@ public sealed partial class UsbPanelViewModel : ObservableObject
                 : $"{row.Name} stays on this computer.");
             if (running) await RefreshAsync().ConfigureAwait(false);
         });
+    }
+
+    public void OfferAgain(UsbRow row)
+    {
+        _shell.SetUsbNeverAsk(row.Device.Id, false);
+        Note = $"{row.Name} is offered to a running machine again when it is plugged in.";
     }
 
     /// <summary>The helper is missing: say which package brings it.</summary>

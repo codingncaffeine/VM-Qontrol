@@ -18,4 +18,13 @@ public static class Text
 
     public static readonly IValueConverter FavouriteToggle =
         new FuncValueConverter<bool, string>(f => f ? "Remove from favourites" : "Add to favourites");
+
+    /// <summary>"ctrl+alt+f2" → "Ctrl+Alt+F2", the way the keys are printed on a keyboard.</summary>
+    public static string KeyLabel(string qcodes) => string.Join('+', qcodes.Split('+').Select(k => k switch
+    {
+        "ctrl" => "Ctrl", "alt" => "Alt", "shift" => "Shift", "backspace" => "Backspace", "delete" => "Del", "print" => "Print Screen",
+        "sysrq" => "SysRq", "esc" => "Esc", "tab" => "Tab", "meta_l" => "Super",
+        _ when k.Length <= 3 && k.StartsWith('f') => k.ToUpperInvariant(),
+        _ => k.Length > 0 ? char.ToUpperInvariant(k[0]) + k[1..] : k,
+    }));
 }

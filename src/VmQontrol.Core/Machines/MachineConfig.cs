@@ -298,6 +298,9 @@ public sealed record DisplayConfig
 
     public int? Height { get; set; }
 
+    /// <summary>Monitors the guest sees (1 to 4); the viewer opens a window for each. <c>null</c> = one.</summary>
+    public int? Monitors { get; set; }
+
     /// <summary>The viewer program: spicy, remote-viewer, or none.</summary>
     public string Viewer { get; set; } = "auto";
 
@@ -315,6 +318,12 @@ public sealed record AudioConfig
 {
     /// <summary>The sound card; <c>null</c> = the profile's choice; "none" = no sound card.</summary>
     public string? Device { get; set; }
+
+    /// <summary>
+    /// The guest may hear this computer's microphone (through the viewer, while it shows the machine). Off = an
+    /// output-only sound device, so no program in the guest can record.
+    /// </summary>
+    public bool Microphone { get; set; } = true;
 }
 
 public sealed record InputConfig

@@ -60,6 +60,23 @@ public sealed class UsbTests
     }
 
     [Fact]
+    public void A_device_says_what_kind_it_is_from_its_interfaces()
+    {
+        using var profile = new TestProfile("usbclass");
+        var sys = Path.Combine(profile.Root, "sys");
+        Device(sys, "3-2", new() { ["idVendor"] = "0781", ["idProduct"] = "5583", ["product"] = "Ultra Fit", ["busnum"] = "3", ["devnum"] = "4", ["bDeviceClass"] = "00" });
+        Device(sys, "3-2:1.0", new() { ["bInterfaceClass"] = "08" });
+        Device(sys, "3-3", new() { ["idVendor"] = "046d", ["idProduct"] = "0825", ["product"] = "Webcam C270", ["busnum"] = "3", ["devnum"] = "5", ["bDeviceClass"] = "ef" });
+        Device(sys, "3-3:1.0", new() { ["bInterfaceClass"] = "0e" });
+        Device(sys, "3-3:1.2", new() { ["bInterfaceClass"] = "01" });
+        Device(sys, "3-4", new() { ["idVendor"] = "045e", ["idProduct"] = "028e", ["product"] = "Controller", ["busnum"] = "3", ["devnum"] = "6", ["bDeviceClass"] = "ff" });
+        var list = UsbHost.List(sys, _ => true);
+        Assert.StartsWith("A storage device", list.Single(d => d.ProductId == "5583").Advice);
+        Assert.StartsWith("A webcam", list.Single(d => d.ProductId == "0825").Advice); // video outranks its microphone
+        Assert.Null(list.Single(d => d.ProductId == "028e").Advice); // a vendor-specific device: nothing to say
+    }
+
+    [Fact]
     public void A_device_plugged_in_while_watching_is_news_and_ones_already_there_are_not()
     {
         using var profile = new TestProfile("usbhotplug");

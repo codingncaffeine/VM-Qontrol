@@ -60,6 +60,8 @@ public static class SettingsHistory
         Diff("Boot menu", before.Devices.BootMenu, after.Devices.BootMenu, v => (bool?)v == true ? "on" : "off");
         Diff("Host drives", string.Join(", ", before.HostDrives.Select(d => $"{d.Name}{(d.Writable ? " (writable)" : "")}")), string.Join(", ", after.HostDrives.Select(d => $"{d.Name}{(d.Writable ? " (writable)" : "")}")), v => (v as string) is { Length: > 0 } t ? t : "none");
         Diff("Host serial ports", string.Join(", ", before.HostSerialPorts.Select(x => x.Name.Length > 0 ? x.Name : x.Path)), string.Join(", ", after.HostSerialPorts.Select(x => x.Name.Length > 0 ? x.Name : x.Path)), v => (v as string) is { Length: > 0 } t ? t : "none");
+        Diff("Microphone", before.Audio.Microphone, after.Audio.Microphone, v => v is true ? "on" : "off");
+        Diff("Monitors", before.Display.Monitors ?? 1, after.Display.Monitors ?? 1);
         Diff("Shared folders", string.Join(", ", before.Shares.Select(x => $"{x.Tag}={x.Path}{(x.ReadOnly ? " (read only)" : "")}")), string.Join(", ", after.Shares.Select(x => $"{x.Tag}={x.Path}{(x.ReadOnly ? " (read only)" : "")}")), v => (v as string) is { Length: > 0 } t ? t : "none");
         Diff("AutoProtect", AutoProtectText(before.AutoProtect), AutoProtectText(after.AutoProtect));
         Diff("Extra QEMU arguments", string.Join(' ', before.ExtraArgs), string.Join(' ', after.ExtraArgs), v => (v as string) is { Length: > 0 } s ? s : "none");

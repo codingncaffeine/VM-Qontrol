@@ -12,8 +12,9 @@ public sealed partial class NoticeViewModel : ObservableObject
     private readonly TaskCompletionSource<bool> _answer = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public NoticeViewModel(string title, IReadOnlyList<string> lines, string? confirm = null, bool isError = false, bool isDanger = false,
-        string? dismiss = null, string? checkText = null, string? icon = null, string? itemTitle = null, string? itemDetail = null, string? code = null)
+        string? dismiss = null, string? checkText = null, string? icon = null, string? itemTitle = null, string? itemDetail = null, string? code = null, string? aside = null)
     {
+        AsideText = aside;
         Code = code;
         Icon = icon is not null && Avalonia.Application.Current?.TryGetResource(icon, null, out var g) == true ? g as Avalonia.Media.Geometry : null;
         ItemTitle = itemTitle;
@@ -70,6 +71,21 @@ public sealed partial class NoticeViewModel : ObservableObject
     public bool IsDanger { get; }
 
     public Task<bool> Answer => _answer.Task;
+
+    /// <summary>A quieter third answer on the left ("Don't ask about this device"); it closes like Dismiss and sets <see cref="AsideChosen"/>.</summary>
+    public string? AsideText { get; }
+
+    public bool HasAside => AsideText is not null;
+
+    public bool AsideChosen { get; private set; }
+
+    [RelayCommand]
+    private void Aside()
+    {
+        AsideChosen = true;
+        _answer.TrySetResult(false);
+        Closed?.Invoke();
+    }
 
     public event Action? Closed;
 

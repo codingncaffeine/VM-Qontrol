@@ -202,6 +202,13 @@ public static class QemuCommandBuilder
         var video = new StringBuilder(device);
         if (device is "virtio-vga" or "virtio-vga-gl" or "virtio-gpu" or "virtio-gpu-gl" or "virtio-gpu-pci" or "virtio-gpu-gl-pci" or "qxl" or "qxl-vga" or "bochs-display")
             video.Append(CultureInfo.InvariantCulture, $",xres={(m.Display.Width is not null && m.Display.Height is not null ? m.Display.Width : 1280)},yres={(m.Display.Width is not null && m.Display.Height is not null ? m.Display.Height : 800)}");
+        // More than one monitor: virtio and QXL graphics carry several outputs; the SPICE viewer opens a window for each.
+        if (m.Display.Monitors is > 1 and var heads)
+        {
+            if (device.StartsWith("virtio-", StringComparison.Ordinal) || device is "qxl" or "qxl-vga") video.Append(CultureInfo.InvariantCulture, $",max_outputs={Math.Min(heads, 4)}");
+            else warnings.Add($"Only virtio or QXL graphics can show more than one monitor; {device} shows one.");
+        }
+
         video.Append(device switch
         {
             "bochs-display" => ",vgamem=67108864",
@@ -214,7 +221,8 @@ public static class QemuCommandBuilder
         var audiodev = ctx.Headless ? "none,id=audio0" : spiceLike ? "spice,id=audio0" : $"{ctx.HostAudio},id=audio0";
         var soundArgs = sound switch
         {
-            "ich9-intel-hda" or "intel-hda" => new[] { "-device", sound, "-device", "hda-micro,audiodev=audio0" },
+            // hda-micro is quickemu's (speaker and microphone); hda-output has no input at all.
+            "ich9-intel-hda" or "intel-hda" => new[] { "-device", sound, "-device", $"{(m.Audio.Microphone ? "hda-micro" : "hda-output")},audiodev=audio0" },
             "none" => [],
             _ => ["-device", $"{sound},audiodev=audio0"],
         };

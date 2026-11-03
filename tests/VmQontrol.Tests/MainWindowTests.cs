@@ -357,6 +357,7 @@ public sealed class MainWindowTests
         // Devices no computer has, so QEMU's rule waits and nothing real is taken.
         var stick = new VmQontrol.Core.Devices.HostUsbDevice("ffff", "fffc", "Test Stick", "001", "099", "9-9", 480, true, false);
         var locked = stick with { ProductId = "fffb", Name = "Locked Pad", Writable = false };
+        var everyDay = stick with { ProductId = "fffa", Name = "Every Day Mouse" };
         try
         {
             var seen = await Ui.Run(() =>
@@ -399,6 +400,16 @@ public sealed class MainWindowTests
                 Ui.Pump(1);
                 var askedAgain = shell.Notice is not null;
                 var status = shell.Status;
+
+                // Don't ask about this device: answered once, the next plug-in is only a line in the status bar.
+                shell.UsbPlugged(everyDay);
+                Ui.PumpUntil(() => shell.Notice is not null, "the plugged-in question", 10);
+                Ui.Click(window, Named<Button>(window, "NoticeAside"));
+                Ui.PumpUntil(() => shell.Notice is null && shell.Settings.UsbNeverAsk.Contains("ffff:fffa"), "the choice to be kept", 10);
+                shell.UsbPlugged(everyDay);
+                Ui.Pump(1);
+                var askedAboutEveryDay = shell.Notice is not null;
+                var everyDayStatus = shell.Status;
                 // The panel, for a look at its rows (this computer's real devices) with the new label.
                 var page = window.GetVisualDescendants().OfType<MachineView>().Single();
                 // The toolbar's USB menu: this computer's real devices, only looked at (never clicked), then Manage….
@@ -424,7 +435,7 @@ public sealed class MainWindowTests
                     Ui.Click(window, Named<Button>(window, "NoticeDismiss"));
                 }
                 window.Close();
-                return (lockedTitle, lockedConfirm, title, checkText, attached, askedAgain, status);
+                return (lockedTitle, lockedConfirm, title, checkText, attached, askedAgain, status, askedAboutEveryDay, everyDayStatus);
             });
 
             Assert.Equal("Locked Pad", seen.lockedTitle);
@@ -436,6 +447,9 @@ public sealed class MainWindowTests
             Assert.Contains("usbauto-ffff-fffc", seen.attached);
             Assert.False(seen.askedAgain);
             Assert.Contains("always connects there", seen.status, StringComparison.Ordinal);
+            Assert.False(seen.askedAboutEveryDay);
+            Assert.Contains("you asked not to be offered it", seen.everyDayStatus, StringComparison.Ordinal);
+            Assert.Contains("ffff:fffa", VmQontrol.Core.AppSettings.Load(profile.Paths).UsbNeverAsk);
             var saved = MachineStore.Load(Path.Combine(dir, "vm.json"));
             Assert.Equal(new UsbDevice("ffff", "fffc", "Test Stick"), Assert.Single(saved.Usb.Passthrough));
         }

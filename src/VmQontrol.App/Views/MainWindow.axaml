@@ -186,6 +186,9 @@
                         <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
                           <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}" />
                           <TextBlock Text="{Binding Detail}" Classes="muted" FontFamily="monospace" FontSize="{DynamicResource QFontSmall}" />
+                          <TextBlock Text="{Binding Advice}" IsVisible="{Binding HasAdvice}" Classes="muted" TextWrapping="Wrap" FontSize="{DynamicResource QFontSmall}" Margin="0,2,0,0" />
+                          <Button Classes="tool" Content="Offer it again when plugged in" Command="{Binding OfferAgainCommand}" IsVisible="{Binding NeverAsk}" HorizontalAlignment="Left" Margin="0,4,0,0"
+                                  ToolTip.Tip="You chose Don't ask about this device; this brings the question back" />
                         </StackPanel>
                         <Border Grid.Column="2" Classes="pill" Classes.ok="{Binding InMachine}" Classes.warn="{Binding IsLocked}" Classes.muted="{Binding IsHere}" VerticalAlignment="Center">
                           <TextBlock Text="{Binding StateText}" />
@@ -458,6 +461,7 @@
             <SelectableTextBlock Text="{Binding Code}" FontFamily="monospace" FontSize="12" TextWrapping="Wrap" />
           </Border>
           <CheckBox x:Name="NoticeCheck" Content="{Binding CheckText}" IsChecked="{Binding Checked}" IsVisible="{Binding HasCheck}" />
+          <Button x:Name="NoticeAside" Classes="tool" Content="{Binding AsideText}" Command="{Binding AsideCommand}" IsVisible="{Binding HasAside}" HorizontalAlignment="Left" />
           <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
             <Button x:Name="NoticeDismiss" Classes="secondary" Content="{Binding DismissText}" Command="{Binding DismissCommand}" />
             <Button x:Name="NoticeConfirm" Classes="primary" Classes.danger="{Binding IsDanger}" Content="{Binding ConfirmText}" Command="{Binding ConfirmCommand}" IsVisible="{Binding HasConfirm}" />

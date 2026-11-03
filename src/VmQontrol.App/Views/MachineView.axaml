@@ -60,7 +60,7 @@
           </StackPanel>
         </Button>
         <Button x:Name="OpenScreen" Classes="primary" Command="{Binding OpenScreenCommand}" IsVisible="{Binding IsActive}"
-                ToolTip.Tip="Open the machine's screen in a viewer window">
+                ToolTip.Tip="Open the machine's screen in a viewer window. In it, Ctrl+Alt gives the mouse and keyboard back to this computer.">
           <StackPanel Orientation="Horizontal" Spacing="8">
             <Path Classes="icon" Data="{StaticResource IconScreen}" Stroke="{DynamicResource QOnAccent}" />
             <TextBlock Text="Open screen" />
@@ -129,6 +129,27 @@
               <MenuItem Header="Discard suspended state…" Command="{Binding DiscardSuspendedCommand}" IsVisible="{Binding CanDiscardSuspended}" />
               <MenuItem x:Name="OpenDrivesItem" Header="Host drives…" Command="{Binding OpenDrivesCommand}" ToolTip.Tip="Hand a disk, a partition or a disc drive of this computer to the machine" />
               <MenuItem Header="Send Ctrl+Alt+Del" Command="{Binding SendCtrlAltDelCommand}" IsVisible="{Binding IsActive}" />
+              <MenuItem x:Name="SendKeyMenu" Header="Send a key combination" IsVisible="{Binding IsActive}"
+                        ToolTip.Tip="Keys this computer keeps for itself when typed (switching consoles, the screenshot key), sent to the machine instead">
+                <MenuItem Header="Ctrl+Alt+Backspace" Command="{Binding SendKeysCommand}" CommandParameter="ctrl+alt+backspace" />
+                <MenuItem Header="Print Screen" Command="{Binding SendKeysCommand}" CommandParameter="print" />
+                <MenuItem Header="Alt+Tab" Command="{Binding SendKeysCommand}" CommandParameter="alt+tab" />
+                <MenuItem Header="Super (Windows key)" Command="{Binding SendKeysCommand}" CommandParameter="meta_l" />
+                <MenuItem Header="Switch the guest's console">
+                  <MenuItem Header="Ctrl+Alt+F1" Command="{Binding SendKeysCommand}" CommandParameter="ctrl+alt+f1" />
+                  <MenuItem Header="Ctrl+Alt+F2" Command="{Binding SendKeysCommand}" CommandParameter="ctrl+alt+f2" />
+                  <MenuItem Header="Ctrl+Alt+F3" Command="{Binding SendKeysCommand}" CommandParameter="ctrl+alt+f3" />
+                  <MenuItem Header="Ctrl+Alt+F4" Command="{Binding SendKeysCommand}" CommandParameter="ctrl+alt+f4" />
+                  <MenuItem Header="Ctrl+Alt+F5" Command="{Binding SendKeysCommand}" CommandParameter="ctrl+alt+f5" />
+                  <MenuItem Header="Ctrl+Alt+F6" Command="{Binding SendKeysCommand}" CommandParameter="ctrl+alt+f6" />
+                  <MenuItem Header="Ctrl+Alt+F7" Command="{Binding SendKeysCommand}" CommandParameter="ctrl+alt+f7" />
+                  <MenuItem Header="Ctrl+Alt+F8" Command="{Binding SendKeysCommand}" CommandParameter="ctrl+alt+f8" />
+                  <MenuItem Header="Ctrl+Alt+F9" Command="{Binding SendKeysCommand}" CommandParameter="ctrl+alt+f9" />
+                  <MenuItem Header="Ctrl+Alt+F10" Command="{Binding SendKeysCommand}" CommandParameter="ctrl+alt+f10" />
+                  <MenuItem Header="Ctrl+Alt+F11" Command="{Binding SendKeysCommand}" CommandParameter="ctrl+alt+f11" />
+                  <MenuItem Header="Ctrl+Alt+F12" Command="{Binding SendKeysCommand}" CommandParameter="ctrl+alt+f12" />
+                </MenuItem>
+              </MenuItem>
               <MenuItem Header="Save a screenshot" Command="{Binding SaveScreenshotCommand}" IsVisible="{Binding IsActive}" />
               <MenuItem x:Name="RecordScreenItem" Header="Record the screen" Command="{Binding StartRecordingCommand}" IsVisible="{Binding CanRecord}"
                         ToolTip.Tip="Record what the machine shows into a video in your Videos folder (no sound); stop from the red mark beside its state" />

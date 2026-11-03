@@ -289,6 +289,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         DisplayDevice = DisplayDevices.FirstOrDefault(o => o.Value == m.Display.Device) ?? DisplayDevices[0];
         Gl = GlOptions.First(o => o.Value == m.Display.Gl switch { true => "on", false => "off", _ => null });
         Width = m.Display.Width ?? 0;
+        Monitors = m.Display.Monitors ?? 1;
+        Microphone = m.Audio.Microphone;
         Height = m.Display.Height ?? 0;
         Viewer = ViewerOptions.FirstOrDefault(o => o.Value == m.Display.Viewer) ?? ViewerOptions[0];
         FullScreen = m.Display.FullScreen;
@@ -478,6 +480,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private Option _displayDevice;
     [ObservableProperty] private Option _gl;
     [ObservableProperty] private decimal _width;
+    [ObservableProperty] private decimal _monitors = 1;
+    [ObservableProperty] private bool _microphone = true;
     [ObservableProperty] private decimal _height;
     [ObservableProperty] private Option _viewer;
     [ObservableProperty] private bool _fullScreen;
@@ -550,13 +554,14 @@ public sealed partial class SettingsViewModel : ObservableObject
                 Controller = UsbController.Value,
                 Passthrough = UsbRules.Select(r => r.Device).ToList(),
             },
-            Audio = new AudioConfig { Device = SoundCard.Value },
+            Audio = new AudioConfig { Device = SoundCard.Value, Microphone = Microphone },
             Display = new DisplayConfig
             {
                 Backend = Enum.Parse<DisplayBackend>(DisplayBackend.Value!),
                 Device = DisplayDevice.Value,
                 Gl = Gl.Value switch { "on" => true, "off" => false, _ => null },
                 Width = Width > 0 && Height > 0 ? (int)Width : null,
+                Monitors = Monitors > 1 ? (int)Monitors : null,
                 Height = Width > 0 && Height > 0 ? (int)Height : null,
                 Viewer = Viewer.Value ?? "auto",
                 FullScreen = FullScreen,

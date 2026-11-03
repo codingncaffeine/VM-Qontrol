@@ -565,15 +565,26 @@
             <Border Grid.Column="1" Classes="badge-next"><TextBlock Text="Applies at next power on" /></Border>
           </Grid>
           <Border Classes="group">
-            <Border Classes="row first">
-              <Grid ColumnDefinitions="*,Auto">
-                <StackPanel>
-                  <TextBlock Text="Sound card" Classes="label" />
-                  <TextBlock Text="Sound plays through the viewer window. Automatic picks a card the system has drivers for." Classes="help" />
-                </StackPanel>
-                <ComboBox Grid.Column="1" ItemsSource="{Binding SoundCards}" SelectedItem="{Binding SoundCard}" />
-              </Grid>
-            </Border>
+            <StackPanel>
+              <Border Classes="row first">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Sound card" Classes="label" />
+                    <TextBlock Text="Sound plays through the viewer window. Automatic picks a card the system has drivers for." Classes="help" />
+                  </StackPanel>
+                  <ComboBox Grid.Column="1" ItemsSource="{Binding SoundCards}" SelectedItem="{Binding SoundCard}" />
+                </Grid>
+              </Border>
+              <Border Classes="row">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Microphone" Classes="label" />
+                    <TextBlock Text="Lets programs in the guest record from this computer's microphone, through the viewer while it shows the machine (on by default, for calls). Off, the guest gets a sound card with no input at all." Classes="help" />
+                  </StackPanel>
+                  <ToggleSwitch x:Name="Microphone" Grid.Column="1" IsChecked="{Binding Microphone}" />
+                </Grid>
+              </Border>
+            </StackPanel>
           </Border>
         </StackPanel>
 
@@ -659,6 +670,15 @@
                     <TextBlock Text="×" VerticalAlignment="Center" Classes="muted" />
                     <NumericUpDown Value="{Binding Height}" Minimum="0" Maximum="4320" Increment="90" FormatString="0" Width="130" />
                   </StackPanel>
+                </Grid>
+              </Border>
+              <Border Classes="row">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Monitors" Classes="label" />
+                    <TextBlock Text="How many screens the guest sees; the viewer opens a window for each. Works with VirtIO and QXL graphics (the recommended ones), and the guest arranges them in its display settings." Classes="help" />
+                  </StackPanel>
+                  <NumericUpDown x:Name="Monitors" Grid.Column="1" Value="{Binding Monitors}" Minimum="1" Maximum="4" Increment="1" FormatString="0" Width="130" VerticalAlignment="Center" />
                 </Grid>
               </Border>
             </StackPanel>
