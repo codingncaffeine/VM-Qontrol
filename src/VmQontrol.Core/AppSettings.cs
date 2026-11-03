@@ -106,6 +106,9 @@ public sealed record AppSettings
     /// <summary>The wizard's Lean Windows switch starts on.</summary>
     public bool NewMachineLean { get; set; } = true;
 
+    /// <summary>The main window as it was last closed: its size, whether it was maximized, and (X11 only) its place.</summary>
+    public WindowPlacement? MainWindow { get; set; }
+
     /// <summary>The size choice as the recommendations take it.</summary>
     [JsonIgnore]
     public Machines.MachineSize Size => NewMachineSize switch { "lighter" => Machines.MachineSize.Lighter, "generous" => Machines.MachineSize.Generous, _ => Machines.MachineSize.Recommended };
@@ -163,6 +166,7 @@ public sealed record AppSettings
         Segments = (Segments ?? []).Where(x => x is not null && !string.IsNullOrWhiteSpace(x.Name)).ToList(),
         Viewer = string.IsNullOrWhiteSpace(Viewer) ? "auto" : Viewer,
         Theme = string.IsNullOrWhiteSpace(Theme) ? "system" : Theme,
+        MainWindow = MainWindow?.Sane(),
     };
 
     private static readonly Lock SaveLock = new();
@@ -188,6 +192,13 @@ public sealed record AppSettings
     }
 
     private static AppSettings? _pending;
+    private static Task _lastSave = Task.CompletedTask;
+
+    /// <summary>
+    /// Waits (at most <paramref name="timeout"/>) for saves asked for in the background: the app calls it as it exits,
+    /// once its windows are gone, so the last change (the window's size at close) is not lost with the process.
+    /// </summary>
+    public static bool WaitForSaves(TimeSpan timeout) => Volatile.Read(ref _lastSave).Wait(timeout);
 
     /// <summary>
     /// Saves on a worker. Saves asked for in a row write the newest settings only (an older copy never lands last); a
@@ -196,7 +207,7 @@ public sealed record AppSettings
     public void SaveInBackground(QontrolPaths paths)
     {
         Volatile.Write(ref _pending, this);
-        _ = Task.Run(() =>
+        Volatile.Write(ref _lastSave, Task.Run(() =>
         {
             lock (SaveLock)
             {
@@ -210,10 +221,29 @@ public sealed record AppSettings
                     Log.Warn($"Settings could not be saved: {ex.Message}");
                 }
             }
-        });
+        }));
     }
 }
 
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(AppSettings))]
 internal sealed partial class AppSettingsJson : JsonSerializerContext;
+
+/// <summary>A window's size in device-independent pixels, maximized or not, and its place on screen when the desktop lets
+/// an app place itself (X11; Wayland compositors place windows themselves).</summary>
+public sealed record WindowPlacement
+{
+    public double Width { get; set; }
+
+    public double Height { get; set; }
+
+    public int? X { get; set; }
+
+    public int? Y { get; set; }
+
+    public bool Maximized { get; set; }
+
+    /// <summary>A hand-edited or damaged size is dropped rather than opening a window nobody can see.</summary>
+    internal WindowPlacement? Sane() =>
+        double.IsFinite(Width) && double.IsFinite(Height) && Width is >= 200 and <= 32768 && Height is >= 200 and <= 32768 ? this : null;
+}

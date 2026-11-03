@@ -9,6 +9,55 @@ namespace VmQontrol.App.Views;
 
 public partial class MainWindow : Window
 {
+    private Avalonia.Size? _normalSize;
+    private Avalonia.PixelPoint? _normalPosition;
+
+    /// <summary>Whether the desktop lets the app place its own window (X11 does; Wayland compositors place windows).</summary>
+    private bool PlacesItself => !(PlatformImpl?.GetType().Namespace ?? "").StartsWith("Avalonia.Wayland", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Opens at the size (and on X11 the place) it was closed at, maximized again if it was. A size larger than every
+    /// screen shrinks to the largest; a place off every screen (a monitor unplugged since) is left to the desktop.
+    /// </summary>
+    public void RestorePlacement(VmQontrol.Core.WindowPlacement? saved)
+    {
+        if (saved is null) return;
+        var screens = Screens.All;
+        var widest = screens.Count == 0 ? (Avalonia.Size?)null : screens.Select(sc => new Avalonia.Size(sc.WorkingArea.Width / sc.Scaling, sc.WorkingArea.Height / sc.Scaling)).MaxBy(z => z.Width * z.Height);
+        Width = Math.Max(MinWidth, widest is { } w ? Math.Min(saved.Width, w.Width) : saved.Width);
+        Height = Math.Max(MinHeight, widest is { } h ? Math.Min(saved.Height, h.Height) : saved.Height);
+        _normalSize = new Avalonia.Size(Width, Height);
+        if (saved.X is { } x && saved.Y is { } y && PlacesItself)
+        {
+            var corner = new Avalonia.PixelPoint(x, y);
+            // At least the title bar's start must be on a screen, or the window could not be dragged back.
+            if (screens.Any(sc => sc.WorkingArea.Contains(corner + new Avalonia.PixelPoint(48, 16))))
+            {
+                WindowStartupLocation = WindowStartupLocation.Manual;
+                Position = corner;
+                _normalPosition = corner;
+            }
+        }
+
+        if (saved.Maximized && WindowState == WindowState.Normal) WindowState = WindowState.Maximized;
+    }
+
+    /// <summary>What to remember at close: never a minimized size, and the size from before maximizing.</summary>
+    internal VmQontrol.Core.WindowPlacement? Placement()
+    {
+        var size = WindowState == WindowState.Normal ? ClientSize : _normalSize ?? ClientSize;
+        if (size.Width <= 0 || size.Height <= 0) return null;
+        var place = PlacesItself ? (WindowState == WindowState.Normal ? Position : _normalPosition) : null;
+        return new VmQontrol.Core.WindowPlacement
+        {
+            Width = Math.Round(size.Width),
+            Height = Math.Round(size.Height),
+            X = place?.X,
+            Y = place?.Y,
+            Maximized = WindowState is WindowState.Maximized or WindowState.FullScreen,
+        };
+    }
+
     public MainWindow()
     {
         InitializeComponent();
@@ -27,6 +76,21 @@ public partial class MainWindow : Window
             WindowingBackend.WindowOpened(this);
         };
         Closed += (_, _) => (DataContext as ShellViewModel)?.Stop();
+        // The size (and on X11 the place) while not maximized, so a window closed maximized comes back to both.
+        PropertyChanged += (_, e) =>
+        {
+            if (WindowState != WindowState.Normal) return;
+            if (e.Property == ClientSizeProperty) _normalSize = ClientSize;
+        };
+        PositionChanged += (_, e) =>
+        {
+            if (WindowState == WindowState.Normal) _normalPosition = e.Point;
+        };
+        Closing += (_, _) =>
+        {
+            if (DataContext is ShellViewModel shell && Placement() is { } placement)
+                shell.UpdateSettings(s => s with { MainWindow = placement });
+        };
         DataContextChanged += (_, _) =>
         {
             if (DataContext is ShellViewModel shell)
