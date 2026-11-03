@@ -55,6 +55,8 @@ internal static class Commands
           import FILE [--name NAME]
                       Copy a machine from VMware (.vmx), VirtualBox (.vbox), an OVF appliance (.ovf, .ova), libvirt
                       (.xml), a disk on its own, or a VM Qontrol export (.tar) into the library. The original is only read.
+          support FILE.tar.gz Collect what someone helping you needs (system, QEMU, checks, logs, machine settings) into
+                              one file, with your home folder, user name, notes and account names left out.
           doctor              Check this computer: what VM Qontrol needs, what is missing, and the command that installs it.
           version             Print the version and licence.
           help                Show this help.
@@ -87,6 +89,14 @@ internal static class Commands
                     return 0;
                 case "import" when args.Length > 1:
                     return Import(args, paths, output, error);
+                case "support" when args.Length > 1:
+                {
+                    var bundle = Path.GetFullPath(args[1]);
+                    var probed = host();
+                    var included = Core.Hosts.SupportBundle.Create(bundle, paths, probed, Core.Hosts.Doctor.Run(probed, Core.Hosts.Doctor.DetectThisDistro(), AppSettings.Load(paths).LibraryRoots[0]));
+                    output.WriteLine($"Saved {bundle} ({included.Count} files; nothing personal: read it with tar -tzf before sending).");
+                    return 0;
+                }
                 case "doctor":
                     return Doctor(paths, host(), output);
                 case "list":

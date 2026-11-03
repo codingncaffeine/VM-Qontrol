@@ -224,4 +224,36 @@ public sealed class WiderFieldWindowTests
             }
         }
     }
+
+    [Trait("Tier", "Window")]
+    [Fact]
+    public async Task Support_data_is_collected_from_the_welcome_page()
+    {
+        using var profile = new TestProfile("support-ui");
+        var seen = await Ui.Run(() =>
+        {
+            var shell = new ShellViewModel(profile.Paths, AppSettings.Load(profile.Paths)) { WatchUsb = false };
+            var window = new MainWindow { DataContext = shell, Width = 1320, Height = 860 };
+            Avalonia.Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
+            window.Show();
+            _ = shell.StartAsync();
+            Ui.PumpUntil(() => shell.Welcome.Checked, "the host check");
+            Ui.Pump(0.5);
+            var button = window.GetVisualDescendants().OfType<Button>().First(b => b.Name == "CollectSupport");
+            var shown = button.IsEffectivelyVisible;
+            Ui.Capture(window, "phase17", "support-dark");
+            Avalonia.Application.Current!.RequestedThemeVariant = ThemeVariant.Light;
+            Ui.Pump(0.3);
+            Ui.Capture(window, "phase17", "support-light");
+            // The folder picker is the desktop's own dialog; the button's work is the same call with its answer.
+            var task = shell.CollectSupportAsync(profile.Root);
+            Ui.PumpUntil(() => task.IsCompleted, "the support file", 20);
+            window.Close();
+            return (shown, task.Result);
+        });
+
+        Assert.True(seen.shown);
+        Assert.NotNull(seen.Result);
+        Assert.True(new FileInfo(seen.Result!).Length > 100);
+    }
 }

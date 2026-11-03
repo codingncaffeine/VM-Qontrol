@@ -290,6 +290,25 @@ public sealed partial class ShellViewModel : ObservableObject
         });
     }
 
+    /// <summary>Collects support data (system, checks, logs, machine settings, nothing personal) into one file in <paramref name="folder"/>.</summary>
+    public async Task<string?> CollectSupportAsync(string folder)
+    {
+        Ui.Post(() => Note("Collecting support data…"));
+        try
+        {
+            var host = await (await Ui.InvokeAsync(HostAsync).ConfigureAwait(false)).ConfigureAwait(false);
+            var file = Path.Combine(folder, $"vmqontrol-support {DateTime.Now:yyyy-MM-dd HH.mm.ss}.tar.gz");
+            var count = await Task.Run(() => SupportBundle.Create(file, Paths, host, Doctor.Run(host, Doctor.DetectThisDistro(), Settings.LibraryRoots[0])).Count).ConfigureAwait(false);
+            Ui.Post(() => Note($"Saved {file} ({count} files: logs and settings, with your home folder, user name, notes and account names left out)."));
+            return file;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Ui.Post(() => Show(new NoticeViewModel("Support data could not be saved", [ex.Message], isError: true)));
+            return null;
+        }
+    }
+
     /// <summary>The host check again, from scratch (after installing something it said was missing).</summary>
     [RelayCommand]
     private async Task RecheckHostAsync()

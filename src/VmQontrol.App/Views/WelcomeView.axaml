@@ -66,13 +66,22 @@
       <StackPanel Spacing="10">
         <Grid ColumnDefinitions="*,Auto">
           <TextBlock Text="THIS COMPUTER" Classes="section" VerticalAlignment="Center" />
-          <Button x:Name="RecheckHost" Grid.Column="1" Classes="tool" Command="{Binding RecheckHostCommand}" IsEnabled="{Binding !Welcome.Rechecking}"
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+          <Button x:Name="CollectSupport" Classes="tool"
+                  ToolTip.Tip="Save one file with what someone helping you needs: this computer's system and checks, VM Qontrol's logs and each machine's settings. Your home folder, user name, notes and account names are left out; no disk is included.">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Path Classes="icon" Data="{StaticResource IconInfo}" />
+              <TextBlock Text="Collect support data…" />
+            </StackPanel>
+          </Button>
+          <Button x:Name="RecheckHost" Classes="tool" Command="{Binding RecheckHostCommand}" IsEnabled="{Binding !Welcome.Rechecking}"
                   ToolTip.Tip="Look at this computer again, after installing something listed here">
             <StackPanel Orientation="Horizontal" Spacing="8">
               <Path Classes="icon" Data="{StaticResource IconRefresh}" />
               <TextBlock Text="Check again" />
             </StackPanel>
           </Button>
+          </StackPanel>
         </Grid>
         <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
           <Border Classes="card">
