@@ -119,7 +119,7 @@
       </Grid>
     </Border>
 
-    <ListBox x:Name="Sections" DockPanel.Dock="Left" Width="220" Classes="library" ItemsSource="{Binding Sections}" SelectedItem="{Binding Section}" Margin="0,0,28,0">
+    <ListBox x:Name="Sections" AutomationProperties.Name="Settings sections" DockPanel.Dock="Left" Width="220" Classes="library" ItemsSource="{Binding Sections}" SelectedItem="{Binding Section}" Margin="0,0,28,0">
       <ListBox.ItemTemplate>
         <DataTemplate x:DataType="vm:SettingsSection">
           <StackPanel Orientation="Horizontal" Spacing="12">
@@ -603,7 +603,7 @@
                   <TextBlock Classes="help" Margin="0" VerticalAlignment="Center"
                              Text="Devices of these kinds go to the machine at every power on and whenever they are plugged in while it runs. Add one from the machine's USB devices (tick Always connect), or by its id here." />
                   <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                    <TextBox Text="{Binding NewUsbId}" PlaceholderText="046d:c52b" Width="130" FontFamily="monospace" VerticalAlignment="Center" />
+                    <TextBox Text="{Binding NewUsbId}" AutomationProperties.Name="USB device ID (vendor:product)" PlaceholderText="046d:c52b" Width="130" FontFamily="monospace" VerticalAlignment="Center" />
                     <Button Classes="tool" Content="Add" Command="{Binding AddUsbRuleCommand}" VerticalAlignment="Center" />
                   </StackPanel>
                 </Grid>
@@ -888,7 +888,7 @@
                         </StackPanel>
                         <Button Grid.Column="2" Classes="tool" Content="Give me access…" Command="{Binding GiveAccessCommand}" IsVisible="{Binding NeedsAccess}" VerticalAlignment="Center"
                                 ToolTip.Tip="Adds you to the group that owns serial ports (your password is asked for); it takes effect when you next sign in" />
-                        <ToggleSwitch Grid.Column="3" IsChecked="{Binding Connected}" OnContent="" OffContent="" VerticalAlignment="Center"
+                        <ToggleSwitch Grid.Column="3" IsChecked="{Binding Connected}" AutomationProperties.Name="{Binding Name, StringFormat='Connect {0} at power on'}" OnContent="" OffContent="" VerticalAlignment="Center"
                                       ToolTip.Tip="Hand this port to the machine at power on, as its next COM port" />
                       </Grid>
                     </Border>

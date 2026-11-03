@@ -24,6 +24,7 @@ public class App : Application
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
+        Controls.RowLabels.Install();
         // VMQONTROL_THEME=dark|light pins the theme (screenshots, bug reports); otherwise the desktop's choice is followed.
         RequestedThemeVariant = Environment.GetEnvironmentVariable("VMQONTROL_THEME") switch
         {
