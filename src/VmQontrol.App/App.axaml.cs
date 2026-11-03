@@ -34,6 +34,8 @@ public class App : Application
         };
     }
 
+    private System.Runtime.InteropServices.PosixSignalRegistration? _sigterm;
+
     public override void OnFrameworkInitializationCompleted()
     {
         // The watch posts to the dispatcher from its own thread, so it may only start once the dispatcher exists here.
@@ -45,7 +47,18 @@ public class App : Application
             var settings = shell.Settings;
             // Started at sign-in (the autostart entry) with "start minimized": the window waits on the taskbar.
             var minimized = settings.StartMinimized && (desktop.Args ?? []).Contains(VmQontrol.Core.Hosts.Autostart.Argument);
-            desktop.MainWindow = new MainWindow { DataContext = shell, WindowState = minimized ? Avalonia.Controls.WindowState.Minimized : Avalonia.Controls.WindowState.Normal };
+            var window = new MainWindow { DataContext = shell, WindowState = minimized ? Avalonia.Controls.WindowState.Minimized : Avalonia.Controls.WindowState.Normal };
+            window.RestorePlacement(settings.MainWindow);
+            desktop.MainWindow = window;
+            // The window's size is saved as it closes; the save runs on a worker, so the exit waits a moment for it.
+            desktop.Exit += (_, _) => AppSettings.WaitForSaves(TimeSpan.FromSeconds(2));
+            // SIGTERM (a desktop logging out, systemd, kill) closes the window as its close button does, so what is saved
+            // at close (the window's size) is saved; machines run on in their own processes either way.
+            _sigterm = System.Runtime.InteropServices.PosixSignalRegistration.Create(System.Runtime.InteropServices.PosixSignal.SIGTERM, signal =>
+            {
+                signal.Cancel = true;
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => desktop.Shutdown());
+            });
             _ = shell.StartAsync();
         }
         base.OnFrameworkInitializationCompleted();
