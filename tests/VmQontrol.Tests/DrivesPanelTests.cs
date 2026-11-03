@@ -59,8 +59,12 @@ public sealed class DrivesPanelTests
             return (rows, systemWritable, panel.Drives.Count);
         });
 
-        Assert.Equal(drives.Count, seen.Count);
-        Assert.Equal(drives.Count, seen.rows);
+        // A drive plugged in or out while the panel loaded changes the count on this computer: the panel must match the
+        // list as it stood on one side of it (read before and after), and a skip says the host moved under the test.
+        var after = HostDrives.List();
+        Assert.SkipWhen(drives.Count != after.Count && seen.Count != drives.Count && seen.Count != after.Count, $"drives were plugged in or out during the test ({drives.Count} → {after.Count})");
+        Assert.True(seen.Count == drives.Count || seen.Count == after.Count, $"the panel lists {seen.Count} drives; this computer has {drives.Count} before and {after.Count} after");
+        Assert.Equal(seen.Count, seen.rows);
         Assert.All(seen.systemWritable, Assert.False);
     }
 }
