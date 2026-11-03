@@ -172,11 +172,56 @@ public sealed class SnapshotStore(MachineConfig machine, string machineDirectory
             // The saved memory belongs to the disks as they are; under another state it would wreck the guest's files.
             if (MachineSuspend.IsSuspended(machineDirectory))
                 throw new InvalidOperationException("The machine is suspended. Power it on and shut it down, or discard its suspended state, before going back to a snapshot.");
-            foreach (var disk in Disks) await QemuImg.RunAsync(ct, "snapshot", "-a", snapshot.Tag, disk).ConfigureAwait(false);
+            await RestoreOfflineAsync(snapshot.Tag, ct).ConfigureAwait(false);
         }
 
         var list = Load();
         Save(list with { Current = snapshot.Tag });
+    }
+
+    /// <summary>
+    /// All disks or none, as taking one is: each disk first keeps its present state under a hidden tag (on qcow2 that is
+    /// metadata, not a copy), so when one disk refuses (snapshot missing, disk full, damaged) the disks already returned go
+    /// back to how they were. The hidden tags are deleted either way.
+    /// </summary>
+    private async Task RestoreOfflineAsync(string tag, CancellationToken ct)
+    {
+        var disks = Disks.ToList();
+        var undo = $"vmq-undo-{Guid.NewGuid().ToString("N")[..12]}";
+        var kept = new List<string>();
+        var restored = new List<string>();
+        try
+        {
+            foreach (var disk in disks)
+            {
+                await QemuImg.RunAsync(ct, "snapshot", "-c", undo, disk).ConfigureAwait(false);
+                kept.Add(disk);
+            }
+
+            foreach (var disk in disks)
+            {
+                restored.Add(disk);
+                await QemuImg.RunAsync(ct, "snapshot", "-a", tag, disk).ConfigureAwait(false);
+            }
+        }
+        catch
+        {
+            foreach (var disk in restored)
+            {
+                try { await QemuImg.RunAsync(CancellationToken.None, "snapshot", "-a", undo, disk).ConfigureAwait(false); }
+                catch (IOException back) { Log.Warn($"{machine.Name}: {disk} could not be returned to its state before the restore ({back.Message}); its hidden snapshot {undo} is kept."); kept.Remove(disk); }
+            }
+
+            throw;
+        }
+        finally
+        {
+            foreach (var disk in kept)
+            {
+                try { await QemuImg.RunAsync(CancellationToken.None, "snapshot", "-d", undo, disk).ConfigureAwait(false); }
+                catch (IOException gone) { Log.Warn($"{machine.Name}: hidden snapshot {undo} could not be deleted from {disk}: {gone.Message}"); }
+            }
+        }
     }
 
     /// <summary>Deletes a snapshot; its children take its parent, so the tree stays whole.</summary>
