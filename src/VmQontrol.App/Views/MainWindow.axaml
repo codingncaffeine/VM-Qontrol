@@ -8,9 +8,6 @@
         Icon="avares://vmqontrol/Assets/icon-256.png"
         Width="1320" Height="860" MinWidth="960" MinHeight="600"
         WindowStartupLocation="CenterScreen">
-  <Window.KeyBindings>
-    <KeyBinding Gesture="F5" Command="{Binding RefreshCommand}" />
-  </Window.KeyBindings>
   <Panel>
     <DockPanel>
       <!-- Status bar: the last thing that happened. -->
@@ -32,7 +29,7 @@
               <TextBlock x:Name="ClipboardHintText" Text="{Binding ClipboardHint}" FontSize="{DynamicResource QFontSmall}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
-          <TextBlock Grid.Column="3" Text="Ctrl+K  all commands" Classes="muted" FontSize="{DynamicResource QFontSmall}" VerticalAlignment="Center" />
+          <TextBlock Grid.Column="3" Text="Ctrl+K  all commands   ·   Ctrl+?  shortcuts" Classes="muted" FontSize="{DynamicResource QFontSmall}" VerticalAlignment="Center" />
         </Grid>
       </Border>
 
@@ -48,12 +45,12 @@
                   <TextBlock Text="VM Qontrol" Classes="h1" VerticalAlignment="Center" />
                 </StackPanel>
               </Button>
-              <Button x:Name="OpenPreferences" Grid.Column="1" Classes="icononly" VerticalAlignment="Center" Command="{Binding OpenPreferencesCommand}" ToolTip.Tip="Preferences">
+              <Button x:Name="OpenPreferences" Grid.Column="1" Classes="icononly" VerticalAlignment="Center" Command="{Binding OpenPreferencesCommand}" ToolTip.Tip="Preferences (Ctrl+,)">
                 <Path Classes="icon" Data="{StaticResource IconSettings}" Width="16" Height="16" />
               </Button>
             </Grid>
             <Button x:Name="NewMachine" DockPanel.Dock="Top" Classes="primary" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                    Command="{Binding NewMachineCommand}" Margin="0,0,0,12" ToolTip.Tip="Create a virtual machine, step by step">
+                    Command="{Binding NewMachineCommand}" Margin="0,0,0,12" ToolTip.Tip="Create a virtual machine, step by step (Ctrl+N)">
               <TextBlock Text="+  New machine" />
             </Button>
             <TextBox x:Name="Search" AutomationProperties.Name="Search machines" DockPanel.Dock="Top" Classes="search" PlaceholderText="Search machines   (Ctrl+F)"
@@ -61,7 +58,7 @@
             <Grid x:Name="LibraryHeading" DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="2" Margin="4,0,0,6" Background="Transparent"
                   Classes.droptarget="{Binding LibraryDropTarget}" ToolTip.Tip="Drop a machine here to take it out of its folder">
               <TextBlock Text="LIBRARY" Classes="section" VerticalAlignment="Center" />
-              <Button x:Name="NewFolder" Grid.Column="1" Classes="icononly" Command="{Binding NewGroupCommand}" ToolTip.Tip="New folder: sort machines into groups such as Windows, Linux or Work"
+              <Button x:Name="NewFolder" Grid.Column="1" Classes="icononly" Command="{Binding NewGroupCommand}" ToolTip.Tip="New folder: sort machines into groups such as Windows, Linux or Work (Ctrl+Shift+N)"
                       AutomationProperties.Name="New folder">
                 <Path Classes="icon" Data="M12,5 L12,19 M5,12 L19,12" Width="14" Height="14" Stretch="Uniform" />
               </Button>
@@ -75,7 +72,7 @@
               <!-- Right-click between machines: New folder. -->
               <ListBox.ContextMenu>
                 <ContextMenu>
-                  <MenuItem x:Name="LibraryNewFolder" Header="New folder…" Command="{Binding NewGroupCommand}" />
+                  <MenuItem x:Name="LibraryNewFolder" Header="New folder…" Command="{Binding NewGroupCommand}" InputGesture="Ctrl+Shift+N" />
                   <MenuItem Header="Look for machines again" Command="{Binding RefreshCommand}" InputGesture="F5" />
                 </ContextMenu>
               </ListBox.ContextMenu>
@@ -92,7 +89,7 @@
                         <MenuItem x:Name="FolderRename" Header="Rename…" Command="{Binding RenameCommand}" />
                         <MenuItem Header="Move up" Command="{Binding MoveUpCommand}" IsEnabled="{Binding CanMoveUp}" />
                         <MenuItem Header="Move down" Command="{Binding MoveDownCommand}" IsEnabled="{Binding CanMoveDown}" />
-                        <MenuItem Header="New folder…" Command="{Binding NewGroupCommand}" />
+                        <MenuItem Header="New folder…" Command="{Binding NewGroupCommand}" InputGesture="Ctrl+Shift+N" />
                         <Separator />
                         <MenuItem x:Name="FolderDelete" Header="Delete folder" Command="{Binding DeleteCommand}" ToolTip.Tip="The machines in it stay in the library; nothing is deleted from disk" />
                       </ContextMenu>
@@ -491,15 +488,55 @@
           <ListBox x:Name="PaletteList" Classes="library" ItemsSource="{Binding Items}" SelectedItem="{Binding Highlighted}" MaxHeight="380">
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="vm:PaletteItem">
-                <Grid ColumnDefinitions="*,Auto">
+                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
                   <TextBlock Text="{Binding Title}" />
                   <TextBlock Grid.Column="1" Text="{Binding Context}" Classes="muted" FontSize="{DynamicResource QFontSmall}" VerticalAlignment="Center" />
+                  <Border Grid.Column="2" Classes="keycap" IsVisible="{Binding HasKeys}" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Keys}" />
+                  </Border>
                 </Grid>
               </DataTemplate>
             </ListBox.ItemTemplate>
           </ListBox>
           <TextBlock Text="Enter runs it · ↑↓ choose · Esc closes" Classes="muted" FontSize="{DynamicResource QFontSmall}" Margin="6,0" />
         </StackPanel>
+      </Border>
+    </Panel>
+
+    <!-- Ctrl+?: every keyboard shortcut, by section. -->
+    <Panel x:Name="ShortcutsLayer" IsVisible="{Binding ShowShortcuts}" Background="{DynamicResource QScrim}">
+      <Border Classes="card" Width="640" MaxHeight="700" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="22,18" BoxShadow="0 12 40 0 #60000000">
+        <DockPanel>
+          <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+            <TextBlock Text="Keyboard shortcuts" Classes="h1" />
+            <Button Grid.Column="1" Classes="secondary" Content="Close" Command="{Binding CloseShortcutsCommand}" />
+          </Grid>
+          <TextBlock DockPanel.Dock="Bottom" Text="Ctrl+K finds every other action by name. Shortcuts wait while a dialog is open; in a text box, Enter, Delete and Ctrl+Z keep their usual meaning."
+                     Classes="muted" TextWrapping="Wrap" FontSize="{DynamicResource QFontSmall}" Margin="0,10,0,0" />
+          <ScrollViewer>
+            <ItemsControl x:Name="ShortcutSections" ItemsSource="{x:Static views:Shortcuts.Sheet}" Margin="0,0,16,0">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="views:ShortcutSection">
+                  <StackPanel Spacing="4" Margin="0,6,0,8">
+                    <TextBlock Text="{Binding Title}" Classes="section" />
+                    <ItemsControl ItemsSource="{Binding Rows}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="views:ShortcutRow">
+                          <Grid ColumnDefinitions="*,Auto" Margin="0,3">
+                            <TextBlock Text="{Binding Title}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                            <Border Grid.Column="1" Classes="keycap" VerticalAlignment="Center">
+                              <TextBlock Text="{Binding Keys}" />
+                            </Border>
+                          </Grid>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </DockPanel>
       </Border>
     </Panel>
 

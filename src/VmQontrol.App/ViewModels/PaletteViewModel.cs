@@ -5,7 +5,13 @@ using CommunityToolkit.Mvvm.ComponentModel;
 namespace VmQontrol.App.ViewModels;
 
 /// <summary>One command the palette offers: its words, where it applies, and what it does.</summary>
-public sealed record PaletteItem(string Title, string Context, Action Run);
+public sealed record PaletteItem(string Title, string Context, Action Run)
+{
+    /// <summary>The keyboard shortcut that does the same, shown beside it ("Ctrl+B"), or <c>null</c>.</summary>
+    public string? Keys { get; init; }
+
+    public bool HasKeys => Keys is not null;
+}
 
 /// <summary>
 /// Ctrl+K: every action in one search box. Words match in any order, each as the start of a word or anywhere; earlier
@@ -13,6 +19,11 @@ public sealed record PaletteItem(string Title, string Context, Action Run);
 /// </summary>
 public sealed partial class PaletteViewModel(ShellViewModel shell) : ObservableObject
 {
+    /// <summary>The shortcut for an action, by the shortcut table's title (set by the window, which owns the table).</summary>
+    public static Func<string, string?> KeysFor { get; set; } = _ => null;
+
+    private static PaletteItem With(PaletteItem item, string shortcutTitle) => item with { Keys = KeysFor(shortcutTitle) };
+
     private List<PaletteItem> _all = [];
 
     public ObservableCollection<PaletteItem> Items { get; } = [];
@@ -76,13 +87,14 @@ public sealed partial class PaletteViewModel(ShellViewModel shell) : ObservableO
     {
         var items = new List<PaletteItem>
         {
-            new("New machine", "Create", shell.NewMachine),
-            new("Preferences", "The app's own settings", shell.OpenPreferences),
-            new("Import a machine", "From VMware, VirtualBox, an OVF appliance, virt-manager or a disk", shell.OpenImport),
-            new("Refresh the library", "Library", () => _ = shell.RefreshAsync()),
+            With(new("New machine", "Create", shell.NewMachine), "New machine"),
+            With(new("Preferences", "The app's own settings", shell.OpenPreferences), "Preferences"),
+            With(new("Import a machine", "From VMware, VirtualBox, an OVF appliance, virt-manager or a disk", shell.OpenImport), "Import a machine"),
+            With(new("Refresh the library", "Library", () => _ = shell.RefreshAsync()), "Look for machines again"),
             new("Show the host check", "Welcome", () => shell.Selected = null),
             new("Virtual networks", "Networking", shell.OpenNetwork),
-            new("New folder", "Library: sort machines into groups", shell.NewGroup),
+            With(new("New folder", "Library: sort machines into groups", shell.NewGroup), "New folder"),
+            With(new("Keyboard shortcuts", "Help", () => shell.ShowShortcuts = true), "Keyboard shortcuts"),
         };
         foreach (var g in shell.GroupNames)
         {
@@ -94,41 +106,41 @@ public sealed partial class PaletteViewModel(ShellViewModel shell) : ObservableO
         foreach (var m in shell.Machines) items.Add(new($"Go to {m.Name}", m.LibraryLabel, () => shell.Selected = m));
         if (shell.Selected is { } s)
         {
-            void Add(string title, ICommand command, bool when = true)
+            void Add(string title, ICommand command, bool when = true, string? shortcut = null)
             {
-                if (when) items.Add(new(title, s.Name, () => command.Execute(null)));
+                if (when) items.Add(With(new(title, s.Name, () => command.Execute(null)), shortcut ?? title));
             }
 
-            Add(s.PowerOnText, s.PowerOnCommand, s.CanPowerOn);
+            Add(s.PowerOnText, s.PowerOnCommand, s.CanPowerOn, "Power on");
             Add("New machine from this template", s.CloneCommand, s.IsTemplate);
             Add("Power on in the background", s.PowerOnInBackgroundCommand, s.CanPowerOn);
             Add("Power on to firmware setup", s.PowerOnToFirmwareCommand, s.CanOpenFirmware);
             Add("Discard suspended state", s.DiscardSuspendedCommand, s.CanDiscardSuspended);
-            Add("Open screen", s.OpenScreenCommand, s.IsActive);
+            Add("Open screen", s.OpenScreenCommand, s.IsActive, "Power on, or open the screen of a running machine");
             Add("Shut down", s.ShutDownCommand, s.IsRunning);
-            Add("Pause", s.PauseCommand, s.CanPause);
-            Add("Resume", s.ResumeCommand, s.IsPaused);
-            Add("Suspend", s.SuspendCommand, s.IsActive);
-            Add("Reset", s.ResetCommand, s.IsActive);
-            Add("Power off", s.PowerOffCommand, s.IsActive);
-            Add("Open settings", s.OpenSettingsCommand);
+            Add("Pause", s.PauseCommand, s.CanPause, "Pause or resume");
+            Add("Resume", s.ResumeCommand, s.IsPaused, "Pause or resume");
+            Add("Suspend", s.SuspendCommand, s.IsActive, "Suspend (save its state and turn off)");
+            Add("Reset", s.ResetCommand, s.IsActive, "Reset (asks first)");
+            Add("Power off", s.PowerOffCommand, s.IsActive, "Power off (asks first)");
+            Add("Open settings", s.OpenSettingsCommand, shortcut: "Settings");
             Add("USB devices", s.OpenUsbCommand);
             Add("Send Ctrl+Alt+Del", s.SendCtrlAltDelCommand, s.IsActive);
             Add("Save a screenshot", s.SaveScreenshotCommand, s.IsActive);
             Add("Clone", s.CloneCommand, s.IsOff && !s.IsTemplate);
             Add("Make into a template", s.MakeTemplateCommand, s.CanMakeTemplate);
             Add("Turn back into a machine", s.UndoTemplateCommand, s.IsTemplate);
-            Add("Delete machine", s.DeleteMachineCommand, s.IsOff);
+            Add("Delete machine", s.DeleteMachineCommand, s.IsOff, "Delete the machine (asks first)");
             Add("Show in file manager", s.OpenFolderCommand);
             Add("Move to folder…", s.MoveToGroupCommand);
             Add("Take out of the folder", s.RemoveFromGroupCommand, s.HasGroup);
             Add("Copy command line", s.CopyCommandLineCommand);
             Add(s.IsFavorite ? "Remove from favorites" : "Add to favorites", s.ToggleFavoriteCommand);
-            items.Add(new("Show summary", s.Name, () => s.Tab = 0));
-            items.Add(new("Show snapshots", s.Name, () => s.Tab = 1));
-            items.Add(new("Show performance", s.Name, () => s.Tab = 2));
-            items.Add(new("Show console", s.Name, () => s.Tab = 3));
-            items.Add(new("Show log", s.Name, () => s.Tab = 4));
+            items.Add(new("Show summary", s.Name, () => s.Tab = 0) { Keys = "Ctrl+1" });
+            items.Add(new("Show snapshots", s.Name, () => s.Tab = 1) { Keys = "Ctrl+2" });
+            items.Add(new("Show performance", s.Name, () => s.Tab = 2) { Keys = "Ctrl+3" });
+            items.Add(new("Show console", s.Name, () => s.Tab = 3) { Keys = "Ctrl+4" });
+            items.Add(new("Show log", s.Name, () => s.Tab = 4) { Keys = "Ctrl+5" });
         }
 
         return items;

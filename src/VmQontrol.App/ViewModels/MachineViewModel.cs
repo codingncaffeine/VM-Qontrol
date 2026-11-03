@@ -176,7 +176,7 @@ public sealed partial class MachineViewModel : ObservableObject
 
     public string PowerOnText => IsSuspended ? "Resume" : "Power on";
 
-    public string PowerOnTip => IsSuspended ? "Carry on from where the machine was suspended, with every program as it was" : "Start the machine and open its screen";
+    public string PowerOnTip => IsSuspended ? "Carry on from where the machine was suspended, with every program as it was (Ctrl+B)" : "Start the machine and open its screen (Ctrl+B)";
 
     /// <summary>The firmware screen means a fresh start, so a suspended machine offers Discard first.</summary>
     public bool CanOpenFirmware => IsOff && !IsSuspended && !IsTemplate;

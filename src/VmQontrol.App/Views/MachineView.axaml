@@ -88,41 +88,41 @@
           </StackPanel>
         </Button>
         <Button x:Name="OpenScreen" Classes="primary" Command="{Binding OpenScreenCommand}" IsVisible="{Binding IsActive}"
-                ToolTip.Tip="Open the machine's screen in a viewer window. In it, Ctrl+Alt gives the mouse and keyboard back to this computer.">
+                ToolTip.Tip="Open the machine's screen in a viewer window (Enter). In it, Ctrl+Alt gives the mouse and keyboard back to this computer.">
           <StackPanel Orientation="Horizontal" Spacing="8">
             <Path Classes="icon" Data="{StaticResource IconScreen}" Stroke="{DynamicResource QOnAccent}" />
             <TextBlock Text="Open screen" />
           </StackPanel>
         </Button>
         <Button x:Name="ShutDown" Classes="tool" Command="{Binding ShutDownCommand}" IsVisible="{Binding IsRunning}"
-                ToolTip.Tip="Ask the guest to close its programs and turn itself off, like pressing a computer's power button">
+                ToolTip.Tip="Ask the guest to close its programs and turn itself off, like pressing a computer's power button (Ctrl+E)">
           <StackPanel Orientation="Horizontal" Spacing="8">
             <Path Classes="icon" Data="{StaticResource IconPower}" />
             <TextBlock Text="Shut down" />
           </StackPanel>
         </Button>
         <Button x:Name="Pause" Classes="tool" Command="{Binding PauseCommand}" IsVisible="{Binding CanPause}"
-                ToolTip.Tip="Freeze the machine where it is; Resume carries on exactly there">
+                ToolTip.Tip="Freeze the machine where it is; Resume carries on exactly there (Ctrl+Shift+P)">
           <StackPanel Orientation="Horizontal" Spacing="8">
             <Path Classes="iconfill" Data="{StaticResource IconPause}" />
             <TextBlock Text="Pause" />
           </StackPanel>
         </Button>
-        <Button x:Name="Resume" Classes="tool" Command="{Binding ResumeCommand}" IsVisible="{Binding IsPaused}">
+        <Button x:Name="Resume" Classes="tool" Command="{Binding ResumeCommand}" IsVisible="{Binding IsPaused}" ToolTip.Tip="Carry on from where the machine was paused (Ctrl+Shift+P)">
           <StackPanel Orientation="Horizontal" Spacing="8">
             <Path Classes="iconfill" Data="{StaticResource IconPlay}" />
             <TextBlock Text="Resume" />
           </StackPanel>
         </Button>
         <Button x:Name="Suspend" Classes="tool" Command="{Binding SuspendCommand}" IsVisible="{Binding IsActive}"
-                ToolTip.Tip="Save everything the machine is doing and turn it off; Resume carries on from there, programs and all">
+                ToolTip.Tip="Save everything the machine is doing and turn it off; Resume carries on from there, programs and all (Ctrl+Z)">
           <StackPanel Orientation="Horizontal" Spacing="8">
             <Path Classes="icon" Data="{StaticResource IconSuspend}" />
             <TextBlock Text="Suspend" />
           </StackPanel>
         </Button>
         <Button x:Name="PowerOff" Classes="tool danger" Command="{Binding PowerOffCommand}" IsVisible="{Binding IsActive}"
-                ToolTip.Tip="Turn off at once, like pulling the plug (unsaved work is lost)">
+                ToolTip.Tip="Turn off at once, like pulling the plug (unsaved work is lost) (Ctrl+Shift+E)">
           <StackPanel Orientation="Horizontal" Spacing="8">
             <Path Classes="iconfill" Data="{StaticResource IconStop}" Fill="{DynamicResource QDanger}" />
             <TextBlock Text="Power off" />
@@ -131,7 +131,7 @@
       </WrapPanel>
       <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Stretch">
         <!-- A menu of the devices plugged in, as a viewer's USB menu: tick one to hand it over, untick to give it back. -->
-        <Button x:Name="OpenUsb" Classes="tool" ToolTip.Tip="Hand USB devices plugged into this computer to the machine">
+        <Button x:Name="OpenUsb" Classes="tool" ToolTip.Tip="Hand USB devices plugged into this computer to the machine (Ctrl+U)">
           <StackPanel Orientation="Horizontal" Spacing="8">
             <Path Classes="icon" Data="{StaticResource IconUsb}" />
             <TextBlock Text="USB devices" />
@@ -141,7 +141,7 @@
             <MenuFlyout Placement="BottomEdgeAlignedRight" />
           </Button.Flyout>
         </Button>
-        <Button x:Name="OpenSettings" Classes="tool" Command="{Binding OpenSettingsCommand}" ToolTip.Tip="Memory, processors, disks, discs, network, display and everything else">
+        <Button x:Name="OpenSettings" Classes="tool" Command="{Binding OpenSettingsCommand}" ToolTip.Tip="Memory, processors, disks, discs, network, display and everything else (Ctrl+D)">
           <StackPanel Orientation="Horizontal" Spacing="8">
             <Path Classes="icon" Data="{StaticResource IconSettings}" />
             <TextBlock Text="Settings" />
@@ -151,12 +151,12 @@
           <TextBlock Text="⋯" FontWeight="Bold" HorizontalAlignment="Center" />
           <Button.Flyout>
             <MenuFlyout Placement="BottomEdgeAlignedLeft">
-              <MenuItem Header="Reset" Command="{Binding ResetCommand}" IsVisible="{Binding IsActive}" ToolTip.Tip="Restart at once, like a computer's reset button (unsaved work is lost)" />
-              <MenuItem x:Name="PowerOnBackground" Header="Power on in the background" Command="{Binding PowerOnInBackgroundCommand}" IsVisible="{Binding CanPowerOn}" ToolTip.Tip="Start without opening the screen; Open screen shows it whenever you want" />
+              <MenuItem Header="Reset" InputGesture="Ctrl+R" Command="{Binding ResetCommand}" IsVisible="{Binding IsActive}" ToolTip.Tip="Restart at once, like a computer's reset button (unsaved work is lost)" />
+              <MenuItem x:Name="PowerOnBackground" Header="Power on in the background" InputGesture="Ctrl+Shift+B" Command="{Binding PowerOnInBackgroundCommand}" IsVisible="{Binding CanPowerOn}" ToolTip.Tip="Start without opening the screen; Open screen shows it whenever you want" />
               <MenuItem Header="Power on to firmware setup" Command="{Binding PowerOnToFirmwareCommand}" IsVisible="{Binding CanOpenFirmware}" />
               <MenuItem Header="Discard suspended state…" Command="{Binding DiscardSuspendedCommand}" IsVisible="{Binding CanDiscardSuspended}" />
               <MenuItem x:Name="OpenDrivesItem" Header="Host drives…" Command="{Binding OpenDrivesCommand}" ToolTip.Tip="Hand a disk, a partition or a disc drive of this computer to the machine" />
-              <MenuItem Header="Send Ctrl+Alt+Del" Command="{Binding SendCtrlAltDelCommand}" IsVisible="{Binding IsActive}" />
+              <MenuItem Header="Send Ctrl+Alt+Del" InputGesture="Ctrl+Alt+Insert" Command="{Binding SendCtrlAltDelCommand}" IsVisible="{Binding IsActive}" />
               <MenuItem x:Name="SendKeyMenu" Header="Send a key combination" IsVisible="{Binding IsActive}"
                         ToolTip.Tip="Keys this computer keeps for itself when typed (switching consoles, the screenshot key), sent to the machine instead">
                 <MenuItem Header="Ctrl+Alt+Backspace" Command="{Binding SendKeysCommand}" CommandParameter="ctrl+alt+backspace" />
@@ -188,7 +188,7 @@
               </MenuItem>
               <MenuItem x:Name="CaptureItem" Header="Capture network traffic" Command="{Binding StartCaptureCommand}" IsVisible="{Binding CanCapture}"
                         ToolTip.Tip="Write every packet the machine sends and receives to a .pcap file in its folder, for Wireshark; stop from the mark beside its state" />
-              <MenuItem Header="Save a screenshot" Command="{Binding SaveScreenshotCommand}" IsVisible="{Binding IsActive}" />
+              <MenuItem Header="Save a screenshot" InputGesture="Ctrl+Shift+S" Command="{Binding SaveScreenshotCommand}" IsVisible="{Binding IsActive}" />
               <MenuItem x:Name="RecordScreenItem" Header="Record the screen" Command="{Binding StartRecordingCommand}" IsVisible="{Binding CanRecord}"
                         ToolTip.Tip="Record what the machine shows into a video in your Videos folder (no sound); stop from the red mark beside its state" />
               <MenuItem Header="Clone…" Command="{Binding CloneCommand}" IsVisible="{Binding !IsTemplate}" />
@@ -205,7 +205,7 @@
               <MenuItem Header="Copy the QEMU command line" Command="{Binding CopyCommandLineCommand}" />
               <MenuItem Header="{Binding IsFavorite, Converter={x:Static vm:Text.FavoriteToggle}}" Command="{Binding ToggleFavoriteCommand}" />
               <Separator />
-              <MenuItem Header="Delete…" Command="{Binding DeleteMachineCommand}" />
+              <MenuItem Header="Delete…" InputGesture="Delete" Command="{Binding DeleteMachineCommand}" />
             </MenuFlyout>
           </Button.Flyout>
         </Button>
@@ -408,7 +408,9 @@
                 <TextBlock Classes="muted" TextWrapping="Wrap"
                            Text="A snapshot keeps this moment so you can come back to it: before an update, before trying something risky. Taken while the machine runs, it keeps the open programs too." />
                 <Grid ColumnDefinitions="*,*,Auto" ColumnSpacing="10">
-                  <TextBox x:Name="SnapshotName" Text="{Binding NewName}" PlaceholderText="Name" />
+                  <TextBox x:Name="SnapshotName" Text="{Binding NewName}" PlaceholderText="Name">
+                    <TextBox.KeyBindings><KeyBinding Gesture="Enter" Command="{Binding TakeCommand}" /></TextBox.KeyBindings>
+                  </TextBox>
                   <TextBox Grid.Column="1" Text="{Binding NewDescription}" PlaceholderText="What is special about this moment (optional)" />
                   <Button x:Name="TakeSnapshot" Grid.Column="2" Classes="primary" Content="Take snapshot" Command="{Binding TakeCommand}" />
                 </Grid>

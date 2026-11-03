@@ -185,6 +185,20 @@
     <Setter Property="RenderTransform" Value="rotate(-90deg)" />
   </Style>
 
+  <!-- A key or key combination, as on the keyboard (shortcut sheet, command palette). -->
+  <Style Selector="Border.keycap">
+    <Setter Property="Background" Value="{DynamicResource QSurfaceRaised}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource QBorder}" />
+    <Setter Property="BorderThickness" Value="1,1,1,2" />
+    <Setter Property="CornerRadius" Value="{DynamicResource QRadiusSmall}" />
+    <Setter Property="Padding" Value="7,1" />
+  </Style>
+  <Style Selector="Border.keycap TextBlock">
+    <Setter Property="FontSize" Value="{DynamicResource QFontSmall}" />
+    <Setter Property="FontFamily" Value="monospace" />
+    <Setter Property="Foreground" Value="{DynamicResource QTextMuted}" />
+  </Style>
+
   <!-- Guest badge -->
   <Style Selector="Border.badge">
     <Setter Property="Background" Value="{DynamicResource QBadgeOther}" />

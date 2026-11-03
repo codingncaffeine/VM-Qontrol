@@ -874,6 +874,9 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     // ── Commands
 
+    /// <summary>What Save would change, in the history's words (empty = nothing to save).</summary>
+    public IReadOnlyList<string> UnsavedChanges() => SettingsHistory.Describe(Original, Build());
+
     [RelayCommand]
     private async Task SaveAsync()
     {

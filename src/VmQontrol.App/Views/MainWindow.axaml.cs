@@ -12,6 +12,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        PaletteViewModel.KeysFor = Shortcuts.ShownFor;
         // A folder heading row is never selected or focused (its button folds the folder); containers are recycled, so set both ways.
         if (this.FindControl<ListBox>("Library") is { } library)
         {
@@ -31,32 +32,45 @@ public partial class MainWindow : Window
             if (DataContext is ShellViewModel shell)
                 shell.Clipboard = text => Clipboard is { } clipboard ? Avalonia.Input.Platform.ClipboardExtensions.SetTextAsync(clipboard, text) : Task.CompletedTask;
         };
-        // Tunnel: the palette's keys win over whatever control has focus (a text box would take Enter and the arrows).
+        // Tunnel: the palette's keys and the shortcuts win over whatever control has focus (a text box would take Enter and
+        // the arrows); a text box keeps the keys that edit text (Shortcut.WhileTyping).
         AddHandler(KeyDownEvent, (_, e) =>
         {
             if (DataContext is not ShellViewModel shell) return;
             var palette = shell.Palette;
-            if (e.Key == Key.K && e.KeyModifiers == KeyModifiers.Control)
+            if (palette.IsOpen)
             {
-                if (palette.IsOpen) palette.Close();
-                else
+                switch (e.Key)
                 {
-                    palette.Open();
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() => this.FindControl<TextBox>("PaletteQuery")?.Focus());
+                    case Key.Escape: palette.Close(); e.Handled = true; return;
+                    case Key.Enter: palette.RunHighlighted(); e.Handled = true; return;
+                    case Key.Down: palette.Move(1); e.Handled = true; return;
+                    case Key.Up: palette.Move(-1); e.Handled = true; return;
                 }
 
+                if (!(e.Key == Key.K && e.KeyModifiers == KeyModifiers.Control)) return;
+            }
+
+            if (shell.ShowShortcuts && e.Key == Key.Escape)
+            {
+                shell.ShowShortcuts = false;
                 e.Handled = true;
                 return;
             }
 
-            if (!palette.IsOpen) return;
-            switch (e.Key)
+            // An open dialog holds the shortcuts back; the palette and the sheet still close on their own keys.
+            if (shell.HasOverlay)
             {
-                case Key.Escape: palette.Close(); e.Handled = true; break;
-                case Key.Enter: palette.RunHighlighted(); e.Handled = true; break;
-                case Key.Down: palette.Move(1); e.Handled = true; break;
-                case Key.Up: palette.Move(-1); e.Handled = true; break;
+                var closesOverlay = (palette.IsOpen && e.Key == Key.K && e.KeyModifiers == KeyModifiers.Control)
+                                    || (shell.ShowShortcuts && e.Key is Key.OemQuestion or Key.Oem2 && e.KeyModifiers.HasFlag(KeyModifiers.Control));
+                if (!closesOverlay) return;
             }
+
+            var typing = FocusManager?.GetFocusedElement() is TextBox;
+            // Enter and Delete act on the machine only from the library list (or nothing focused), never from a button or a page's field.
+            if (e.KeyModifiers == KeyModifiers.None && e.Key is Key.Enter or Key.Delete
+                && FocusManager?.GetFocusedElement() is { } focused and not ListBoxItem and not ListBox) return;
+            if (Shortcuts.TryRun(shell, this, e, typing)) e.Handled = true;
         }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         KeyDown += (_, e) =>
         {
@@ -91,12 +105,53 @@ public partial class MainWindow : Window
                 notice.DismissCommand.Execute(null);
                 e.Handled = true;
             }
-            else if (e.Key == Key.F && e.KeyModifiers == KeyModifiers.Control)
+            else if (e.Key == Key.Escape && DataContext is ShellViewModel { SettingsPage: { } settings })
             {
-                this.FindControl<TextBox>("Search")?.Focus();
+                CloseSettings(settings);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape && DataContext is ShellViewModel { PreferencesPage: { } preferences })
+            {
+                preferences.CloseCommand.Execute(null);
                 e.Handled = true;
             }
         };
+    }
+
+    /// <summary>Focuses a named text box once the page that holds it is on screen.</summary>
+    public void FocusLater(string name) => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+    {
+        if (this.GetVisualDescendants().OfType<TextBox>().FirstOrDefault(t => t.Name == name && t.IsEffectivelyVisible) is { } box)
+        {
+            box.Focus();
+            box.SelectAll();
+        }
+    }, Avalonia.Threading.DispatcherPriority.Background);
+
+    public void TogglePalette()
+    {
+        if (DataContext is not ShellViewModel shell) return;
+        if (shell.Palette.IsOpen) shell.Palette.Close();
+        else
+        {
+            shell.Palette.Open();
+            FocusLater("PaletteQuery");
+        }
+    }
+
+    /// <summary>Escape on a machine's Settings: closes it, asking first when there are changes not saved.</summary>
+    private async void CloseSettings(SettingsViewModel settings)
+    {
+        if (DataContext is not ShellViewModel shell) return;
+        var changes = settings.UnsavedChanges();
+        if (changes.Count > 0)
+        {
+            var notice = new NoticeViewModel("Discard your changes?", [$"Not saved: {string.Join("; ", changes)}."], confirm: "Discard", dismiss: "Keep editing", isDanger: true);
+            shell.Show(notice);
+            if (!await notice.Answer) return;
+        }
+
+        settings.CloseCommand.Execute(null);
     }
 
     /// <summary>

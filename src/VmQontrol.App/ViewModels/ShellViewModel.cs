@@ -901,6 +901,25 @@ public sealed partial class ShellViewModel : ObservableObject
         ApplyFilter();
     }
 
+    /// <summary>The keyboard shortcut sheet (Ctrl+?) is open.</summary>
+    [ObservableProperty]
+    private bool _showShortcuts;
+
+    [RelayCommand]
+    private void CloseShortcuts() => ShowShortcuts = false;
+
+    /// <summary>A dialog or panel holds the keyboard: shortcuts wait until it closes.</summary>
+    public bool HasOverlay => Palette.IsOpen || ShowShortcuts || Prompt is not null || GroupPrompt is not null || Notice is not null
+                              || Networks is not null || DrivesPanel is not null || UsbPanel is not null;
+
+    /// <summary>Selects the next (or previous) machine in the sidebar's order; machines in folded folders count too.</summary>
+    public void SelectNext(int by)
+    {
+        if (Machines.Count == 0) return;
+        var at = Selected is null ? (by > 0 ? -1 : Machines.Count) : Machines.IndexOf(Selected);
+        Selected = Machines[Math.Clamp(at + by, 0, Machines.Count - 1)];
+    }
+
     /// <summary>A machine dragged over the library's own heading: dropping it takes it out of its folder.</summary>
     [ObservableProperty]
     private bool _libraryDropTarget;
