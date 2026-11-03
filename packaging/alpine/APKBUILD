@@ -1,0 +1,44 @@
+# Contributor: codingncaffeine <codingncaffeine@users.noreply.github.com>
+# Maintainer: codingncaffeine <codingncaffeine@users.noreply.github.com>
+# Needs Alpine 3.23 or later (dotnet10-sdk is not in 3.22).
+pkgname=vm-qontrol
+pkgver=0.0.1
+pkgrel=0
+pkgdesc="Create, run and fine-tune QEMU/KVM virtual machines"
+url="https://github.com/codingncaffeine/VM-Qontrol"
+arch="x86_64"
+license="GPL-3.0-or-later"
+depends="icu-libs libstdc++ fontconfig qemu-system-x86_64 qemu-img ovmf"
+makedepends="dotnet10-sdk"
+subpackages=""
+options="!strip net" # .NET's own native files; NuGet packages are restored at build time
+source="$pkgname-$pkgver.tar.gz::https://github.com/codingncaffeine/VM-Qontrol/archive/refs/tags/v$pkgver.tar.gz"
+builddir="$srcdir/VM-Qontrol-$pkgver"
+_rid=linux-musl-x64
+
+build() {
+	for project in VmQontrol.App VmQontrol.Cli; do
+		dotnet publish "src/$project/$project.csproj" -c Release -r $_rid --self-contained true \
+			-p:VersionPrefix=$pkgver -o "$builddir/publish" --nologo -v q
+	done
+}
+
+check() {
+	# The full suite needs QEMU and a desktop; the build is checked by starting what it made.
+	"$builddir"/publish/vmq --version
+}
+
+package() {
+	install -d "$pkgdir"/usr/lib/$pkgname "$pkgdir"/usr/bin
+	cp -a publish/. "$pkgdir"/usr/lib/$pkgname/
+	for bin in vmqontrol vmq; do
+		printf '#!/bin/sh\nexec /usr/lib/%s/%s "$@"\n' $pkgname $bin > "$pkgdir"/usr/bin/$bin
+		chmod 755 "$pkgdir"/usr/bin/$bin
+	done
+	install -Dm644 packaging/io.github.codingncaffeine.VMQontrol.desktop -t "$pkgdir"/usr/share/applications
+	install -Dm644 packaging/io.github.codingncaffeine.VMQontrol.metainfo.xml -t "$pkgdir"/usr/share/metainfo
+	cp -r packaging/icons/hicolor "$pkgdir"/usr/share/icons/
+	install -Dm644 LICENSE "$pkgdir"/usr/share/licenses/$pkgname/LICENSE
+}
+
+sha512sums="SKIP"
