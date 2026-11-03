@@ -1246,6 +1246,8 @@ public sealed partial class MachineViewModel : ObservableObject
         try
         {
             await Task.Run(() => MachineSuspend.SuspendAsync(running, new Progress<string>(p => Ui.Post(() => _shell.Note(p))))).ConfigureAwait(false);
+            // The state file takes its name only after QEMU has quit, so the exit's own look may have come too early.
+            await RefreshSuspendedAsync().ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is QmpException or IOException or System.Net.Sockets.SocketException)
         {
