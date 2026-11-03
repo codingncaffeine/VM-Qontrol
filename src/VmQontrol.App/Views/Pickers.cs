@@ -33,6 +33,30 @@ internal static class Pickers
             throw new PickerFailedException(ex.Message);
         }
     }
+
+    /// <summary>One file, from the system's dialog; <paramref name="patterns"/> like "*.vmx" make the first filter.</summary>
+    public static async Task<string?> FileAsync(Control from, string title, string filterName, IReadOnlyList<string> patterns)
+    {
+        if (TopLevel.GetTopLevel(from) is not { } top) return null;
+        Log.Info($"File dialog \"{title}\": opening.");
+        try
+        {
+            var files = await top.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = title,
+                AllowMultiple = false,
+                FileTypeFilter = [new FilePickerFileType(filterName) { Patterns = patterns }, FilePickerFileTypes.All],
+            });
+            var path = files.Count > 0 ? files[0].TryGetLocalPath() : null;
+            Log.Info(files.Count == 0 ? $"File dialog \"{title}\": closed without a file." : $"File dialog \"{title}\": {path ?? "not a local file"}.");
+            return path;
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"File dialog \"{title}\" failed.", ex);
+            throw new PickerFailedException(ex.Message);
+        }
+    }
 }
 
 /// <summary>The system's dialog could not be shown; the message says why, for the status line.</summary>

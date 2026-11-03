@@ -11,9 +11,15 @@
                    Text="Create, run and fine-tune virtual machines on this computer. Every setting is explained where you change it, with the recommended value beside it." />
       </StackPanel>
 
-      <Button Classes="primary" HorizontalAlignment="Left" Command="{Binding NewMachineCommand}" Padding="22,12">
-        <TextBlock Text="Create a virtual machine" FontSize="15" />
-      </Button>
+      <StackPanel Orientation="Horizontal" Spacing="10">
+        <Button Classes="primary" HorizontalAlignment="Left" Command="{Binding NewMachineCommand}" Padding="22,12">
+          <TextBlock Text="Create a virtual machine" FontSize="15" />
+        </Button>
+        <Button x:Name="OpenImport" Classes="tool" Command="{Binding OpenImportCommand}" Padding="22,12"
+                ToolTip.Tip="Bring over a machine from VMware Workstation, VirtualBox, an OVF appliance, virt-manager or a disk; the original is only read">
+          <TextBlock Text="Import a machine…" FontSize="15" />
+        </Button>
+      </StackPanel>
 
       <!-- Where machines live, and what is in the library. -->
       <Border Classes="card">

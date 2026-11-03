@@ -17,6 +17,20 @@ public partial class MachineView : UserControl
             _console = (DataContext as MachineViewModel)?.Console;
             if (_console is not null) _console.OutputAdded += OnOutput;
         };
+        foreach (var (item, tar) in new[] { ("ExportFolder", false), ("ExportTar", true) })
+            if (this.FindControl<MenuItem>(item) is { } export)
+                export.Click += async (_, _) =>
+                {
+                    if (DataContext is not MachineViewModel m) return;
+                    try
+                    {
+                        if (await Pickers.FolderAsync(this, $"Where should the copy of {m.Name} go?") is { } path) _ = Task.Run(() => m.ExportAsync(path, tar));
+                    }
+                    catch (PickerFailedException)
+                    {
+                        // Logged by the picker.
+                    }
+                };
         if (this.FindControl<Button>("ChooseDriversDisc") is { } choose)
             choose.Click += async (_, _) =>
             {

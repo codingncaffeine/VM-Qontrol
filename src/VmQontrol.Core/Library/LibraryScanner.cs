@@ -43,6 +43,9 @@ public static class LibraryScanner
             try
             {
                 var import = QuickemuImporter.Import(conf);
+                // A .conf VM Qontrol wrote for one of its own machines (Export, quickemu .conf) is that machine, listed
+                // once, from its vm.json: two entries on one disk could run it twice.
+                if (File.Exists(System.IO.Path.Combine(import.MachineDirectory, MachineStore.FileName))) continue;
                 var machine = import.Machine;
                 if (stateDirectory is not null && System.IO.Path.Combine(stateDirectory, "machines", machine.Id, MachineStore.FileName) is var saved && File.Exists(saved))
                     machine = MachineStore.Load(saved) with { Id = machine.Id, ImportedFrom = machine.ImportedFrom };

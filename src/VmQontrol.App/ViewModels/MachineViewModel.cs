@@ -273,6 +273,56 @@ public sealed partial class MachineViewModel : ObservableObject
         if (GuestToolsAdvice.Command is { } command) _shell.CopyToClipboard(command, "The command is on the clipboard. Paste it in the machine's terminal.");
     }
 
+    /// <summary>
+    /// A portable copy into <paramref name="destination"/> (a folder, or one .tar there). The machine must be off: a disk
+    /// being written is no copy. Progress in the status line; what to know in a notice at the end.
+    /// </summary>
+    public async Task ExportAsync(string destination, bool asTar)
+    {
+        if (!IsOff)
+        {
+            _shell.Show(new NoticeViewModel($"Shut {Name} down first", ["A copy of a running machine's disk would be caught half-written. Shut it down (or suspend it), then export."]));
+            return;
+        }
+
+        var machine = Machine;
+        var dir = Folder;
+        var progress = new Progress<Core.Import.ImportProgress>(p => Ui.Post(() => _shell.Note($"Exporting {Name}: {p.Status} {p.Percent:0}%")));
+        try
+        {
+            var (path, notes) = await Task.Run(() => MachineExport.ExportAsync(machine, dir, destination, asTar, progress, CancellationToken.None)).ConfigureAwait(false);
+            Ui.Post(() =>
+            {
+                _shell.Note($"{Name} is exported to {path}.");
+                _shell.Show(new NoticeViewModel($"{Name} is exported", [$"The copy is in {path}, with a checksum of every file.", .. notes,
+                    asTar ? "On any computer, Import a machine brings it back." : "On any computer, Add machines from a folder lists it (or Import a machine copies it in)."]));
+            });
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Warn($"{Name}: export failed ({ex.Message}).");
+            Ui.Post(() => _shell.Show(new NoticeViewModel($"{Name} was not exported", [ex.Message, "Nothing of the copy was kept; the machine is as it was."], isError: true)));
+        }
+    }
+
+    [RelayCommand]
+    private async Task ExportQuickemuAsync()
+    {
+        var machine = Machine;
+        var dir = Folder;
+        try
+        {
+            var conf = await Task.Run(() => MachineExport.WriteQuickemuConf(machine, dir)).ConfigureAwait(false);
+            Ui.Post(() => _shell.Show(new NoticeViewModel("A quickemu .conf is written", [$"quickemu --vm \"{conf}\" runs this machine's disk.",
+                "The library still lists the machine once. Do not run it from quickemu and from VM Qontrol at the same time.",
+                "quickemu keeps TPM state beside the disk, not in tpm/: a Windows 11 machine there starts with a new TPM."])));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Ui.Post(() => _shell.Show(new NoticeViewModel("The .conf was not written", [ex.Message], isError: true)));
+        }
+    }
+
     /// <summary>The app, for the guest tools download's progress shown on this page.</summary>
     public ShellViewModel Shell => _shell;
 

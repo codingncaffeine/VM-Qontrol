@@ -82,6 +82,23 @@
     <Setter Property="BorderBrush" Value="{DynamicResource QAccent}" />
     <Setter Property="Background" Value="{DynamicResource QAccentSoft}" />
   </Style>
+  <!-- The same card as a button (a choice that acts at once, e.g. where an import comes from). -->
+  <Style Selector="Button.choice">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="VerticalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Name="Card" Background="{DynamicResource QSurface}" BorderBrush="{DynamicResource QBorder}" BorderThickness="2"
+                CornerRadius="{DynamicResource QRadiusLarge}" Padding="16,14">
+          <ContentPresenter Content="{TemplateBinding Content}" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="Button.choice:pointerover /template/ Border#Card">
+    <Setter Property="BorderBrush" Value="{DynamicResource QAccent}" />
+  </Style>
   <Style Selector="TextBlock.warn">
     <Setter Property="Foreground" Value="{DynamicResource QWarning}" />
   </Style>

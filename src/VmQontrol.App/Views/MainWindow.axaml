@@ -99,6 +99,13 @@
               </DataTemplate>
             </ContentControl.ContentTemplate>
           </ContentControl>
+          <ContentControl x:Name="ImportPage" Content="{Binding ImportPage}" IsVisible="{Binding ShowImport}">
+            <ContentControl.ContentTemplate>
+              <DataTemplate x:DataType="vm:ImportViewModel">
+                <views:ImportView />
+              </DataTemplate>
+            </ContentControl.ContentTemplate>
+          </ContentControl>
           <ContentControl x:Name="MachinePage" Content="{Binding Selected}" IsVisible="{Binding ShowMachine}">
             <ContentControl.ContentTemplate>
               <DataTemplate x:DataType="vm:MachineViewModel">

@@ -63,12 +63,32 @@ public sealed partial class ShellViewModel : ObservableObject
 
     public bool ShowWizard => Wizard is not null;
 
+    /// <summary>Import a machine (VMware, VirtualBox, OVF, virt-manager, a disk) while it is open.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowWelcome), nameof(ShowMachine), nameof(ShowImport), nameof(ShowSettings))]
+    private ImportViewModel? _importPage;
+
+    public bool ShowImport => ImportPage is not null && Wizard is null;
+
+    [RelayCommand]
+    public void OpenImport()
+    {
+        if (ImportPage is not null || Wizard is not null) return;
+        var page = new ImportViewModel(this);
+        page.Closed += () => Ui.Post(() =>
+        {
+            if (ImportPage == page) ImportPage = null;
+        });
+        SettingsPage = null;
+        ImportPage = page;
+    }
+
     /// <summary>A machine's settings while they are open.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowWelcome), nameof(ShowMachine), nameof(ShowSettings))]
     private SettingsViewModel? _settingsPage;
 
-    public bool ShowSettings => SettingsPage is not null && Wizard is null;
+    public bool ShowSettings => SettingsPage is not null && Wizard is null && ImportPage is null;
 
     /// <summary>A typed-answer question while it is open (clone, delete).</summary>
     [ObservableProperty]
@@ -200,9 +220,9 @@ public sealed partial class ShellViewModel : ObservableObject
     [ObservableProperty]
     private bool _scanning;
 
-    public bool ShowWelcome => Selected is null && Wizard is null && SettingsPage is null;
+    public bool ShowWelcome => Selected is null && Wizard is null && SettingsPage is null && ImportPage is null;
 
-    public bool ShowMachine => Selected is not null && Wizard is null && SettingsPage is null;
+    public bool ShowMachine => Selected is not null && Wizard is null && SettingsPage is null && ImportPage is null;
 
     public bool LibraryEmpty => MachineCount == 0 && !Scanning;
 
@@ -406,6 +426,8 @@ public sealed partial class ShellViewModel : ObservableObject
     partial void OnSelectedChanged(MachineViewModel? oldValue, MachineViewModel? newValue)
     {
         SettingsPage = null;
+        // Picking a machine leaves the import page, unless it is copying (its progress stays on screen).
+        if (newValue is not null && ImportPage is { Busy: false }) ImportPage = null;
         OnPropertyChanged(nameof(SidebarSelection));
         if (oldValue is not null) oldValue.IsSelected = false;
         if (newValue is not null) newValue.IsSelected = true;

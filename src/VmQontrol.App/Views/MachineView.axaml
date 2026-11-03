@@ -156,6 +156,11 @@
               <MenuItem Header="Clone…" Command="{Binding CloneCommand}" IsVisible="{Binding !IsTemplate}" />
               <MenuItem Header="Make into a template…" Command="{Binding MakeTemplateCommand}" IsVisible="{Binding CanMakeTemplate}" />
               <MenuItem Header="Turn back into a machine" Command="{Binding UndoTemplateCommand}" IsVisible="{Binding IsTemplate}" />
+              <MenuItem x:Name="ExportMenu" Header="Export">
+                <MenuItem x:Name="ExportFolder" Header="As a folder…" ToolTip.Tip="A portable copy of the machine (disks, firmware, TPM, history) with a checksum of every file; the machine must be off" />
+                <MenuItem x:Name="ExportTar" Header="As one file (.tar)…" ToolTip.Tip="The same portable copy in one file, to move or back up; Import a machine brings it back" />
+                <MenuItem Header="As a quickemu .conf" Command="{Binding ExportQuickemuCommand}" ToolTip.Tip="A .conf beside the machine's folder that runs this disk with quickemu" />
+              </MenuItem>
               <MenuItem Header="Open the machine's folder" Command="{Binding OpenFolderCommand}" />
               <MenuItem Header="Copy the QEMU command line" Command="{Binding CopyCommandLineCommand}" />
               <MenuItem Header="{Binding IsFavourite, Converter={x:Static vm:Text.FavouriteToggle}}" Command="{Binding ToggleFavouriteCommand}" />

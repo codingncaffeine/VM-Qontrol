@@ -1,0 +1,144 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:VmQontrol.App.ViewModels"
+             x:Class="VmQontrol.App.Views.ImportView"
+             x:DataType="vm:ImportViewModel">
+  <DockPanel Margin="{DynamicResource QPagePadding}">
+    <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,20">
+      <TextBlock Text="Import a machine" Classes="hero" />
+      <TextBlock Classes="muted" TextWrapping="Wrap"
+                 Text="Bring over a machine from VMware Workstation, VirtualBox, an OVF appliance, virt-manager, or a disk on its own. The original is only read: VM Qontrol works on its own copy." />
+    </StackPanel>
+
+    <!-- Cancel / Back / Import -->
+    <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource QBorder}" BorderThickness="0,1,0,0" Padding="0,14,0,0" Margin="0,16,0,0">
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10">
+        <Button x:Name="CancelImport" Classes="secondary" Content="Cancel" Command="{Binding CancelCommand}" />
+        <StackPanel Grid.Column="1" Margin="16,0" VerticalAlignment="Center" IsVisible="{Binding Busy}" Spacing="4">
+          <TextBlock x:Name="ImportStatus" Text="{Binding Status}" Classes="muted" />
+          <ProgressBar Value="{Binding Percent}" IsIndeterminate="{Binding Percent, Converter={x:Static vm:Text.IsZero}}" Maximum="100" Height="4" />
+        </StackPanel>
+        <Button Grid.Column="2" Classes="secondary" Content="Back" Command="{Binding BackCommand}" IsVisible="{Binding Reviewing}" IsEnabled="{Binding !Busy}" />
+        <Button x:Name="DoImport" Grid.Column="3" Classes="primary" Content="Import" Command="{Binding ImportCommand}" IsVisible="{Binding Reviewing}" />
+      </Grid>
+    </Border>
+
+    <ScrollViewer>
+      <Panel MaxWidth="900" HorizontalAlignment="Left">
+        <!-- 1. Where it comes from -->
+        <StackPanel Spacing="16" IsVisible="{Binding Choosing}">
+          <TextBlock Text="Where is the machine?" Classes="h1" />
+          <UniformGrid Columns="3" ColumnSpacing="12">
+            <Button x:Name="PickMachineFile" Classes="choice" IsEnabled="{Binding !Busy}">
+              <StackPanel Spacing="6">
+                <Path Classes="icon" Data="{StaticResource IconFolder}" Width="20" Height="20" HorizontalAlignment="Left" />
+                <TextBlock Text="A machine's file" FontWeight="SemiBold" />
+                <TextBlock Classes="muted" TextWrapping="Wrap" Text="VMware .vmx, VirtualBox .vbox, an appliance .ova or .ovf, a libvirt .xml, or a VM Qontrol export (.tar)." />
+              </StackPanel>
+            </Button>
+            <Button x:Name="FromVirtManager" Classes="choice" Command="{Binding LoadDomainsCommand}" IsEnabled="{Binding !Busy}">
+              <StackPanel Spacing="6">
+                <Path Classes="icon" Data="{StaticResource IconScreen}" Width="20" Height="20" HorizontalAlignment="Left" />
+                <TextBlock Text="From virt-manager" FontWeight="SemiBold" />
+                <TextBlock Classes="muted" TextWrapping="Wrap" Text="The machines libvirt keeps (virt-manager, GNOME Boxes), listed here to pick from." />
+              </StackPanel>
+            </Button>
+            <Button x:Name="PickDisk" Classes="choice" IsEnabled="{Binding !Busy}">
+              <StackPanel Spacing="6">
+                <Path Classes="icon" Data="{StaticResource IconDisk}" Width="20" Height="20" HorizontalAlignment="Left" />
+                <TextBlock Text="A disk on its own" FontWeight="SemiBold" />
+                <TextBlock Classes="muted" TextWrapping="Wrap" Text=".vmdk, .vdi, .vhdx, .qcow2 or .img: a new machine is made around it." />
+              </StackPanel>
+            </Button>
+          </UniformGrid>
+
+          <TextBlock Text="{Binding DomainsNote}" Classes="muted" TextWrapping="Wrap" IsVisible="{Binding DomainsNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <ItemsControl x:Name="Domains" ItemsSource="{Binding Domains}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate><StackPanel Spacing="8" /></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:LibvirtDomain">
+                <Border Classes="card" Padding="14,10">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                      <TextBlock Text="{Binding Where}" Classes="muted" />
+                    </StackPanel>
+                    <Button Grid.Column="1" Classes="tool" Content="Choose"
+                            Command="{Binding $parent[UserControl].((vm:ImportViewModel)DataContext).ReadDomainCommand}" CommandParameter="{Binding}" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+
+        <!-- 2. What it becomes -->
+        <StackPanel Spacing="16" IsVisible="{Binding Reviewing}">
+          <StackPanel Spacing="4">
+            <TextBlock x:Name="KindTitle" Text="{Binding KindTitle}" Classes="h1" />
+            <TextBlock Text="Check what VM Qontrol will make of it. Everything can be changed later in Settings." Classes="muted" TextWrapping="Wrap" />
+          </StackPanel>
+
+          <Border x:Name="Problems" Classes="card problem" IsVisible="{Binding HasProblems}">
+            <StackPanel Spacing="8">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Path Classes="icon" Data="{StaticResource IconWarning}" />
+                <TextBlock Text="This machine cannot be imported yet" FontWeight="SemiBold" />
+              </StackPanel>
+              <ItemsControl ItemsSource="{Binding Machine.Problems}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="x:String"><TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="0,2" /></DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </Border>
+
+          <Border Classes="card">
+            <StackPanel Spacing="10">
+              <Grid ColumnDefinitions="140,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
+                <TextBlock Text="Name" VerticalAlignment="Center" />
+                <TextBox x:Name="ImportName" Grid.Column="1" Text="{Binding Name}" />
+                <TextBlock Grid.Row="1" Text="System" VerticalAlignment="Center" />
+                <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding GuestChoices}" SelectedItem="{Binding System}" PlaceholderText="{Binding DetectedSystem}" HorizontalAlignment="Stretch" />
+                <TextBlock Grid.Row="2" Text="Firmware" VerticalAlignment="Center" IsVisible="{Binding IsBareDisk}" />
+                <ToggleSwitch Grid.Row="2" Grid.Column="1" IsChecked="{Binding Uefi}" OnContent="UEFI (anything from the last ten years)" OffContent="BIOS (older systems)" IsVisible="{Binding IsBareDisk}" />
+              </Grid>
+              <Rectangle Height="1" Fill="{DynamicResource QBorder}" Margin="0,4" />
+              <ItemsControl x:Name="ImportRows" ItemsSource="{Binding Rows}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:DetailRow">
+                    <Grid ColumnDefinitions="140,*" Margin="0,4">
+                      <TextBlock Text="{Binding Label}" Classes="muted" />
+                      <TextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap" />
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </Border>
+
+          <Border x:Name="ImportNotes" Classes="card" IsVisible="{Binding HasNotes}">
+            <StackPanel Spacing="8">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Path Classes="icon" Data="{StaticResource IconInfo}" />
+                <TextBlock Text="Good to know" FontWeight="SemiBold" />
+              </StackPanel>
+              <ItemsControl ItemsSource="{Binding Machine.Notes}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="x:String">
+                    <Grid ColumnDefinitions="18,*" Margin="0,3">
+                      <TextBlock Text="›" Classes="muted" />
+                      <TextBlock Grid.Column="1" Text="{Binding}" TextWrapping="Wrap" />
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </Panel>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>

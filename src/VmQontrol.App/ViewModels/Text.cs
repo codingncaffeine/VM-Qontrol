@@ -6,6 +6,9 @@ namespace VmQontrol.App.ViewModels;
 public static class Text
 {
     /// <summary>True when an int equals the parameter (which page of the wizard is showing).</summary>
+    /// <summary>True for 0: a progress bar with nothing to show yet runs without a value.</summary>
+    public static readonly IValueConverter IsZero = new FuncValueConverter<double, bool>(v => v <= 0);
+
     public static readonly IValueConverter Is = new FuncValueConverter<int, object?, bool>((v, p) => p is not null && v.ToString(System.Globalization.CultureInfo.InvariantCulture) == p.ToString());
 
     /// <summary>The step rail's text sits beside the current step's accent bar, and indented the same when there is none.</summary>
