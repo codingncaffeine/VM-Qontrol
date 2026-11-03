@@ -120,7 +120,7 @@ internal static class Commands
                 case "doctor":
                     return Doctor(paths, host(), output);
                 case "list":
-                    return List(args.Length > 1 ? args[1] : paths.DefaultLibrary, paths, output);
+                    return List(args.Length > 1 ? [args[1]] : AppSettings.Load(paths).LibraryRoots, paths, output);
                 case "inspect" when args.Length > 1:
                     return Inspect(args[1], paths, host(), output, error);
                 case "detect" when args.Length > 1:
@@ -317,12 +317,13 @@ internal static class Commands
         }
     }
 
-    private static int List(string root, QontrolPaths paths, TextWriter output)
+    /// <summary>Every library folder the app shows (Preferences → Library), not only ~/VMs.</summary>
+    private static int List(IReadOnlyList<string> roots, QontrolPaths paths, TextWriter output)
     {
-        var entries = LibraryScanner.Scan(root, paths.State);
+        var entries = roots.SelectMany(r => LibraryScanner.Scan(r, paths.State)).ToList();
         if (entries.Count == 0)
         {
-            output.WriteLine($"No machines in {root}.");
+            output.WriteLine($"No machines in {string.Join(", ", roots)}.");
             return 0;
         }
 
@@ -430,9 +431,9 @@ internal static class Commands
             password = read;
         }
 
-        if (Directory.Exists(System.IO.Path.Combine(paths.DefaultLibrary, name)))
+        if (Directory.Exists(System.IO.Path.Combine(NewMachineRoot(paths), name)))
         {
-            error.WriteLine($"vmq create: {System.IO.Path.Combine(paths.DefaultLibrary, name)} already exists.");
+            error.WriteLine($"vmq create: {System.IO.Path.Combine(NewMachineRoot(paths), name)} already exists.");
             return 1;
         }
 
@@ -516,7 +517,7 @@ internal static class Commands
         var (_, dir) = MachineFactory.Create(new NewMachineRequest
         {
             Name = name,
-            LibraryRoot = paths.DefaultLibrary,
+            LibraryRoot = NewMachineRoot(paths),
             Guest = guest,
             InstallerIso = iso,
             DriversIso = Option("--drivers") is { } drv ? System.IO.Path.GetFullPath(drv) : null,
@@ -599,8 +600,8 @@ internal static class Commands
 
         var progress = new Progress<string>(output.WriteLine);
         var dir = linked
-            ? MachineLifecycle.LinkedCloneAsync(m, entry.Directory, paths.DefaultLibrary, name, progress).GetAwaiter().GetResult().Directory
-            : MachineLifecycle.CloneAsync(m, entry.Directory, paths.DefaultLibrary, name, progress).GetAwaiter().GetResult().Directory;
+            ? MachineLifecycle.LinkedCloneAsync(m, entry.Directory, NewMachineRoot(paths), name, progress).GetAwaiter().GetResult().Directory
+            : MachineLifecycle.CloneAsync(m, entry.Directory, NewMachineRoot(paths), name, progress).GetAwaiter().GetResult().Directory;
         output.WriteLine($"Created {name} in {dir}{(linked ? $", sharing {m.Name}'s disks as they were" : "")}.");
         return 0;
     }
@@ -660,8 +661,12 @@ internal static class Commands
         var json = Directory.Exists(target) ? System.IO.Path.Combine(target, MachineStore.FileName) : target;
         if (File.Exists(json) && System.IO.Path.GetFileName(json) == MachineStore.FileName)
             return new LibraryEntry(MachineKind.Native, System.IO.Path.GetFullPath(json), System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(json))!, MachineStore.Load(json), [], null);
-        return LibraryScanner.Scan(paths.DefaultLibrary, paths.State).FirstOrDefault(e => string.Equals(e.Machine?.Name, target, StringComparison.OrdinalIgnoreCase));
+        return AppSettings.Load(paths).LibraryRoots.SelectMany(r => LibraryScanner.Scan(r, paths.State))
+            .FirstOrDefault(e => string.Equals(e.Machine?.Name, target, StringComparison.OrdinalIgnoreCase));
     }
+
+    /// <summary>Where the app puts new machines: the first library folder in Preferences.</summary>
+    private static string NewMachineRoot(QontrolPaths paths) => AppSettings.Load(paths).LibraryRoots[0];
 
     /// <summary>
     /// The Easy Install password: from --password-file (a file, or standard input with "-"; one trailing line break is
@@ -715,7 +720,7 @@ internal static class Commands
         {
             var resolved = Core.Downloads.CloudImages.ResolveAsync(image).GetAwaiter().GetResult();
             var file = Core.Downloads.CloudImages.GetAsync(paths, resolved, progress).GetAwaiter().GetResult();
-            var (m, dir) = Core.Downloads.CloudImages.CreateAsync(paths.DefaultLibrary, image, file, choices).GetAwaiter().GetResult();
+            var (m, dir) = Core.Downloads.CloudImages.CreateAsync(NewMachineRoot(paths), image, file, choices).GetAwaiter().GetResult();
             output.WriteLine();
             output.WriteLine($"Created {m.Name} from {resolved.FileName} in {dir}.");
             output.WriteLine($"Account {m.Guest.Account}{(keys.Count > 0 ? $" with {keys.Count} SSH key(s)" : "")}{(string.IsNullOrEmpty(password) ? "" : " and a password")}. 'vmq start {Quote(m.Name)}' then 'vmq status' gives the SSH command.");
