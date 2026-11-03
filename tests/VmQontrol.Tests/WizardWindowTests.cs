@@ -226,6 +226,9 @@ public sealed class WizardWindowTests
         Directory.CreateDirectory(profile.Paths.DefaultLibrary);
         Directory.CreateDirectory(profile.Paths.Cache);
         File.WriteAllText(Path.Combine(profile.Paths.Cache, "windows-11-products.xml"), WindowsDownloadTests.Catalogue());
+        // quickget's list, cached as the app caches it, so the test never runs quickget (over a minute on a busy machine).
+        File.WriteAllText(Path.Combine(profile.Paths.Cache, "catalogue.json"),
+            """[{"Display Name":"Ubuntu","OS":"ubuntu","Release":"24.04","Option":"","PNG":""},{"Display Name":"Windows","OS":"windows","Release":"11","Option":"English (United States)","PNG":"icon.png"}]""");
 
         await Ui.Run(() =>
         {
@@ -236,7 +239,8 @@ public sealed class WizardWindowTests
             var wizard = shell.Wizard!;
             wizard.Locale = "en-US";
             Ui.Click(window, Named<RadioButton>(window, "SourceDownload"));
-            Ui.PumpUntil(() => wizard.Systems.Any(s => s.Os == "windows"), "the catalogue", 60);
+            Ui.PumpUntil(() => wizard.Systems.Any(s => s.Os == "windows"), "the catalogue", 10);
+            Assert.Equal(["Windows", "Ubuntu"], wizard.Systems.Select(s => s.DisplayName)); // quickget's Windows is replaced, not doubled
             Assert.Equal("windows", wizard.Systems[0].Os); // the most asked-for download comes first
             var windows = wizard.Systems.Single(s => s.Os == "windows");
             Assert.Equal(["11", "10"], windows.Entries.Select(e => e.Release));
