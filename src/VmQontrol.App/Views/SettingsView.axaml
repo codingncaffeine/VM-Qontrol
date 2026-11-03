@@ -206,6 +206,29 @@
               </Border>
             </StackPanel>
           </Border>
+          <!-- While it runs: the balloon gives memory back to this computer, and takes it again up to the size it started with. -->
+          <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding LiveMemoryShown}" Margin="0,8,0,0">
+            <TextBlock Text="WHILE IT RUNS" Classes="grouptitle" />
+            <Border Grid.Column="1" Classes="badge-now"><TextBlock Text="Applies now" /></Border>
+          </Grid>
+          <Border x:Name="LiveMemory" Classes="group" IsVisible="{Binding LiveMemoryShown}">
+            <StackPanel>
+              <Border Classes="row first">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Memory it may use now" Classes="label" />
+                    <TextBlock Text="Lower it to give memory back to this computer without shutting down; raise it again up to the amount the machine started with. Windows needs the guest tools for this." Classes="help" />
+                    <TextBlock x:Name="LiveMemoryStatus" Text="{Binding LiveMemoryStatus}" Classes="help" Margin="0,4,0,0" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                    <NumericUpDown x:Name="LiveMemoryGb" Value="{Binding LiveMemoryGb}" Minimum="0.25" Maximum="{Binding LiveMemoryMaxGb}" Increment="0.5" FormatString="0.##" Width="150" />
+                    <TextBlock Text="GB" VerticalAlignment="Center" Classes="muted" />
+                    <Button x:Name="ApplyLiveMemory" Classes="tool" Content="Apply now" Command="{Binding ApplyLiveMemoryCommand}" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+            </StackPanel>
+          </Border>
         </StackPanel>
 
         <!-- Processors -->

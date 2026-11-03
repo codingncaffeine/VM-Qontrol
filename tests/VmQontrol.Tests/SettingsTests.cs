@@ -323,4 +323,54 @@ public sealed class SettingsTests
         Assert.Contains("was not in the drive", seen.Note, StringComparison.Ordinal);
         Assert.Equal(nameof(Connect.Never), seen.First);
     }
+
+    /// <summary>Memory while it runs: shown for a running machine with a balloon, with what it holds now.</summary>
+    [Trait("Tier", "Window")]
+    [Fact]
+    public async Task A_running_machine_shows_memory_it_may_use_now()
+    {
+        using var profile = new TestProfile("settings-live-memory");
+        var dir = Path.Combine(profile.Paths.DefaultLibrary, "Running");
+        Directory.CreateDirectory(dir);
+        await VmQontrol.Core.Runtime.QemuImg.RunAsync(TestContext.Current.CancellationToken, "create", "-q", "-f", "qcow2", Path.Combine(dir, "disk0.qcow2"), "1G");
+        var m = new MachineConfig { Name = "Running", MemoryMiB = 512, Cpu = new CpuConfig { Cores = 1 }, Firmware = new FirmwareConfig { Kind = FirmwareKind.Bios }, Disks = [new DiskConfig { File = "disk0.qcow2", SizeGiB = 1 }] };
+        MachineStore.Save(m, Path.Combine(dir, "vm.json"));
+        var running = await VmQontrol.Core.Runtime.MachineRunner.StartAsync(m, dir, profile.Paths, VmQontrol.Core.Hosts.HostProbe.Probe(), new VmQontrol.Core.Runtime.StartOptions { Headless = true }, TestContext.Current.CancellationToken);
+        try
+        {
+            var seen = await Ui.Run(() =>
+            {
+                var shell = new ShellViewModel(profile.Paths, AppSettings.Load(profile.Paths)) { WatchUsb = false };
+                var window = new MainWindow { DataContext = shell, Width = 1320, Height = 900 };
+                Avalonia.Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
+                window.Show();
+                _ = shell.StartAsync();
+                Ui.PumpUntil(() => shell.Machines.Count == 1 && shell.Machines[0].IsActive, "the running machine", 20);
+                Ui.Click(window, Named<ListBox>(window, "Library").GetVisualDescendants().OfType<ListBoxItem>().First());
+                Ui.PumpUntil(() => shell.Selected is { Watcher: not null }, "the machine page, attached", 20);
+                Ui.Click(window, Named<Button>(window.GetVisualDescendants().OfType<MachineView>().Single(), "OpenSettings"));
+                Ui.PumpUntil(() => shell.SettingsPage is not null, "the settings", 15);
+                var settings = shell.SettingsPage!;
+                var view = window.GetVisualDescendants().OfType<SettingsView>().Single();
+                Ui.Click(window, Named<ListBox>(view, "Sections").GetVisualDescendants().OfType<ListBoxItem>().First(i => (i.DataContext as SettingsSection)?.Key == "memory"));
+                Ui.PumpUntil(() => settings.LiveMemoryShown, "memory while it runs", 15);
+                Ui.Pump(0.3);
+                Ui.Capture(window, "s7", "settings-live-memory-dark");
+                Avalonia.Application.Current!.RequestedThemeVariant = ThemeVariant.Light;
+                Ui.Pump(0.3);
+                Ui.Capture(window, "s7", "settings-live-memory-light");
+                Avalonia.Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
+                var result = (Drawn: Named<Border>(view, "LiveMemory").IsEffectivelyVisible, settings.LiveMemoryMaxGb, settings.LiveMemoryStatus);
+                window.Close();
+                return result;
+            });
+            Assert.True(seen.Drawn);
+            Assert.Equal(0.5m, seen.LiveMemoryMaxGb);
+            Assert.Contains("holds 512", seen.LiveMemoryStatus, StringComparison.Ordinal);
+        }
+        finally
+        {
+            await VmQontrol.Core.Runtime.MachineRunner.PowerOffAsync(running, CancellationToken.None);
+        }
+    }
 }

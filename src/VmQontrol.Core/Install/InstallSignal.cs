@@ -26,7 +26,8 @@ public enum InstallStage
 public sealed record InstallProgress(InstallStage Stage, DateTimeOffset? Started = null, DateTimeOffset? Finished = null, bool Acknowledged = false)
 {
     /// <summary>How long the install took, when both ends are known.</summary>
-    public TimeSpan? Took => Started is { } s && Finished is { } f && f > s ? f - s : null;
+    /// <remarks>File times come from the kernel's coarse clock, a few milliseconds behind: never below zero.</remarks>
+    public TimeSpan? Took => Started is { } s && Finished is { } f ? (f > s ? f - s : TimeSpan.Zero) : null;
 }
 
 /// <summary>

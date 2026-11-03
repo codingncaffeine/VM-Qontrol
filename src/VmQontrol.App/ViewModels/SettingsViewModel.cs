@@ -286,6 +286,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         foreach (var d in m.Disks) Disks.Add(new DiskRow(d, machine.Folder));
         foreach (var x in m.Media) Media.Add(new MediaRow(x));
         _ = RefreshMediaStatusAsync();
+        _ = Task.Run(RefreshLiveMemoryAsync);
         var nic = m.Nics.FirstOrDefault() ?? new NicConfig { Mode = VmQontrol.Core.Machines.NetMode.None };
         NetMode = NetModes.First(o => o.Value == nic.Mode.ToString());
         NicModel = NicModels.FirstOrDefault(o => o.Value == nic.Model) ?? new Option(nic.Model, nic.Model ?? "Automatic");
@@ -365,6 +366,68 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string _cpuModel;
 
     public decimal HostMemoryGb => _host?.MemoryGB ?? 0;
+
+    // ── Memory while it runs (the balloon)
+    /// <summary>The machine runs with a balloon device: its memory can be lowered (and raised back) now.</summary>
+    [ObservableProperty]
+    private bool _liveMemoryShown;
+
+    /// <summary>The most the machine can hold now: what it started with.</summary>
+    [ObservableProperty]
+    private decimal _liveMemoryMaxGb;
+
+    [ObservableProperty]
+    private decimal _liveMemoryGb;
+
+    [ObservableProperty]
+    private string _liveMemoryStatus = "";
+
+    /// <summary>Reads what the running machine holds now (on a worker).</summary>
+    private async Task RefreshLiveMemoryAsync()
+    {
+        if (_machine.Watcher is not { } watcher)
+        {
+            Ui.Post(() => LiveMemoryShown = false);
+            return;
+        }
+
+        var actual = await LiveMemory.ActualMiBAsync(watcher).ConfigureAwait(false);
+        var started = _machine.Machine.MemoryMiB;
+        Ui.Post(() =>
+        {
+            LiveMemoryShown = actual is not null;
+            if (actual is not { } now) return;
+            // The size it started with: the setting, else the most it has reported (the recommended amount at power on).
+            var max = Math.Max(started ?? now, (long)(LiveMemoryMaxGb * 1024));
+            LiveMemoryMaxGb = Math.Round(max / 1024m, 2);
+            if (LiveMemoryGb == 0) LiveMemoryGb = Math.Round(now / 1024m, 2);
+            LiveMemoryStatus = $"The machine holds {Formats.Bytes(now << 20)} now, of the {Formats.Bytes(max << 20)} it started with.";
+        });
+    }
+
+    [RelayCommand]
+    private async Task ApplyLiveMemoryAsync()
+    {
+        if (_machine.Watcher is not { } watcher) return;
+        var target = (long)(Math.Min(LiveMemoryGb, LiveMemoryMaxGb) * 1024);
+        try
+        {
+            await LiveMemory.SetAsync(watcher, target).ConfigureAwait(false);
+            Ui.Post(() => LiveMemoryStatus = $"Asked the guest to hold {Formats.Bytes(target << 20)}; it gives memory back or takes it over a few seconds.");
+            for (var i = 0; i < 10; i++)
+            {
+                await Task.Delay(1000).ConfigureAwait(false);
+                if (await LiveMemory.ActualMiBAsync(watcher).ConfigureAwait(false) is { } now && Math.Abs(now - target) < 16) break;
+            }
+        }
+        catch (QmpException ex)
+        {
+            Ui.Post(() => LiveMemoryStatus = $"The machine did not take the change ({ex.Message}).");
+            return;
+        }
+
+        await RefreshLiveMemoryAsync().ConfigureAwait(false);
+    }
 
     public decimal HostCores => _host?.LogicalCpus ?? 1;
 
