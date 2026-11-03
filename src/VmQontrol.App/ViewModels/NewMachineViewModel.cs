@@ -369,7 +369,7 @@ public sealed partial class NewMachineViewModel : ObservableObject
 
     public string PasswordNote => IsCloud
         ? CloudKeys.Count > 0
-            ? "Optional with your SSH key. With one, you can also sign in at the machine's screen, and sudo asks for it; without, sudo asks for nothing."
+            ? "Optional with your SSH key. With one, the machine's screen asks for it and so does sudo; without, the screen signs you in by itself and sudo asks for nothing."
             : "Required: no SSH key was found, so the password is how you sign in. It is stored hashed in the machine's cloud-init disc."
         : PasswordRequired
         ? "Required: Linux installers make no account without a password. It is stored hashed in the machine's answer file."

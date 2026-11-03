@@ -71,7 +71,9 @@ public static partial class CloudImages
                 {
                     var (code, n) = image.Id == "debian-13" ? ("trixie", "13") : ("bookworm", "12");
                     var dir = $"https://cloud.debian.org/images/cloud/{code}/latest/";
-                    var name = $"debian-{n}-genericcloud-amd64.qcow2";
+                    // "generic", not "genericcloud": the cloud kernel has no graphics driver at all (no DRM), so the
+                    // machine's screen stayed black for good; generic is the same cloud-init image with the full kernel.
+                    var name = $"debian-{n}-generic-amd64.qcow2";
                     return new(image, new Uri(dir + name), name, HashAlgorithmName.SHA512, SumsLine(await GetTextAsync(dir + "SHA512SUMS", ct).ConfigureAwait(false), name));
                 }
 
@@ -110,13 +112,17 @@ public static partial class CloudImages
     /// <summary>The image on this computer, downloaded and checked once; a kept copy is checked again before use.</summary>
     public static async Task<string> GetAsync(QontrolPaths paths, ResolvedCloudImage r, IProgress<DownloadProgress> progress, CancellationToken ct = default)
     {
-        var folder = CacheFolder(paths);
-        Directory.CreateDirectory(folder);
+        var folder = KeptFolder(paths, r.Image);
         var target = Path.Combine(folder, r.FileName);
         if (File.Exists(target))
         {
             progress.Report(new DownloadProgress(0, null, "Checking the kept image…"));
-            if (await MatchesAsync(target, r, ct).ConfigureAwait(false)) return target;
+            if (await MatchesAsync(target, r, ct).ConfigureAwait(false))
+            {
+                DropOlder(folder, r.FileName);
+                return target;
+            }
+
             File.Delete(target); // the publisher has a newer build under the same name
         }
 
@@ -132,7 +138,47 @@ public static partial class CloudImages
 
         File.Move(partial, target, overwrite: true);
         Log.Info($"Cloud image downloaded and checked: {r.File} → {target}");
+        DropOlder(folder, r.FileName);
         return target;
+    }
+
+    /// <summary>
+    /// Each image keeps its own folder, holding only its newest file: a point release or respin (Alpine 3.24.3 → 3.24.4,
+    /// a new Fedora build) replaces the old file instead of piling up beside it. Files kept loose by 0.0.5's builds are
+    /// moved into their image's folder.
+    /// </summary>
+    internal static string KeptFolder(QontrolPaths paths, CloudImage image)
+    {
+        var root = CacheFolder(paths);
+        var folder = Path.Combine(root, image.Id);
+        Directory.CreateDirectory(folder);
+        foreach (var loose in Directory.EnumerateFiles(root))
+        {
+            var name = Path.GetFileName(loose);
+            if (!name.StartsWith(FilePrefix(image), StringComparison.Ordinal)) continue;
+            try { File.Move(loose, Path.Combine(folder, name), overwrite: true); }
+            catch (IOException) { }
+        }
+
+        return folder;
+    }
+
+    private static string FilePrefix(CloudImage image) => image.Id switch
+    {
+        "fedora" => "Fedora-Cloud-",
+        "alpine" => "alpine-",
+        var id => id + "-", // ubuntu-26.04-…, debian-13-…
+    };
+
+    internal static void DropOlder(string folder, string keep)
+    {
+        foreach (var file in Directory.EnumerateFiles(folder))
+        {
+            var name = Path.GetFileName(file);
+            if (name == keep || name == keep + ".part") continue;
+            try { File.Delete(file); Log.Info($"Older cloud image removed: {name}"); }
+            catch (IOException) { }
+        }
     }
 
     /// <summary>Makes the machine: the image copied as its own disk and grown, the cloud-init disc, and its settings.</summary>
@@ -190,9 +236,12 @@ public static partial class CloudImages
             "users:",
             $"  - name: {account}",
             c.Password.Length > 0 ? "    sudo: \"ALL=(ALL) ALL\"" : "    sudo: \"ALL=(ALL) NOPASSWD:ALL\"",
-            $"    lock_passwd: {(c.Password.Length > 0 ? "false" : "true")}",
+            // Never lock_passwd: a locked account ("!" in shadow) is refused by an SSH server built without PAM even with
+            // the right key (Alpine: "Permission denied (publickey)"). With no password the field is "*": no password
+            // can match it, yet the account is not locked.
+            "    lock_passwd: false",
+            $"    passwd: \"{(c.Password.Length > 0 ? Sha512Crypt.Hash(c.Password) : "*")}\"",
         };
-        if (c.Password.Length > 0) lines.Add($"    passwd: \"{Sha512Crypt.Hash(c.Password)}\"");
         if (c.SshKeys.Count > 0)
         {
             lines.Add("    ssh_authorized_keys:");
@@ -200,10 +249,26 @@ public static partial class CloudImages
         }
 
         lines.Add($"ssh_pwauth: {(c.Password.Length > 0 ? "true" : "false")}");
+        if (c.Password.Length == 0)
+        {
+            // D41: with no password the account cannot sign in on the machine's own screen, so the screen signs it in
+            // by itself (only whoever runs the machine on this computer sees it; SSH stays key-only). systemd: an agetty
+            // --autologin drop-in for tty1; Alpine's busybox init: tty1 runs `login -f` instead of getty.
+            lines.Add("write_files:");
+            lines.Add("  - path: /etc/systemd/system/getty@tty1.service.d/50-vmqontrol-autologin.conf");
+            lines.Add("    content: |");
+            lines.Add("      [Service]");
+            lines.Add("      ExecStart=");
+            lines.Add($"      ExecStart=-/sbin/agetty --autologin {account} --noclear %I $TERM");
+        }
+
         lines.Add("packages: [qemu-guest-agent, sudo]");
         lines.Add("runcmd:");
         lines.Add("  - [sh, -c, 'systemctl enable --now qemu-guest-agent 2>/dev/null || { rc-update add qemu-guest-agent default; rc-service qemu-guest-agent start; }']");
         lines.Add($"  - [sh, -c, 'if [ -x /bin/bash ] && command -v usermod >/dev/null; then usermod -s /bin/bash {account}; fi']");
+        if (c.Password.Length == 0)
+            lines.Add("  - [sh, -c, 'if [ -d /run/systemd/system ]; then systemctl daemon-reload; systemctl restart getty@tty1; "
+                      + $"elif grep -q \"^tty1::\" /etc/inittab; then sed -i \"s|^tty1::.*|tty1::respawn:/bin/login -f {account}|\" /etc/inittab; kill -HUP 1; sleep 1; for p in /proc/[0-9]*; do [ \"$(cat $p/comm 2>/dev/null)\" = getty ] && [ \"$(readlink $p/fd/0)\" = /dev/tty1 ] && kill ${{p#/proc/}}; done; true; fi']");
         return string.Join('\n', lines) + "\n";
     }
 
