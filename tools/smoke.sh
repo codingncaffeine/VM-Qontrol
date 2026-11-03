@@ -38,7 +38,11 @@ head -c 8 "$out/screen.png" | od -An -tx1 | grep -q "89 50 4e 47" || fail "the s
 "$cli" resume smoke-vm && "$cli" status smoke-vm | grep -q ": running" || fail "vmq resume"
 "$cli" poweroff smoke-vm || fail "vmq poweroff"
 "$cli" status smoke-vm | grep -q ": off" || fail "the machine is still running after poweroff"
-ls -d "${XDG_RUNTIME_DIR:-/tmp}"/vmqontrol-*/*/lock.json 2>/dev/null | grep -q . && fail "poweroff left a runtime folder behind"
+# Only this run's own runtime folder counts: another profile's (the user's running machines) is none of its business.
+for d in "${XDG_RUNTIME_DIR:-/tmp}"/vmqontrol-*/; do
+    d=${d%/}; grep -qxF "$d" <<< "$runtime_before" && continue
+    ls "$d"/*/lock.json > /dev/null 2>&1 && fail "poweroff left a runtime folder behind ($d)"
+done
 echo "smoke: a machine started, paused, resumed, took a screenshot and powered off through vmq"
 
 xvfb-run -a dbus-run-session --config-file="$root/packaging/isolated-bus.conf" "$app" > "$out/app.out" 2>&1 &
