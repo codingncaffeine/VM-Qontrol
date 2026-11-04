@@ -3,6 +3,8 @@
 #   VMQontrol-<ver>-linux-x64.tar.gz        glibc distributions (Arch, Debian, Ubuntu, Fedora...): extract, run ./vmqontrol
 #   VMQontrol-<ver>-linux-musl-x64.tar.gz   musl distributions (Alpine)
 #   vm-qontrol_<ver>_amd64.deb              Debian/Ubuntu system install (/usr/lib/vm-qontrol; vmqontrol and vmq in /usr/bin)
+#   SHA256SUMS                              the three files' SHA-256 (attach it to the GitHub release; the wiki's
+#                                           Download-Sources-and-Verification page tells people how to check it)
 # Self-contained: .NET ships inside; QEMU and its helpers are the distribution's (Depends/Recommends). Publishing goes
 # through its own artifacts folder, so bin/ (which a running script or the person's app may use) is never touched.
 # Check the .deb with packaging/deb-install-test.sh and the musl tarball with packaging/musl-tarball-test.sh.
@@ -78,6 +80,9 @@ Description: Create, run and fine-tune QEMU/KVM virtual machines
 CTRL
 dpkg-deb --build --root-owner-group "$DEB" "$OUT/vm-qontrol_${VER}_amd64.deb" > /dev/null
 rm -rf "$DEB"
+
+# Checksums of what people download, in sha256sum's own format (`sha256sum -c --ignore-missing SHA256SUMS`).
+(cd "$OUT" && sha256sum -- *.tar.gz *.deb > SHA256SUMS)
 
 echo "── artifacts:"
 ls -sh1 "$OUT" | grep -v publish
