@@ -92,6 +92,19 @@ public sealed record MachineConfig
 
     /// <summary>The machine this one was copied from by an import (VMware, VirtualBox, OVF, libvirt, a disk); the source was only read.</summary>
     public ImportSource? CopiedFrom { get; set; }
+
+    /// <summary>Windows programs opened as windows on this desktop (D43); <c>null</c> until they are first used.</summary>
+    public WindowsAppsConfig? WindowsApps { get; set; }
+}
+
+/// <summary>Windows apps as windows (D43): which account they sign in as and which are in this computer's app menu.</summary>
+public sealed record WindowsAppsConfig
+{
+    /// <summary>The Windows account; <c>null</c> = the one signed in on Windows' own screen.</summary>
+    public string? Account { get; set; }
+
+    /// <summary>Start menu ids of the programs given an entry in this computer's app menu.</summary>
+    public List<string> InMenu { get; set; } = [];
 }
 
 /// <summary>What Easy Install was asked to do, for the "Installing for you" card.</summary>

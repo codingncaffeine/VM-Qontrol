@@ -1,0 +1,5 @@
+# FreeRDP 3 client under Xvfb, for proving Windows apps as windows without a window on the desktop (D43).
+# Also the .NET runtime (the real vmq runs here) and gnome-keyring (a real Secret Service on a private bus).
+FROM docker.io/library/archlinux:latest
+RUN pacman -Syu --noconfirm --needed freerdp xorg-server-xvfb xorg-xwininfo xorg-xprop xorg-xsetroot imagemagick openbox \
+      dotnet-runtime gnome-keyring libsecret dbus && pacman -Scc --noconfirm

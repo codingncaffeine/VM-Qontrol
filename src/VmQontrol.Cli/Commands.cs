@@ -64,6 +64,14 @@ internal static class Commands
                       Share a folder of this computer with the machine, from its next power on. It appears in the
                       machine by itself once the guest tools answer: /mnt/shared/NAME in Linux, a drive named after
                       the folder in Windows; every start after that mounts it again.
+          apps MACHINE on|off|list
+                              Windows apps as windows (Pro, Enterprise, Education): on lets Windows' programs out over
+                              Remote Desktop, off turns that off again; list reads Windows' Start menu with its icons.
+          apps MACHINE open APP [--password-stdin]
+                              Open a Windows program (a name or id from list) as its own window here, through FreeRDP 3.
+                              The password comes from the keyring or an Easy Install machine's answer disc, else stdin.
+          apps MACHINE start "COMMAND LINE"
+                              Start a command line in the Windows apps session already open.
           copy-to MACHINE FILE GUEST-PATH / copy-from MACHINE GUEST-PATH FILE
                               Copy a file into or out of the guest through its agent, with no shared folder or network.
           cable MACHINE on|off
@@ -282,6 +290,86 @@ internal static class Commands
                         error.Write(result.Errors);
                         if (result.TimedOut) error.WriteLine("vmq exec: the program was still running after 10 minutes; it carries on in the guest.");
                         code = result.ExitCode ?? 124;
+                    });
+                    return rc != 0 ? rc : code;
+                }
+                case "apps" when args.Length > 2 && args[2] is "on" or "off":
+                {
+                    var code = 0;
+                    var rc = Control(args[1], paths, output, error, async r =>
+                    {
+                        var ready = await VmQontrol.Core.WindowsApps.WindowsAppsSetup.PrepareAsync(new GuestAgentClient(r.Paths.Agent), CancellationToken.None, undo: args[2] == "off").ConfigureAwait(false);
+                        if (!ready.Ready)
+                        {
+                            error.WriteLine($"vmq apps: {ready.Why}");
+                            code = 1;
+                            return;
+                        }
+
+                        output.WriteLine(args[2] == "off" ? $"{r.Name}: Windows apps are off (Remote Desktop is off again)." : $"{r.Name}: {ready.Product} lets its programs out as windows (certificate {ready.CertificateSha256}; signed in: {ready.SignedIn ?? "nobody"}).");
+                    });
+                    return rc != 0 ? rc : code;
+                }
+                case "apps" when args.Length > 3 && args[2] == "start":
+                {
+                    var code = 0;
+                    var rc = Control(args[1], paths, output, error, async r =>
+                    {
+                        var agent = new GuestAgentClient(r.Paths.Agent);
+                        var why = await VmQontrol.Core.WindowsApps.WindowsAppsSession.EnsureLauncherAsync(agent, CancellationToken.None).ConfigureAwait(false)
+                            ?? await VmQontrol.Core.WindowsApps.WindowsAppsSession.RunAsync(agent, args[3], null, CancellationToken.None).ConfigureAwait(false);
+                        if (why is not null) { error.WriteLine($"vmq apps: {why}"); code = 1; }
+                    });
+                    return rc != 0 ? rc : code;
+                }
+                case "apps" when args.Length > 2 && args[2] == "list":
+                {
+                    var code = 0;
+                    var rc = Control(args[1], paths, output, error, async r =>
+                    {
+                        var agent = new GuestAgentClient(r.Paths.Agent);
+                        var ready = await VmQontrol.Core.WindowsApps.WindowsAppsSetup.PrepareAsync(agent, CancellationToken.None).ConfigureAwait(false);
+                        var (apps, why) = ready.Ready
+                            ? await VmQontrol.Core.WindowsApps.WindowsAppsCatalog.RefreshAsync(agent, r.MachineDirectory, ready.SignedIn ?? "Users", CancellationToken.None).ConfigureAwait(false)
+                            : (null, ready.Why);
+                        if (apps is null) { error.WriteLine($"vmq apps: {why}"); code = 1; return; }
+                        foreach (var app in apps) output.WriteLine($"{app.Slug}  {app.Name}  ({app.Program ?? app.Id}){(app.Icon is null ? "  [no icon]" : "")}");
+                        output.WriteLine($"{apps.Count} programs.");
+                    });
+                    return rc != 0 ? rc : code;
+                }
+                case "apps" when args.Length > 3 && args[2] == "open":
+                {
+                    var entry = Resolve(args[1], paths);
+                    var code = 0;
+                    var rc = Control(args[1], paths, output, error, async r =>
+                    {
+                        if (entry?.Machine is not { } config) return;
+                        var apps = VmQontrol.Core.WindowsApps.WindowsAppsCatalog.Read(entry.Directory);
+                        var want = args[3];
+                        var app = apps.FirstOrDefault(a => a.Slug == want || a.Id.Equals(want, StringComparison.OrdinalIgnoreCase))
+                            ?? apps.FirstOrDefault(a => a.Name.Equals(want, StringComparison.OrdinalIgnoreCase))
+                            ?? (want.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? new VmQontrol.Core.WindowsApps.WindowsApp(want, System.IO.Path.GetFileNameWithoutExtension(want), want, null) : null);
+                        if (app is null)
+                        {
+                            error.WriteLine($"vmq apps: {config.Name} has no program '{want}' in its list ({(apps.Count == 0 ? $"run 'vmq apps {args[1]} list' first" : "names and ids are in 'vmq apps " + args[1] + " list'")}).");
+                            code = 1;
+                            return;
+                        }
+
+                        var fromStdin = args.Contains("--password-stdin");
+                        var result = await VmQontrol.Core.WindowsApps.WindowsAppsPasswords.OpenAsync(config, entry.Directory, r, app, (account, refused, _) =>
+                            Task.FromResult(fromStdin && !refused ? Console.In.ReadLine() : null), CancellationToken.None).ConfigureAwait(false);
+                        if (result.Opened)
+                        {
+                            output.WriteLine($"{config.Name}: {app.Name} is open.");
+                            if (result.Kept is { } kept) output.WriteLine(kept.Length == 0 ? "The Windows password is kept in this desktop's keyring." : $"The Windows password was not kept: {kept}.");
+                        }
+                        else
+                        {
+                            error.WriteLine($"vmq apps: {result.Why}{(result.PasswordRefused || result.Why == "No password was given." ? " Give it with --password-stdin." : "")}");
+                            code = 1;
+                        }
                     });
                     return rc != 0 ? rc : code;
                 }

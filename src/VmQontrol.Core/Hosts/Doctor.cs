@@ -46,6 +46,7 @@ public static class Doctor
         ["virtiofsd"] = new() { [DistroFamily.Arch] = "virtiofsd", [DistroFamily.Debian] = "virtiofsd", [DistroFamily.Fedora] = "virtiofsd", [DistroFamily.Alpine] = "virtiofsd", [DistroFamily.OpenSuse] = "virtiofsd" },
         ["passt"] = new() { [DistroFamily.Arch] = "passt", [DistroFamily.Debian] = "passt", [DistroFamily.Fedora] = "passt", [DistroFamily.Alpine] = "passt", [DistroFamily.OpenSuse] = "passt" },
         ["windows-download"] = new() { [DistroFamily.Arch] = "wimlib libisoburn libarchive", [DistroFamily.Debian] = "wimtools xorriso libarchive-tools", [DistroFamily.Fedora] = "wimlib-utils xorriso bsdtar", [DistroFamily.Alpine] = "wimlib xorriso libarchive-tools", [DistroFamily.OpenSuse] = "wimlib xorriso bsdtar" },
+        ["freerdp"] = new() { [DistroFamily.Arch] = "freerdp", [DistroFamily.Debian] = "freerdp3-x11", [DistroFamily.Fedora] = "freerdp", [DistroFamily.Alpine] = "freerdp", [DistroFamily.OpenSuse] = "freerdp" },
         ["guestmount"] = new() { [DistroFamily.Arch] = "libguestfs", [DistroFamily.Debian] = "guestmount", [DistroFamily.Fedora] = "libguestfs", [DistroFamily.Alpine] = "guestfs-tools", [DistroFamily.OpenSuse] = "libguestfs" },
         ["quickemu"] = new() { [DistroFamily.Arch] = "quickemu", [DistroFamily.Debian] = "quickemu", [DistroFamily.Fedora] = "quickemu" },
     };
@@ -148,6 +149,9 @@ public static class Doctor
         checks.Add(onPath("guestmount")
             ? new("Open a machine's disk (libguestfs)", CheckStatus.Ok, "A machine's disk can be opened in the file manager while the machine is off.")
             : new("Open a machine's disk (libguestfs)", CheckStatus.Optional, "Opening a machine's disk in the file manager needs libguestfs' guestmount.", InstallCommand(distro, "guestmount")));
+        checks.Add(WindowsApps.WindowsAppsClient.FindFreeRdp() is not null
+            ? new("Windows apps as windows (FreeRDP)", CheckStatus.Ok, "Programs in Pro, Enterprise and Education editions of Windows can open as their own windows here.")
+            : new("Windows apps as windows (FreeRDP)", CheckStatus.Optional, "Opening Windows programs as their own windows needs FreeRDP 3.", InstallCommand(distro, "freerdp")));
         checks.Add(onPath("passt")
             ? new("Fast networking (passt)", CheckStatus.Ok, "Machines get faster networking with IPv6.")
             : new("Fast networking (passt)", CheckStatus.Optional, "Networking uses QEMU's built-in method without it.", InstallCommand(distro, "passt")));
