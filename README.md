@@ -21,7 +21,8 @@ port access) ask for your password once through the desktop's own prompt; USB pa
 | Alpine / musl | `VMQontrol-<version>-linux-musl-x64.tar.gz`: extract, run `./vmqontrol` |
 
 .NET comes inside every package; QEMU and its helpers come from your distribution (table below). Run `vmq doctor`, or
-open the app's welcome page, to see what is missing and the command that installs it.
+open the app's welcome page, to see what is missing and the command that installs it. Each release carries a
+`SHA256SUMS` file: `sha256sum -c --ignore-missing SHA256SUMS`.
 
 ## What it does
 
@@ -31,7 +32,10 @@ open the app's welcome page, to see what is missing and the command that install
 - **A New machine wizard**: your own ISO, or a download. Windows 10 and 11 come straight from Microsoft's own catalog
   (the one its Media Creation Tool uses, checked against Microsoft's checksums and made into an installer disc);
   other systems come from the quickget catalog; **Ready-made Linux** makes an Ubuntu, Debian, Fedora or Alpine machine
-  from its cloud image in seconds, with your account and SSH key. The system is detected from the media, and **Easy Install** sets up
+  from its cloud image in seconds, with your account and SSH key. Downloads are checked against their publishers'
+  checksums, and against their signatures where the publisher signs (Ubuntu, Debian, Fedora, Alpine); every source is
+  listed on the wiki's [Download Sources and Verification](https://github.com/codingncaffeine/VM-Qontrol/wiki/Download-Sources-and-Verification)
+  page. The system is detected from the media, and **Easy Install** sets up
   Windows and the major Linux distributions unattended. "Lean Windows" leaves out the bundled promotions, games and
   ads while installing Microsoft's own, untouched Windows.
 - **Settings that explain themselves**: memory, processors, disks, CD/DVD, network, USB, sound, display, TPM,
@@ -79,10 +83,11 @@ New here? [Getting started](https://github.com/codingncaffeine/VM-Qontrol/wiki/G
 | Faster user networking (optional) | `passt` | `passt` | `passt` |
 | Windows downloads (optional) | `wimlib libisoburn` | `wimtools xorriso libarchive-tools` | `wimlib-utils xorriso bsdtar` |
 | OS download catalog (optional) | `quickemu` | `quickemu` | `quickemu` |
+| Download signatures (optional) | `gnupg` | `gpgv` | `gnupg2` |
 
 **Alpine and other musl distributions** are supported for building from source:
 `apk add dotnet10-sdk qemu-system-x86_64 qemu-img ovmf swtpm virt-viewer osinfo-db` (plus `virtiofsd passt` if
-wanted, and `wimlib xorriso libarchive-tools` for Windows downloads). Alpine's UEFI firmware has no Secure Boot build, and quickget is not packaged there, so the download
+wanted, `wimlib xorriso libarchive-tools` for Windows downloads, and `gpgv` for download signatures). Alpine's UEFI firmware has no Secure Boot build, and quickget is not packaged there, so the download
 catalog is unavailable unless you install quickemu yourself.
 
 Your user needs access to `/dev/kvm`, through the `kvm` group or your distribution's default rule.

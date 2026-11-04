@@ -11,7 +11,7 @@ git archive HEAD | tar -x -C "$out/src"
 # Uncommitted tracked changes too, so the check covers what is about to be committed.
 git diff HEAD --binary | (cd "$out/src" && git apply --allow-empty 2>/dev/null || true)
 podman run --rm -v "$PWD/$out/src:/src:Z" -w /src "docker.io/library/alpine:$tag" sh -euc '
-    apk add --no-cache -q dotnet10-sdk bash icu-libs fontconfig ttf-dejavu qemu-img > /dev/null
+    apk add --no-cache -q dotnet10-sdk bash icu-libs fontconfig ttf-dejavu qemu-img gpgv > /dev/null
     echo "── $(cat /etc/alpine-release), $(dotnet --version), RID $(dotnet --info | sed -n "s/^ *RID: *//p" | head -1)"
     dotnet build VmQontrol.slnx -c Release -warnaserror --nologo -v q 2>&1 | grep -E "error|warn|Build succeeded" | sort -u
     dotnet test tests/VmQontrol.Tests -c Release --no-build --filter "Tier!=Window&Tier!=Integration" 2>&1 | grep -E "^(Passed|Failed)!|^\s+Failed "
