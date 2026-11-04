@@ -171,6 +171,7 @@ public static class MachineRunner
             NatSubnet = appSettings.NatSubnet is { } nat && Runtime.SegmentSubnet.Parse(nat) is { } natNet ? natNet.ToString() : null,
             FirmwareMenu = options.FirmwareSetup && m.Firmware.Kind == FirmwareKind.Bios && m.Guest.Os != "macos",
             InstallSignal = Install.InstallSignal.Prepare(m, machineDirectory),
+            ShareOwner = SharedFolders.ReadOwner(machineDirectory) ?? SharedFolders.GuestOwner,
         };
         var launch = QemuCommandBuilder.Build(m, context);
         if (launch.Errors.Count > 0) throw new StartRefusedException(launch.Errors);
@@ -218,15 +219,27 @@ public static class MachineRunner
 
         // Each shared folder's virtiofsd, in a session of its own so it outlives this process; it ends with the machine.
         var shareProcesses = new List<int>();
-        foreach (var share in launch.Shares)
+        foreach (var (share, index) in launch.Shares.Select((x, i) => (x, i)))
         {
-            var start = new ProcessStartInfo("setsid") { UseShellExecute = false, RedirectStandardError = true, RedirectStandardOutput = true };
-            foreach (var a in share.Args) start.ArgumentList.Add(a);
-            var process = Process.Start(start) ?? throw new StartRefusedException(["virtiofsd could not be started."]);
+            // Its log goes to a file (a pipe to this process would break when it exits). Ready = it says it waits for
+            // QEMU: its socket file exists a moment before it listens, and QEMU connecting in that moment is refused.
+            var shareLog = Path.Combine(logs, $"virtiofsd-{index}.log");
+            var start = new ProcessStartInfo("setsid") { UseShellExecute = false };
+            foreach (var a in new[] { "sh", "-c", "l=$1; shift; exec \"$@\" < /dev/null > /dev/null 2> \"$l\"", "sh", shareLog }.Concat(share.Args)) start.ArgumentList.Add(a);
+            using var process = Process.Start(start) ?? throw new StartRefusedException(["virtiofsd could not be started."]);
             shareProcesses.Add(process.Id);
-            await WaitForAsync(() => File.Exists(share.Socket) || process.HasExited, TimeSpan.FromSeconds(5), "virtiofsd did not open its socket", ct).ConfigureAwait(false);
+            string Said() => File.Exists(shareLog) ? File.ReadAllText(shareLog) : "";
+            var until = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+            while (!process.HasExited && !Said().Contains("Waiting for vhost-user socket connection", StringComparison.Ordinal))
+            {
+                // A virtiofsd that does not say so (another build) is taken as ready a second after its socket appears.
+                if (DateTime.UtcNow > until) throw new StartRefusedException(["A shared folder could not be shared: virtiofsd did not open its socket."]);
+                if (File.Exists(share.Socket) && DateTime.UtcNow > until - TimeSpan.FromSeconds(9) && !Said().Contains("INFO", StringComparison.Ordinal)) break;
+                await Task.Delay(20, ct).ConfigureAwait(false);
+            }
+
             if (process.HasExited)
-                throw new StartRefusedException([$"A shared folder could not be shared: {(await process.StandardError.ReadToEndAsync(ct).ConfigureAwait(false)).Trim()}"]);
+                throw new StartRefusedException([$"A shared folder could not be shared: {Said().Trim()}"]);
         }
 
         var hostDrives = m.HostDrives.Count > 0;
@@ -333,6 +346,12 @@ public static class MachineRunner
         }, LockJson), CancellationToken.None).ConfigureAwait(false);
         File.Move(lockTemp, runtime.Lock, overwrite: true);
         ShutdownGuard.EnsureRunning(paths);
+        // D42: the shared folders appear in the guest by themselves once its agent answers.
+        if (launch.Shares.Count > 0)
+        {
+            SharedFolders.WriteStarted(runtime, m.Shares, context.ShareOwner, m.Guest.Account);
+            SharedFolders.EnsureConnector(running);
+        }
         Log.Info($"{m.Name}: started (process {pid}){(ssh is { } port ? $", SSH on host port {port}" : "")}{(resuming ? ", resuming" : "")}");
         if (resuming)
         {

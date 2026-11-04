@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using VmQontrol.Core.Hosts;
 using VmQontrol.Core.Machines;
+using VmQontrol.Core.Runtime;
 
 namespace VmQontrol.Core.Qemu;
 
@@ -477,8 +478,9 @@ public static class QemuCommandBuilder
             var socket = ctx.Runtime.Share(i);
             var fsArgs = new List<string> { $"--socket-path={socket}", $"--shared-dir={share.Path}", "--cache=auto", "--sandbox=namespace" };
             if (share.ReadOnly) fsArgs.Add("--readonly");
+            fsArgs.AddRange(SharedFolders.OwnerArgs(ctx.VirtiofsdTranslates ?? LaunchContext.Translates(virtiofsd), ctx.HostIds, ctx.ShareOwner));
             shares.Add(new VirtiofsdLaunch([virtiofsd, .. fsArgs], socket));
-            args.AddRange(["-chardev", $"socket,id=fs{i},path={EscapeOption(socket)}", "-device", $"vhost-user-fs-pci,chardev=fs{i},tag={EscapeOption(share.Tag)}"]);
+            args.AddRange(["-chardev", $"socket,id=fs{i},path={EscapeOption(socket)}", "-device", $"vhost-user-fs-pci,chardev=fs{i},tag={EscapeOption(SharedFolders.SafeTag(share.Tag))}"]);
         }
 
         SwtpmLaunch? swtpm = null;

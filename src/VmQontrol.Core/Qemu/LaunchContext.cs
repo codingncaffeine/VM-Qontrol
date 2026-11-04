@@ -67,6 +67,35 @@ public sealed record LaunchContext
     public string? Virtiofsd { get; init; } = new[] { "/usr/lib/virtiofsd", "/usr/libexec/virtiofsd", "/usr/bin/virtiofsd" }.FirstOrDefault(File.Exists);
 
     public Func<string, string> FirmwareFormat { get; init; } = FirmwareLocator.FormatOf;
+
+    /// <summary>Whether virtiofsd translates owner ids itself (--translate-uid, virtiofsd 1.11); <c>null</c> = ask the program.</summary>
+    public bool? VirtiofsdTranslates { get; init; }
+
+    /// <summary>The guest user every shared file belongs to (learned from the guest, D42; 1000 until then).</summary>
+    public uint ShareOwner { get; init; } = VmQontrol.Core.Runtime.SharedFolders.GuestOwner;
+
+    /// <summary>This account's user and group ids (the owner every shared file has on this computer).</summary>
+    public (uint Uid, uint Gid) HostIds { get; init; } = OperatingSystem.IsLinux() ? (NativeLibc.Geteuid(), NativeLibc.Getegid()) : (1000, 1000);
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> Translating = new();
+
+    /// <summary>Whether the virtiofsd at <paramref name="program"/> has --translate-uid (its --help says so); asked once per program.</summary>
+    public static bool Translates(string program) => Translating.GetOrAdd(program, static p =>
+    {
+        try
+        {
+            using var help = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(p, "--help") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false });
+            if (help is null) return false;
+            var stderr = help.StandardError.ReadToEndAsync();
+            var text = help.StandardOutput.ReadToEnd();
+            help.WaitForExit(5000);
+            return (text + stderr.Result).Contains("--translate-uid", StringComparison.Ordinal);
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            return false;
+        }
+    });
 }
 
 /// <summary>A virtiofsd process serving one shared folder, started before QEMU.</summary>

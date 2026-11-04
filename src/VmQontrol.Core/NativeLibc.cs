@@ -20,6 +20,9 @@ internal static partial class NativeLibc
     [LibraryImport("libc", EntryPoint = "geteuid")]
     internal static partial uint Geteuid();
 
+    [LibraryImport("libc", EntryPoint = "getegid")]
+    internal static partial uint Getegid();
+
     [LibraryImport("libc", EntryPoint = "statx", SetLastError = true, StringMarshalling = StringMarshalling.Utf8)]
     private static partial int StatX(int dirfd, string path, int flags, uint mask, nint buffer);
 

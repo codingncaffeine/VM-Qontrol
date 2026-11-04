@@ -129,6 +129,7 @@ public static class LinuxEasyInstall
             - qemu-guest-agent
             - spice-vdagent
           late-commands:
+            - curtin in-target -- sh -c '{Runtime.SharedFolders.GuestMounterInstall}'
             - sh -c '{InstallSignal.LinuxCommand}'
           shutdown: {(c.PowerOffWhenDone ? "poweroff" : "reboot")}
 
@@ -151,6 +152,9 @@ public static class LinuxEasyInstall
         %packages
         qemu-guest-agent
         spice-vdagent
+        %end
+        %post
+        {Runtime.SharedFolders.GuestMounterInstall}
         %end
         %post --nochroot
         {InstallSignal.LinuxCommand}
@@ -189,7 +193,7 @@ public static class LinuxEasyInstall
         popularity-contest popularity-contest/participate boolean false
         d-i grub-installer/only_debian boolean true
         d-i grub-installer/bootdev string default
-        d-i preseed/late_command string {InstallSignal.LinuxCommand}
+        d-i preseed/late_command string in-target sh -c '{Runtime.SharedFolders.GuestMounterInstall}'; {InstallSignal.LinuxCommand}
         d-i finish-install/reboot_in_progress note
         d-i debian-installer/exit/poweroff boolean {(c.PowerOffWhenDone ? "true" : "false")}
 

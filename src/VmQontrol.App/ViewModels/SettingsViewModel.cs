@@ -91,15 +91,18 @@ public sealed partial class DiskRow(DiskConfig disk, string machineDirectory) : 
 }
 
 /// <summary>A shared folder in the settings.</summary>
-public sealed partial class ShareRow(ShareConfig share) : ObservableObject
+public sealed partial class ShareRow(ShareConfig share, bool windows = false) : ObservableObject
 {
-    [ObservableProperty] [NotifyPropertyChangedFor(nameof(MountHint))] private string _path = share.Path;
-    [ObservableProperty] [NotifyPropertyChangedFor(nameof(MountHint))] private string _tag = share.Tag;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(InMachine))] private string _path = share.Path;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(InMachine))] private string _tag = share.Tag;
     [ObservableProperty] private bool _readOnly = share.ReadOnly;
 
-    public string MountHint => $"sudo mkdir -p /mnt/{Tag} && sudo mount -t virtiofs {Tag} /mnt/{Tag}";
+    /// <summary>Where the folder appears in the machine (set up there by the app through the guest tools, D42).</summary>
+    public string InMachine => windows
+        ? $"A drive in This PC named \u201c{Core.Runtime.SharedFolders.DisplayName(ToConfig())}\u201d"
+        : Core.Runtime.SharedFolders.LinuxMount(ToConfig());
 
-    public ShareConfig ToConfig() => new() { Path = Path, Tag = Tag.Trim().Length > 0 ? Tag.Trim() : "share", ReadOnly = ReadOnly };
+    public ShareConfig ToConfig() => new() { Path = Path, Tag = Core.Runtime.SharedFolders.SafeTag(Tag), ReadOnly = ReadOnly };
 }
 
 /// <summary>A USB device the machine always connects (a rule): by its kind, at power on and whenever plugged in.</summary>
@@ -330,7 +333,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         ConnectedAtPowerOn = nic.ConnectedAtPowerOn;
         SshPort = nic.SshHostPort ?? 0;
         foreach (var f in nic.Forwards) Forwards.Add(new ForwardRow(f));
-        foreach (var sh in m.Shares) Shares.Add(new ShareRow(sh));
+        foreach (var sh in m.Shares) Shares.Add(new ShareRow(sh, IsWindowsGuest));
+        _ = LoadSharesStatusAsync();
         UsbController = UsbControllers.FirstOrDefault(o => o.Value == m.Usb.Controller) ?? UsbControllers[0];
         foreach (var u in m.Usb.Passthrough) UsbRules.Add(new UsbRuleRow(u));
         foreach (var d in m.HostDrives) HostDrives.Add(new HostDriveRow(d));
@@ -1088,10 +1092,22 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <summary>Adds a folder chosen by the person (the view picks it).</summary>
     public void AddShare(string path)
     {
-        var tag = new string(System.IO.Path.GetFileName(path.TrimEnd('/')).ToLowerInvariant().Select(c => char.IsAsciiLetterOrDigit(c) ? c : '-').ToArray()).Trim('-');
-        if (tag.Length == 0) tag = "share";
-        while (Shares.Any(x => x.Tag == tag)) tag += "-2";
-        Shares.Add(new ShareRow(new ShareConfig { Path = path, Tag = tag }));
+        var tag = Core.Runtime.SharedFolders.SafeTag(System.IO.Path.GetFileName(path.TrimEnd('/')));
+        for (var n = 2; Shares.Any(x => Core.Runtime.SharedFolders.SafeTag(x.Tag) == tag); n++)
+            tag = Core.Runtime.SharedFolders.SafeTag(tag[..Math.Min(tag.Length, Core.Runtime.SharedFolders.MaxTag - 3)] + "-" + n);
+        Shares.Add(new ShareRow(new ShareConfig { Path = path, Tag = tag }, IsWindowsGuest));
+    }
+
+    /// <summary>What the share connector last did in the running machine, in one sentence; empty when it is off or has no shares.</summary>
+    [ObservableProperty] private string _sharesStatus = "";
+
+    private async Task LoadSharesStatusAsync()
+    {
+        if (_machine.Watcher is not { } watcher) return;
+        var report = await Task.Run(() => Core.Runtime.SharedFolders.ReadReport(watcher.Machine.Paths)).ConfigureAwait(true);
+        if (report is null) return;
+        var problems = report.Shares.Where(x => x.Problem is not null && x.Problem != report.Summary).Select(x => $"{x.Name}: {x.Problem}");
+        SharesStatus = string.Join(" ", new[] { $"Now: {report.Summary}" }.Concat(problems));
     }
 
     [RelayCommand]

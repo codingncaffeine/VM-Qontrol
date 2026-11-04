@@ -249,12 +249,25 @@ public static partial class CloudImages
         }
 
         lines.Add($"ssh_pwauth: {(c.Password.Length > 0 ? "true" : "false")}");
+        // D42: the guest's own shared-folder mounter (SELinux keeps Fedora's guest agent from mounting anything).
+        lines.Add("write_files:");
+        lines.Add($"  - path: {Runtime.SharedFolders.GuestMounterPath}");
+        lines.Add("    permissions: '0755'");
+        lines.Add("    content: |");
+        lines.AddRange(Runtime.SharedFolders.GuestMounter.TrimEnd('\n').Split('\n').Select(l => l.Length == 0 ? "" : "      " + l));
+        lines.Add("  - path: /etc/systemd/system/vmqontrol-shares.service");
+        lines.Add("    content: |");
+        lines.AddRange(Runtime.SharedFolders.GuestMounterUnit.TrimEnd('\n').Split('\n').Select(l => l.Length == 0 ? "" : "      " + l));
+        lines.Add("  - path: /etc/local.d/vmqontrol-shares.start");
+        lines.Add("    permissions: '0755'");
+        lines.Add("    content: |");
+        lines.Add("      #!/bin/sh");
+        lines.Add($"      exec {Runtime.SharedFolders.GuestMounterPath}");
         if (c.Password.Length == 0)
         {
             // D41: with no password the account cannot sign in on the machine's own screen, so the screen signs it in
             // by itself (only whoever runs the machine on this computer sees it; SSH stays key-only). systemd: an agetty
             // --autologin drop-in for tty1; Alpine's busybox init: tty1 runs `login -f` instead of getty.
-            lines.Add("write_files:");
             lines.Add("  - path: /etc/systemd/system/getty@tty1.service.d/50-vmqontrol-autologin.conf");
             lines.Add("    content: |");
             lines.Add("      [Service]");
@@ -265,6 +278,7 @@ public static partial class CloudImages
         lines.Add("packages: [qemu-guest-agent, sudo]");
         lines.Add("runcmd:");
         lines.Add("  - [sh, -c, 'systemctl enable --now qemu-guest-agent 2>/dev/null || { rc-update add qemu-guest-agent default; rc-service qemu-guest-agent start; }']");
+        lines.Add("  - [sh, -c, 'if [ -d /run/systemd/system ]; then systemctl daemon-reload; systemctl enable --now vmqontrol-shares.service; else rc-update add local default; rc-service local start; fi']");
         lines.Add($"  - [sh, -c, 'if [ -x /bin/bash ] && command -v usermod >/dev/null; then usermod -s /bin/bash {account}; fi']");
         if (c.Password.Length == 0)
             lines.Add("  - [sh, -c, 'if [ -d /run/systemd/system ]; then systemctl daemon-reload; systemctl restart getty@tty1; "

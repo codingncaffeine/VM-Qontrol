@@ -60,6 +60,10 @@ internal static class Commands
           exec MACHINE PROGRAM [ARG...]
                               Run a program inside the guest and print what it printed (needs the guest agent; Windows'
                               agent runs programs only when allowed). The exit code is the program's.
+          share MACHINE FOLDER [--read-only] [--name NAME] / unshare MACHINE NAME|FOLDER
+                      Share a folder of this computer with the machine, from its next power on. It appears in the
+                      machine by itself once the guest tools answer: /mnt/shared/NAME in Linux, a drive named after
+                      the folder in Windows; every start after that mounts it again.
           copy-to MACHINE FILE GUEST-PATH / copy-from MACHINE GUEST-PATH FILE
                               Copy a file into or out of the guest through its agent, with no shared folder or network.
           cable MACHINE on|off
@@ -100,6 +104,12 @@ internal static class Commands
                     Log.Minimum = LogLevel.Info;
                     Log.Initialize("vmq-guard", paths.Logs);
                     return Core.Runtime.ShutdownGuard.Main(paths);
+                case Core.Runtime.SharedFolders.Argument:
+                    // Sets a machine's shared folders up inside its guest, started at power on (never typed by hand).
+                    paths.EnsureCreated();
+                    Log.Minimum = LogLevel.Info;
+                    Log.Initialize("vmq-shares", paths.Logs);
+                    return Core.Runtime.SharedFolders.Main(paths, args);
                 case "version" or "--version" or "-V":
                     output.WriteLine($"vmq {BuildInfo.Stamp}");
                     output.WriteLine(BuildInfo.License);
@@ -134,6 +144,10 @@ internal static class Commands
                     return Create(args[1..], paths, host, output, error);
                 case "template" when args.Length > 1:
                     return Template(args[1], !args.Contains("--undo"), paths, output, error);
+                case "share" when args.Length > 2:
+                    return Share(args[1], args[2], args.Contains("--read-only"), (Array.IndexOf(args, "--name") is var ni and >= 0 && ni + 1 < args.Length ? args[ni + 1] : null), paths, output, error);
+                case "unshare" when args.Length > 2:
+                    return Unshare(args[1], args[2], paths, output, error);
                 case "clone" when args.Length > 2:
                     return Clone(args[1], args[2], args.Contains("--linked"), paths, output, error);
                 case "start" when args.Length > 1:
@@ -146,6 +160,11 @@ internal static class Commands
                         var addresses = await new GuestAgentClient(r.Paths.Agent).AddressesAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
                         if (addresses is { Count: > 0 }) output.WriteLine($"  Guest addresses: {string.Join(", ", addresses.Select(a => $"{a.Address} ({a.Interface})"))}");
                         else if (addresses is null) output.WriteLine("  Guest agent: not answering (install the guest tools to see the guest's address)");
+                        if (SharedFolders.ReadReport(r.Paths) is { } shares)
+                        {
+                            output.WriteLine($"  Shared folders: {shares.Summary}");
+                            foreach (var sh in shares.Shares) output.WriteLine($"    {sh.Name}: {sh.Where ?? sh.Problem}");
+                        }
                     }, notRunning: 0);
                 case "shutdown" when args.Length > 1:
                     return Control(args[1], paths, output, error, r => MachineRunner.ShutDownAsync(r));
@@ -292,8 +311,8 @@ internal static class Commands
                         await LiveNetwork.StartCaptureAsync((c, a) => qmp.ExecuteAsync(c, a), r.Paths, args[2]).ConfigureAwait(false);
                         output.WriteLine($"{r.Name}: capturing into {Path.GetFullPath(args[2])}; 'vmq capture {args[1]} --stop' finishes the file.");
                     });
-                case "inspect" or "detect" or "create" or "clone" or "template" or "start" or "status" or "shutdown" or "poweroff" or "suspend" or "discard-suspended" or "pause" or "resume" or "reset" or "screenshot" or "exec" or "copy-to" or "copy-from" or "cable" or "capture":
-                    error.WriteLine($"vmq {command}: something is missing ({(command == "detect" ? "the disc image" : command == "screenshot" ? "the machine and the file" : command == "exec" ? "the machine and the program" : command is "copy-to" or "copy-from" ? "the machine and both files" : command == "cable" ? "the machine and on or off" : command == "capture" ? "the machine and the file, or --stop" : command == "clone" ? "the machine and the new name" : command == "create" ? "the name" : "the machine")}). Run 'vmq help' for the list.");
+                case "inspect" or "detect" or "create" or "clone" or "share" or "unshare" or "template" or "start" or "status" or "shutdown" or "poweroff" or "suspend" or "discard-suspended" or "pause" or "resume" or "reset" or "screenshot" or "exec" or "copy-to" or "copy-from" or "cable" or "capture":
+                    error.WriteLine($"vmq {command}: something is missing ({(command == "detect" ? "the disc image" : command == "screenshot" ? "the machine and the file" : command == "exec" ? "the machine and the program" : command is "copy-to" or "copy-from" ? "the machine and both files" : command == "cable" ? "the machine and on or off" : command == "capture" ? "the machine and the file, or --stop" : command == "clone" ? "the machine and the new name" : command is "share" or "unshare" ? "the machine and the folder" : command == "create" ? "the name" : "the machine")}). Run 'vmq help' for the list.");
                     return 2;
                 default:
                     error.WriteLine($"vmq: unknown command '{command}'. Run 'vmq help' for the list.");
@@ -531,6 +550,57 @@ internal static class Commands
             LinuxEasyInstall = linuxEasy,
         });
         output.WriteLine($"Created {name} in {dir}.");
+        return 0;
+    }
+
+    /// <summary>vmq share: a folder of this computer the machine sees (vmrun addSharedFolder); applies at the next power on.</summary>
+    private static int Share(string target, string folder, bool readOnly, string? name, QontrolPaths paths, TextWriter output, TextWriter error)
+    {
+        if (Resolve(target, paths) is not { Machine: { } m } entry || entry.Kind != MachineKind.Native)
+        {
+            error.WriteLine($"vmq share: no VM Qontrol machine called '{target}'.");
+            return 1;
+        }
+
+        var path = Path.GetFullPath(folder);
+        if (!Directory.Exists(path))
+        {
+            error.WriteLine($"vmq share: {path} is not a folder.");
+            return 1;
+        }
+
+        var tag = SharedFolders.SafeTag(name ?? Path.GetFileName(path.TrimEnd('/')));
+        if (m.Shares.Any(x => SharedFolders.SafeTag(x.Tag) == tag || x.Path == path))
+        {
+            error.WriteLine($"vmq share: {m.Name} already shares a folder named '{tag}' or {path} itself; --name gives another name.");
+            return 1;
+        }
+
+        var share = new ShareConfig { Path = path, Tag = tag, ReadOnly = readOnly };
+        SettingsHistory.Save(m, m with { Shares = [.. m.Shares, share] }, entry.Path, entry.Directory);
+        output.WriteLine($"{m.Name} shares {path}{(readOnly ? " (read only)" : "")} from its next power on: {SharedFolders.LinuxMount(share)} in Linux, "
+                         + $"a drive named \u201c{SharedFolders.DisplayName(share)}\u201d in Windows (set up by itself once the guest tools answer).");
+        return 0;
+    }
+
+    private static int Unshare(string target, string which, QontrolPaths paths, TextWriter output, TextWriter error)
+    {
+        if (Resolve(target, paths) is not { Machine: { } m } entry || entry.Kind != MachineKind.Native)
+        {
+            error.WriteLine($"vmq unshare: no VM Qontrol machine called '{target}'.");
+            return 1;
+        }
+
+        var full = Directory.Exists(which) ? Path.GetFullPath(which) : null;
+        var kept = m.Shares.Where(x => x.Path != full && SharedFolders.SafeTag(x.Tag) != SharedFolders.SafeTag(which)).ToList();
+        if (kept.Count == m.Shares.Count)
+        {
+            error.WriteLine($"vmq unshare: {m.Name} shares no folder '{which}'. It shares: {(m.Shares.Count == 0 ? "nothing" : string.Join(", ", m.Shares.Select(x => $"{SharedFolders.SafeTag(x.Tag)} ({x.Path})")))}.");
+            return 1;
+        }
+
+        SettingsHistory.Save(m, m with { Shares = kept }, entry.Path, entry.Directory);
+        output.WriteLine($"{m.Name} stops sharing '{which}' at its next power on.");
         return 0;
     }
 

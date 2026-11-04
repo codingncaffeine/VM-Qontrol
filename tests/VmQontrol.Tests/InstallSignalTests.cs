@@ -89,9 +89,13 @@ public sealed class InstallSignalTests
         Assert.Contains(InstallSignal.Marker, xml, StringComparison.Ordinal);
 
         var linux = new LinuxInstallChoices { UserName = "Ann", Password = "x", HostName = "lab" };
-        Assert.Contains("late-commands:\n    - sh -c 'echo VMQONTROL-INSTALLED > /dev/ttyS3'", LinuxEasyInstall.UbuntuAutoinstall(linux, "h").ReplaceLineEndings("\n"), StringComparison.Ordinal);
+        Assert.Contains("\n    - sh -c 'echo VMQONTROL-INSTALLED > /dev/ttyS3'", LinuxEasyInstall.UbuntuAutoinstall(linux, "h").ReplaceLineEndings("\n"), StringComparison.Ordinal);
         Assert.Contains("%post --nochroot\necho VMQONTROL-INSTALLED > /dev/ttyS3\n%end", LinuxEasyInstall.Kickstart(linux, "h").ReplaceLineEndings("\n"), StringComparison.Ordinal);
-        Assert.Contains("d-i preseed/late_command string echo VMQONTROL-INSTALLED > /dev/ttyS3", LinuxEasyInstall.Preseed(linux, "h"), StringComparison.Ordinal);
+        Assert.Contains("; echo VMQONTROL-INSTALLED > /dev/ttyS3\n", LinuxEasyInstall.Preseed(linux, "h").ReplaceLineEndings("\n"), StringComparison.Ordinal);
+        // D42: every Easy Install puts the guest's own shared-folder mounter in the installed system.
+        Assert.Contains("    - curtin in-target -- sh -c 'mkdir -p /usr/local/sbin", LinuxEasyInstall.UbuntuAutoinstall(linux, "h").ReplaceLineEndings("\n"), StringComparison.Ordinal);
+        Assert.Contains("%post\nmkdir -p /usr/local/sbin", LinuxEasyInstall.Kickstart(linux, "h").ReplaceLineEndings("\n"), StringComparison.Ordinal);
+        Assert.Contains("d-i preseed/late_command string in-target sh -c 'mkdir -p /usr/local/sbin", LinuxEasyInstall.Preseed(linux, "h"), StringComparison.Ordinal);
     }
 
     [Fact]

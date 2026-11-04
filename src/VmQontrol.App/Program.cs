@@ -27,6 +27,15 @@ internal static class Program
             return Core.Runtime.ShutdownGuard.Main(guardPaths);
         }
 
+        if (args.Length > 0 && args[0] == Core.Runtime.SharedFolders.Argument)
+        {
+            // Sets a machine's shared folders up inside its guest once the guest agent answers; started at power on, no window.
+            var sharePaths = QontrolPaths.ForCurrentUser();
+            sharePaths.EnsureCreated();
+            Log.Initialize("vmq-shares", sharePaths.Logs);
+            return Core.Runtime.SharedFolders.Main(sharePaths, args);
+        }
+
         if (args.Any(a => a is "--version" or "-V"))
         {
             Console.WriteLine($"VM Qontrol {BuildInfo.Stamp}");
