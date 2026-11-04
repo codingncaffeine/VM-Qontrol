@@ -4,7 +4,7 @@
 
 A modern, intuitive manager for QEMU/KVM virtual machines on Linux. Create a machine in a few guided steps, download
 an operating system from a catalog or use your own installer, and change every setting in a dialog that explains
-what it does and what the recommended value is. It runs as you, with no background service, and keeps
+what it does and what the recommended value is. It runs with no background service required, and keeps
 one portable folder per machine. A few host changes (PCI handover, nested virtualization, huge pages, host drives, serial
 port access) ask for your password once through the desktop's own prompt; USB passthrough needs none.
 
