@@ -67,7 +67,7 @@ Section: admin
 Priority: optional
 Architecture: amd64
 Installed-Size: $INSTALLED_KB
-Depends: libc6 (>= 2.34), libgcc-s1, libstdc++6, libicu76 | libicu74 | libicu72 | libicu70, libfontconfig1, libfreetype6, libx11-6, libx11-xcb1, libxcb1, libxi6, libxcursor1, libxext6, libxrandr2, libxrender1, libice6, libsm6, libegl1, libgl1, libwayland-client0, libxkbcommon0, zlib1g, qemu-system-x86, qemu-utils, ovmf
+Depends: libc6 (>= 2.34), libgcc-s1, libstdc++6, libicu76 | libicu74 | libicu72 | libicu70, libfontconfig1, libfreetype6, libx11-6, libx11-xcb1, libxcb1, libxi6, libxcursor1, libxext6, libxrandr2, libxrender1, libice6, libsm6, libegl1, libgl1, libwayland-client0, libxkbcommon0, zlib1g, qemu-system-x86, qemu-utils, ovmf, gpgv
 Recommends: swtpm, swtpm-tools, virt-viewer, osinfo-db, virtiofsd, passt, spice-client-glib-usb-acl-helper, freerdp3-x11
 Suggests: wimtools, xorriso, libarchive-tools, quickemu, ffmpeg
 Maintainer: VM Qontrol <codingncaffeine@users.noreply.github.com>

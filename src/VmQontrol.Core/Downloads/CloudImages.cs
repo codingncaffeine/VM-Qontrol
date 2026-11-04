@@ -11,8 +11,12 @@ namespace VmQontrol.Core.Downloads;
 /// <summary>An official cloud image VM Qontrol can make a ready machine from (D39).</summary>
 public sealed record CloudImage(string Id, string DisplayName, string OsInfoId, string Summary);
 
-/// <summary>The image file chosen for a <see cref="CloudImage"/> today, and the checksum its publisher lists for it.</summary>
-public sealed record ResolvedCloudImage(CloudImage Image, Uri File, string FileName, HashAlgorithmName Algorithm, string Checksum);
+/// <summary>
+/// The image file chosen for a <see cref="CloudImage"/> today, the checksum its publisher lists for it, and how that was
+/// vouched for: <see cref="Signed"/> when the checksum list's own signature was checked, <see cref="ImageSignature"/> when
+/// the publisher signs the image itself (Alpine), checked once it has arrived.
+/// </summary>
+public sealed record ResolvedCloudImage(CloudImage Image, Uri File, string FileName, HashAlgorithmName Algorithm, string Checksum, bool Signed = false, byte[]? ImageSignature = null);
 
 /// <summary>What the person chose for the new machine; <see cref="Password"/> may be empty when an SSH key is given.</summary>
 public sealed record CloudChoices
@@ -64,13 +68,18 @@ public static partial class CloudImages
                     var v = image.Id[7..];
                     var dir = $"https://cloud-images.ubuntu.com/releases/{v}/release/";
                     var name = $"ubuntu-{v}-server-cloudimg-amd64.img";
-                    return new(image, new Uri(dir + name), name, HashAlgorithmName.SHA256, SumsLine(await GetTextAsync(dir + "SHA256SUMS", ct).ConfigureAwait(false), name));
+                    var sums = await GetBytesAsync(dir + "SHA256SUMS", ct).ConfigureAwait(false);
+                    var signature = await GetBytesAsync(dir + "SHA256SUMS.gpg", ct).ConfigureAwait(false);
+                    var check = await CheckedSumsAsync(Signatures.UbuntuCloud, sums, signature, $"{image.DisplayName}'s checksum list", ct).ConfigureAwait(false);
+                    return new(image, new Uri(dir + name), name, HashAlgorithmName.SHA256, SumsLine(Encoding.UTF8.GetString(sums), name), check.Checked);
                 }
 
                 case "debian-13" or "debian-12":
                 {
                     var (code, n) = image.Id == "debian-13" ? ("trixie", "13") : ("bookworm", "12");
                     var dir = $"https://cloud.debian.org/images/cloud/{code}/latest/";
+                    // Debian signs its installer discs' checksums, but not the cloud images' (no SHA512SUMS.sign exists):
+                    // the checksum list over HTTPS from cloud.debian.org decides.
                     // "generic", not "genericcloud": the cloud kernel has no graphics driver at all (no DRM), so the
                     // machine's screen stayed black for good; generic is the same cloud-init image with the full kernel.
                     var name = $"debian-{n}-generic-amd64.qcow2";
@@ -87,7 +96,13 @@ public static partial class CloudImages
                         .Where(x => x is { Variant: "Cloud", Arch: "x86_64", Link: { } l, Sha.Length: 64 } && int.TryParse(x.Version, out _) && FedoraImage().IsMatch(Path.GetFileName(l)))
                         .OrderByDescending(x => int.Parse(x.Version!, System.Globalization.CultureInfo.InvariantCulture)).FirstOrDefault();
                     if (newest.Link is not { } link) throw new DownloadFailedException(["Fedora's release list names no Cloud Base image right now. Try again later."]);
-                    return new(image, new Uri(link), Path.GetFileName(link), HashAlgorithmName.SHA256, newest.Sha!);
+                    // The list is not signed, but the CHECKSUM file beside the image is (clear-signed by that release's
+                    // key): both must name the same checksum. It comes through Fedora's mirrors, so a few tries.
+                    var file = Path.GetFileName(link);
+                    var signed = await FedoraSignedHashAsync(link, file, ct).ConfigureAwait(false);
+                    if (signed.Hash is { } h && !string.Equals(h, newest.Sha, StringComparison.OrdinalIgnoreCase))
+                        throw new DownloadFailedException([$"Fedora's signed checksum for {file} differs from the one its release list names, so nothing was downloaded."]);
+                    return new(image, new Uri(link), file, HashAlgorithmName.SHA256, newest.Sha!, signed.Checked);
                 }
 
                 case "alpine":
@@ -96,7 +111,9 @@ public static partial class CloudImages
                     var name = Links(await GetTextAsync(dir, ct).ConfigureAwait(false)).Select(l => AlpineImage().Match(l)).Where(m => m.Success)
                         .OrderByDescending(m => Version.Parse(m.Groups[1].Value)).ThenByDescending(m => int.Parse(m.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture))
                         .Select(m => m.Value).FirstOrDefault() ?? throw new DownloadFailedException(["Alpine's server lists no cloud image right now. Try again later."]);
-                    return new(image, new Uri(dir + name), name, HashAlgorithmName.SHA512, SumsLine(await GetTextAsync(dir + name + ".sha512", ct).ConfigureAwait(false), name, alone: true));
+                    // Alpine signs each image itself (its .asc), checked once the image has arrived.
+                    var signature = await GetBytesAsync(dir + name + ".asc", ct).ConfigureAwait(false);
+                    return new(image, new Uri(dir + name), name, HashAlgorithmName.SHA512, SumsLine(await GetTextAsync(dir + name + ".sha512", ct).ConfigureAwait(false), name, alone: true), ImageSignature: signature);
                 }
 
                 default:
@@ -134,6 +151,20 @@ public static partial class CloudImages
         {
             File.Delete(partial);
             throw new DownloadFailedException([$"The download does not match the checksum {r.Image.DisplayName} publishes, so it was deleted. Try again; if it happens again, the server or the connection is damaging it."]);
+        }
+
+        if (r.ImageSignature is { } signature)
+        {
+            progress.Report(new DownloadProgress(size ?? 0, size, $"Checking {r.Image.DisplayName}'s signature…"));
+            try
+            {
+                await Signatures.VerifyDetachedAsync(Signatures.AlpineCloud, signature, partial, $"{r.Image.DisplayName}'s image", ct).ConfigureAwait(false);
+            }
+            catch
+            {
+                File.Delete(partial);
+                throw;
+            }
         }
 
         File.Move(partial, target, overwrite: true);
@@ -306,6 +337,48 @@ public static partial class CloudImages
         return string.Equals(Convert.ToHexString(hash.GetHashAndReset()), r.Checksum, StringComparison.OrdinalIgnoreCase);
     }
 
+    private static async Task<SignatureCheck> CheckedSumsAsync(SigningPublisher publisher, byte[] sums, byte[] signature, string what, CancellationToken ct)
+    {
+        var file = Path.Combine(Directory.CreateTempSubdirectory("vmqontrol-sums-").FullName, "sums");
+        try
+        {
+            await File.WriteAllBytesAsync(file, sums, ct).ConfigureAwait(false);
+            return await Signatures.VerifyDetachedAsync(publisher, signature, file, what, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            try { Directory.Delete(Path.GetDirectoryName(file)!, recursive: true); } catch (IOException) { }
+        }
+    }
+
+    /// <summary>Fedora's clear-signed CHECKSUM beside the image ("Fedora-Cloud-45-1.4-x86_64-CHECKSUM"), checked; its hash for the image.</summary>
+    private static async Task<(bool Checked, string? Hash)> FedoraSignedHashAsync(string link, string file, CancellationToken ct)
+    {
+        if (FedoraVersion().Match(file) is not { Success: true } m)
+            throw new DownloadFailedException([$"Fedora's image {file} is not named as VM Qontrol expects, so its signed checksum cannot be found."]);
+        var url = link[..(link.Length - file.Length)] + $"Fedora-Cloud-{m.Groups[1].Value}-x86_64-CHECKSUM";
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                var (check, text) = await Signatures.VerifyClearsignedAsync(Signatures.Fedora, await GetBytesAsync(url, ct).ConfigureAwait(false), "Fedora's checksum list", ct).ConfigureAwait(false);
+                if (!check.Checked) return (false, null);
+                return (true, Signatures.HashFor(text ?? "", file) ?? throw new DownloadFailedException([$"Fedora's signed checksum list does not list {file}."]));
+            }
+            catch (HttpRequestException) when (attempt < 3)
+            {
+                // Another mirror on the next try (download.fedoraproject.org picks one per request).
+            }
+        }
+    }
+
+    private static async Task<byte[]> GetBytesAsync(string url, CancellationToken ct)
+    {
+        using var response = await Http.GetAsync(url, ct).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
+    }
+
     private static async Task<string> GetTextAsync(string url, CancellationToken ct)
     {
         using var response = await Http.GetAsync(url, ct).ConfigureAwait(false);
@@ -334,6 +407,9 @@ public static partial class CloudImages
 
     [GeneratedRegex(@"^Fedora-Cloud-Base-Generic-[0-9.-]+\.x86_64\.qcow2$")]
     private static partial Regex FedoraImage();
+
+    [GeneratedRegex(@"^Fedora-Cloud-Base-Generic-(\d+-[0-9.]+)\.x86_64\.qcow2$")]
+    private static partial Regex FedoraVersion();
 
     [GeneratedRegex(@"^alpine-(\d+\.\d+\.\d+)-x86_64-cloudinit-r(\d+)\.qcow2$")]
     private static partial Regex AlpineImage();

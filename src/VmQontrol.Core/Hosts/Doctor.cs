@@ -48,6 +48,7 @@ public static class Doctor
         ["windows-download"] = new() { [DistroFamily.Arch] = "wimlib libisoburn libarchive", [DistroFamily.Debian] = "wimtools xorriso libarchive-tools", [DistroFamily.Fedora] = "wimlib-utils xorriso bsdtar", [DistroFamily.Alpine] = "wimlib xorriso libarchive-tools", [DistroFamily.OpenSuse] = "wimlib xorriso bsdtar" },
         ["freerdp"] = new() { [DistroFamily.Arch] = "freerdp", [DistroFamily.Debian] = "freerdp3-x11", [DistroFamily.Fedora] = "freerdp", [DistroFamily.Alpine] = "freerdp", [DistroFamily.OpenSuse] = "freerdp" },
         ["guestmount"] = new() { [DistroFamily.Arch] = "libguestfs", [DistroFamily.Debian] = "guestmount", [DistroFamily.Fedora] = "libguestfs", [DistroFamily.Alpine] = "guestfs-tools", [DistroFamily.OpenSuse] = "libguestfs" },
+        ["gpgv"] = new() { [DistroFamily.Arch] = "gnupg", [DistroFamily.Debian] = "gpgv", [DistroFamily.Fedora] = "gnupg2", [DistroFamily.Alpine] = "gpgv", [DistroFamily.OpenSuse] = "gpg2" },
         ["quickemu"] = new() { [DistroFamily.Arch] = "quickemu", [DistroFamily.Debian] = "quickemu", [DistroFamily.Fedora] = "quickemu" },
     };
 
@@ -163,6 +164,9 @@ public static class Doctor
         checks.Add(windowsTools.Count == 0
             ? new("Windows downloads (wimlib, xorriso)", CheckStatus.Ok, "Windows can be downloaded from Microsoft and made into an installer disc.")
             : new("Windows downloads (wimlib, xorriso)", CheckStatus.Optional, $"Downloading Windows needs {string.Join(" and ", windowsTools)} to turn Microsoft's file into an installer disc; your own Windows discs work without them.", InstallCommand(distro, "windows-download")));
+        checks.Add(onPath("gpgv")
+            ? new("Download signatures (gpgv)", CheckStatus.Ok, "Downloads from Ubuntu, Debian, Fedora and Alpine are checked against their publishers' signatures.")
+            : new("Download signatures (gpgv)", CheckStatus.Optional, "Downloads are still checked against their published checksums, but their publishers' signatures cannot be checked without gpgv.", InstallCommand(distro, "gpgv")));
         checks.Add(onPath("quickget")
             ? new("Download catalog (quickget)", CheckStatus.Ok, "Operating systems can be downloaded from the New Machine wizard.")
             : new("Download catalog (quickget)", CheckStatus.Optional,

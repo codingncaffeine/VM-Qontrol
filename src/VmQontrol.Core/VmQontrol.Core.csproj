@@ -12,6 +12,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The publishers' signing keys (see Downloads/Signatures.cs), read from the assembly by name. -->
+    <EmbeddedResource Include="Downloads/Keys/*.asc" LogicalName="VmQontrol.Core.Downloads.Keys.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="VmQontrol.Tests" />
   </ItemGroup>
 

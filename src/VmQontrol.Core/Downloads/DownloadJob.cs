@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Security.Cryptography;
 using VmQontrol.Core.Import;
 using VmQontrol.Core.Machines;
 
@@ -30,7 +31,7 @@ public sealed class DownloadJob(CatalogEntry entry, string libraryRoot, string m
         try
         {
             progress.Report(new DownloadProgress(0, null, "Finding the download…"));
-            var expected = await ExpectedBytesAsync(ct).ConfigureAwait(false);
+            var (expected, urls) = await ExpectedBytesAsync(ct).ConfigureAwait(false);
             var args = new List<string> { Entry.Os, Entry.Release };
             if (Entry.Option.Length > 0) args.Add(Entry.Option);
             var start = new ProcessStartInfo(Catalog.Program) { WorkingDirectory = staging, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
@@ -59,6 +60,8 @@ public sealed class DownloadJob(CatalogEntry entry, string libraryRoot, string m
             if (Entry.Os == "windows" && log.Contains("Microsoft blocked", StringComparison.OrdinalIgnoreCase))
                 problems.Insert(0, "Microsoft refused the automatic download. Download Windows from Microsoft's site in your browser, then choose the file.");
             if (problems.Count > 0) throw new DownloadFailedException(problems);
+            foreach (var disc in import.Machine.Media.Where(x => x.Role == MediaRole.Installer && File.Exists(x.File)))
+                await CheckDiscSignatureAsync(Entry, urls, disc.File, progress, ct).ConfigureAwait(false);
 
             var result = Adopt(import, libraryRoot, machineName);
             progress.Report(new DownloadProgress(FolderBytes(result.Directory), expected, "Ready"));
@@ -108,14 +111,99 @@ public sealed class DownloadJob(CatalogEntry entry, string libraryRoot, string m
         return (machine, target);
     }
 
-    private async Task<long?> ExpectedBytesAsync(CancellationToken ct)
+    private static readonly HashSet<string> UbuntuFamily =
+        ["ubuntu", "ubuntu-server", "edubuntu", "kubuntu", "lubuntu", "ubuntu-budgie", "ubuntu-mate", "ubuntu-unity", "ubuntucinnamon", "ubuntukylin", "ubuntustudio", "xubuntu"];
+
+    /// <summary>The publishers in the catalog that sign the checksum files beside their installer discs.</summary>
+    internal static SigningPublisher? PublisherFor(string os) => os switch
+    {
+        "debian" => Signatures.Debian,
+        "fedora" => Signatures.Fedora,
+        _ when UbuntuFamily.Contains(os) => Signatures.UbuntuDiscs,
+        _ => null,
+    };
+
+    /// <summary>
+    /// quickget checks the checksum a system publishes, not its signature. For Ubuntu (every flavor), Debian and Fedora,
+    /// which sign the checksum file beside each disc (measured over all 155 of their release entries in quickget 4.9.9's
+    /// catalog), the signed file is read from where quickget downloaded, its signature checked, and the disc's own hash
+    /// must be the one it lists. Daily builds are not signed there; they are let through with a note in the log.
+    /// </summary>
+    internal static async Task CheckDiscSignatureAsync(CatalogEntry entry, IReadOnlyList<string> urls, string disc, IProgress<DownloadProgress> progress, CancellationToken ct)
+    {
+        if (PublisherFor(entry.Os) is not { } publisher) return;
+        var what = $"{entry.DisplayName} {entry.Release}";
+        if (urls.FirstOrDefault(u => u.EndsWith(".iso", StringComparison.OrdinalIgnoreCase)) is not { } url)
+        {
+            Log.Warn($"{what}: quickget named no disc address, so {publisher.Name}'s signature could not be looked for.");
+            return;
+        }
+
+        var cut = url.LastIndexOf('/') + 1;
+        var (folder, name) = (url[..cut], Uri.UnescapeDataString(url[cut..]));
+        progress.Report(new DownloadProgress(0, null, $"Checking {publisher.Name}'s signature…"));
+        string? sums;
+        try
+        {
+            sums = await SignedSumsAsync(publisher, folder, what, ct).ConfigureAwait(false);
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound && entry.Release.StartsWith("daily", StringComparison.OrdinalIgnoreCase))
+        {
+            Log.Warn($"{what}: a daily build, which {publisher.Name} does not sign there; quickget's checksum decided.");
+            return;
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new DownloadFailedException([$"{publisher.Name}'s signed checksum list could not be read beside the disc ({ex.Message}), so the download could not be checked. Try again."]);
+        }
+
+        if (sums is null) return; // gpgv is not installed (logged)
+        var listed = Signatures.HashFor(sums, name) ?? throw new DownloadFailedException([$"{publisher.Name}'s signed checksum list does not list {name}, so the disc was not used."]);
+        await using var stream = new FileStream(disc, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 20, FileOptions.SequentialScan);
+        var hash = Convert.ToHexStringLower(listed.Length == 128 ? await SHA512.HashDataAsync(stream, ct).ConfigureAwait(false) : await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false));
+        if (hash != listed)
+            throw new DownloadFailedException([$"The disc does not match the checksum {publisher.Name} signed for {name}, so it was not used."]);
+        Log.Info($"{what}: {name} matches {publisher.Name}'s signed checksum.");
+    }
+
+    /// <summary>The signed text of the checksum file in <paramref name="folder"/>, or null when gpgv is not installed.</summary>
+    private static async Task<string?> SignedSumsAsync(SigningPublisher publisher, string folder, string what, CancellationToken ct)
+    {
+        if (publisher == Signatures.Fedora)
+        {
+            var listing = await Http.GetStringAsync(folder, ct).ConfigureAwait(false);
+            var checksum = System.Text.RegularExpressions.Regex.Match(listing, "href=\"(?:\\./)?([^\"/?#]+-CHECKSUM)\"");
+            if (!checksum.Success) throw new HttpRequestException("no CHECKSUM file", null, System.Net.HttpStatusCode.NotFound);
+            var (check, text) = await Signatures.VerifyClearsignedAsync(publisher, await Http.GetByteArrayAsync(folder + checksum.Groups[1].Value, ct).ConfigureAwait(false), $"{what}'s checksum list", ct).ConfigureAwait(false);
+            return check.Checked ? text : null;
+        }
+
+        var (sumsName, signatureName) = publisher == Signatures.Debian ? ("SHA512SUMS", "SHA512SUMS.sign") : ("SHA256SUMS", "SHA256SUMS.gpg");
+        var sums = await Http.GetByteArrayAsync(folder + sumsName, ct).ConfigureAwait(false);
+        var signature = await Http.GetByteArrayAsync(folder + signatureName, ct).ConfigureAwait(false);
+        var work = Directory.CreateTempSubdirectory("vmqontrol-sums-").FullName;
+        try
+        {
+            var file = Path.Combine(work, sumsName);
+            await File.WriteAllBytesAsync(file, sums, ct).ConfigureAwait(false);
+            var verdict = await Signatures.VerifyDetachedAsync(publisher, signature, file, $"{what}'s checksum list", ct).ConfigureAwait(false);
+            return verdict.Checked ? System.Text.Encoding.UTF8.GetString(sums) : null;
+        }
+        finally
+        {
+            try { Directory.Delete(work, recursive: true); } catch (IOException) { }
+        }
+    }
+
+    private async Task<(long? Bytes, IReadOnlyList<string> Urls)> ExpectedBytesAsync(CancellationToken ct)
     {
         var args = new List<string> { "--url", Entry.Os, Entry.Release };
         if (Entry.Option.Length > 0) args.Add(Entry.Option);
         var text = await Catalog.RunAsync(ct, [.. args]).ConfigureAwait(false);
         long total = 0;
         // quickget prints "name: url" lines.
-        foreach (var url in System.Text.RegularExpressions.Regex.Matches(text, @"https?://\S+").Select(m => m.Value).Distinct().Take(4))
+        var urls = System.Text.RegularExpressions.Regex.Matches(text, @"https?://\S+").Select(m => m.Value).Distinct().Take(4).ToList();
+        foreach (var url in urls)
         {
             try
             {
@@ -127,7 +215,7 @@ public sealed class DownloadJob(CatalogEntry entry, string libraryRoot, string m
             }
         }
 
-        return total > 0 ? total : null;
+        return (total > 0 ? total : null, urls);
     }
 
     private static long FolderBytes(string dir)
