@@ -127,6 +127,8 @@ public sealed class MainWindowTests
         });
 
         Assert.Equal(["freebsd", "linux", "[RETRO]", "haiku"], seen);
+        // The settings are saved on a worker: read them once that save has landed (it raced the read under load).
+        Assert.True(VmQontrol.Core.AppSettings.WaitForSaves(TimeSpan.FromSeconds(5)));
         Assert.Equal("Retro", VmQontrol.Core.AppSettings.Load(profile.Paths).GroupOf.Single().Value);
     }
 

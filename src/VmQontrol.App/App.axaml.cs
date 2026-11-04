@@ -15,6 +15,9 @@ public class App : Application
     /// <summary>A machine to open when the library has loaded (the command line's MACHINE).</summary>
     public static string? OpenOnStart { get; set; }
 
+    /// <summary>A Windows program to open from an app menu entry (machine id, app slug); no main window then.</summary>
+    public static (string Machine, string App)? WindowsApp { get; set; }
+
     /// <summary>The settings, read by <see cref="Program"/> before the UI thread starts.</summary>
     public static AppSettings? Settings { get; set; }
 
@@ -40,6 +43,15 @@ public class App : Application
     {
         // The watch posts to the dispatcher from its own thread, so it may only start once the dispatcher exists here.
         if (WatchUiThread) UiStallWatch.Start(Environment.GetEnvironmentVariable("VMQONTROL_UI_TRACE") == "1");
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime launch && WindowsApp is { } program)
+        {
+            var vm = new ViewModels.WindowsAppLaunchViewModel(Paths ?? QontrolPaths.ForCurrentUser(), program.Machine, program.App);
+            launch.MainWindow = new WindowsAppLaunchWindow { DataContext = vm };
+            _ = vm.RunAsync();
+            base.OnFrameworkInitializationCompleted();
+            return;
+        }
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var paths = Paths ?? QontrolPaths.ForCurrentUser();

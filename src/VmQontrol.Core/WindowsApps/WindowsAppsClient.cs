@@ -67,7 +67,8 @@ public static class WindowsAppsClient
 
     private static string StateFile(RuntimePaths runtime) => Path.Combine(runtime.Directory, "windows-apps.json");
 
-    public static string LogFile(RuntimePaths runtime) => Path.Combine(runtime.Directory, "windows-apps.log");
+    /// <summary>Beside the machine's other logs (kept after power off; the Log tab shows it). The password never goes in.</summary>
+    public static string LogFile(QontrolPaths paths, MachineConfig config) => Path.Combine(MachineRunner.LogDirectory(paths, config), "windows-apps.log");
 
     private sealed record ClientState(int Pid, string Route, string Account);
 
@@ -211,7 +212,7 @@ public static class WindowsAppsClient
     /// Opens <paramref name="app"/>: inside the machine's open client when there is one, else by starting the client with
     /// it. <paramref name="password"/> is asked only when a new client must sign in.
     /// </summary>
-    public static async Task<OpenResult> OpenAsync(MachineConfig config, RunningMachine running, WindowsApp app,
+    public static async Task<OpenResult> OpenAsync(MachineConfig config, QontrolPaths paths, RunningMachine running, WindowsApp app,
         Func<string, CancellationToken, Task<string?>> password, CancellationToken ct)
     {
         var agent = new GuestAgentClient(running.Paths.Agent);
@@ -243,7 +244,8 @@ public static class WindowsAppsClient
 
         if (await WindowsAppsSession.EnsureLauncherAsync(agent, ct).ConfigureAwait(false) is { } noStarter) return new(false, noStarter);
         await WindowsAppsSession.DisconnectConsoleAsync(agent, ct).ConfigureAwait(false);
-        var log = LogFile(running.Paths);
+        var log = LogFile(paths, config);
+        Directory.CreateDirectory(Path.GetDirectoryName(log)!);
         var start = new ProcessStartInfo("setsid") { UseShellExecute = false, RedirectStandardInput = true };
         start.ArgumentList.Add("sh");
         start.ArgumentList.Add("-c");

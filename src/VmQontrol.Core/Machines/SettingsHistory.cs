@@ -30,7 +30,6 @@ public static class SettingsHistory
         Diff("Notes", before.Notes.Length, after.Notes.Length, _ => "edited");
         Diff("Easy Install", before.EasyInstall is null, after.EasyInstall is null, v => (bool?)v == true ? "off" : "on");
         Diff("Windows apps account", before.WindowsApps?.Account, after.WindowsApps?.Account, v => v?.ToString() ?? "the one signed in");
-        Diff("Windows apps in this computer's menu", before.WindowsApps?.InMenu.Count ?? 0, after.WindowsApps?.InMenu.Count ?? 0);
         Diff("Template", before.IsTemplate, after.IsTemplate, v => (bool?)v == true ? "yes" : "no");
         Diff("Changes at power off", before.OnPowerOff, after.OnPowerOff, v => v switch { DiscardMode.Discard => "discarded", DiscardMode.Ask => "ask each time", _ => "kept" });
         Diff("Memory", before.MemoryMiB, after.MemoryMiB, Mib);

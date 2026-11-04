@@ -12,10 +12,11 @@ license=('GPL-3.0-or-later')
 provides=('vm-qontrol')
 conflicts=('vm-qontrol')
 # Self-contained .NET publish (Avalonia draws through X11 or Wayland; icu = .NET globalization), plus what every
-# machine needs: QEMU, its disk tool and UEFI firmware.
+# machine needs: QEMU, its disk tool and UEFI firmware; FreeRDP 3 opens Windows programs as windows (D43), so that
+# works without installing anything else.
 depends=('glibc' 'gcc-libs' 'zlib' 'icu' 'fontconfig' 'freetype2' 'libglvnd' 'libx11' 'libxext' 'libxi' 'libxrandr'
          'libxcursor' 'libxrender' 'libice' 'libsm' 'libxkbcommon' 'wayland'
-         'qemu-desktop' 'edk2-ovmf')
+         'qemu-desktop' 'edk2-ovmf' 'freerdp')
 optdepends=('swtpm: the TPM Windows 11 requires'
             'virt-viewer: a window for each machine screen (or spice-gtk spicy)'
             'spice-gtk: hand USB devices to machines without a password'

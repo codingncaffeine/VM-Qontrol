@@ -358,7 +358,7 @@ internal static class Commands
                         }
 
                         var fromStdin = args.Contains("--password-stdin");
-                        var result = await VmQontrol.Core.WindowsApps.WindowsAppsPasswords.OpenAsync(config, entry.Directory, r, app, (account, refused, _) =>
+                        var result = await VmQontrol.Core.WindowsApps.WindowsAppsPasswords.OpenAsync(config, entry.Directory, paths, r, app, (account, refused, _) =>
                             Task.FromResult(fromStdin && !refused ? Console.In.ReadLine() : null), CancellationToken.None).ConfigureAwait(false);
                         if (result.Opened)
                         {

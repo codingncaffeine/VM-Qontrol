@@ -97,14 +97,14 @@ public sealed record MachineConfig
     public WindowsAppsConfig? WindowsApps { get; set; }
 }
 
-/// <summary>Windows apps as windows (D43): which account they sign in as and which are in this computer's app menu.</summary>
+/// <summary>
+/// Windows apps as windows (D43): the account they sign in as. Which programs are in this computer's app menu is kept by
+/// the menu entries themselves (<see cref="WindowsApps.WindowsAppsMenu"/>), so there is no second list to drift.
+/// </summary>
 public sealed record WindowsAppsConfig
 {
     /// <summary>The Windows account; <c>null</c> = the one signed in on Windows' own screen.</summary>
     public string? Account { get; set; }
-
-    /// <summary>Start menu ids of the programs given an entry in this computer's app menu.</summary>
-    public List<string> InMenu { get; set; } = [];
 }
 
 /// <summary>What Easy Install was asked to do, for the "Installing for you" card.</summary>

@@ -1,0 +1,41 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:VmQontrol.App.ViewModels"
+        x:Class="VmQontrol.App.Views.WindowsAppLaunchWindow"
+        x:DataType="vm:WindowsAppLaunchViewModel"
+        Title="{Binding Title}"
+        Icon="avares://vmqontrol/Assets/icon-256.png"
+        Width="460" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource QBackground}">
+  <!-- D43: what an app menu entry shows while a Windows program opens. -->
+  <Border Padding="22,20">
+    <StackPanel Spacing="14">
+      <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16">
+        <Panel Width="56" Height="56" VerticalAlignment="Top">
+          <Image Source="{Binding Icon}" Width="56" Height="56" RenderOptions.BitmapInterpolationMode="HighQuality"
+                 IsVisible="{Binding Icon, Converter={x:Static ObjectConverters.IsNotNull}}" />
+          <Path Classes="icon" Data="{StaticResource IconApps}" Width="36" Height="36" Stroke="{DynamicResource QAccent}"
+                IsVisible="{Binding Icon, Converter={x:Static ObjectConverters.IsNull}}" />
+        </Panel>
+        <StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Center">
+          <TextBlock x:Name="LaunchTitle" Text="{Binding Title}" FontSize="{DynamicResource QFontTitle}" FontWeight="SemiBold" TextWrapping="Wrap" />
+          <SelectableTextBlock x:Name="LaunchStatus" Text="{Binding Status}" Classes="muted" TextWrapping="Wrap" />
+        </StackPanel>
+      </Grid>
+      <ProgressBar IsIndeterminate="True" Height="4" IsVisible="{Binding Working}" />
+      <StackPanel Spacing="8" IsVisible="{Binding ShowPassword}">
+        <TextBlock Text="{Binding Account, StringFormat='Password for {0}'}" FontWeight="SemiBold" />
+        <TextBox x:Name="LaunchPassword" Text="{Binding Password}" PasswordChar="&#x2022;">
+          <TextBox.KeyBindings>
+            <KeyBinding Gesture="Enter" Command="{Binding SignInCommand}" />
+          </TextBox.KeyBindings>
+        </TextBox>
+      </StackPanel>
+      <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
+        <Button x:Name="LaunchClose" Classes="secondary" Content="{Binding Failed, Converter={x:Static vm:Text.CloseOrCancel}}" Command="{Binding CloseCommand}" />
+        <Button x:Name="LaunchSignIn" Classes="primary" Content="Sign in" Command="{Binding SignInCommand}" IsVisible="{Binding ShowPassword}" />
+      </StackPanel>
+    </StackPanel>
+  </Border>
+</Window>

@@ -36,6 +36,12 @@ internal static class Program
             return Core.Runtime.SharedFolders.Main(sharePaths, args);
         }
 
+        if (args.Length > 2 && args[0] == Core.WindowsApps.WindowsAppsMenu.Argument)
+        {
+            // An app menu entry of a Windows program (D43): a small window opens it; the main window stays closed.
+            App.WindowsApp = (args[1], args[2]);
+        }
+
         if (args.Any(a => a is "--version" or "-V"))
         {
             Console.WriteLine($"VM Qontrol {BuildInfo.Stamp}");
@@ -67,11 +73,11 @@ internal static class Program
         if (paths.Isolated) Log.Info($"Isolated profile under {QontrolPaths.HomeVariable}");
         App.Paths = paths;
         App.Settings = AppSettings.Load(paths);
-        App.OpenOnStart = args.FirstOrDefault(a => !a.StartsWith('-'));
+        App.OpenOnStart = App.WindowsApp is null ? args.FirstOrDefault(a => !a.StartsWith('-')) : null;
         App.WatchUiThread = true;
         // A build run from its folder has no desktop entry, so the taskbar would show a generic icon (an isolated
         // profile is a trial or a test: it never touches the desktop).
-        if (!paths.Isolated) _ = Task.Run(() => DesktopIntegration.Ensure());
+        if (!paths.Isolated && App.WindowsApp is null) _ = Task.Run(() => DesktopIntegration.Ensure());
 
         try
         {

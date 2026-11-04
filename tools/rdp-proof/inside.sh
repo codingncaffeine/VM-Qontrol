@@ -10,7 +10,16 @@ exec dbus-run-session -- sh -c '
   printf "proof-keyring" | gnome-keyring-daemon --unlock --components=secrets >/dev/null 2>&1
   sleep 1
   run() { echo "\$ vmq $*"; "$VMQ" "$@"; echo "exit $?"; }
+  if [ -n "${MENU:-}" ]; then
+    # The app menu path: the window program exactly as a menu entry runs it (Exec= of the .desktop file).
+    echo "$ $MENU"
+    sh -c "$MENU" > "$OUT/menu.log" 2>&1 & menu=$!
+    sleep 4; import -window root "$OUT/menu-early.png"
+    for i in $(seq 1 40); do kill -0 $menu 2>/dev/null || break; sleep 1; done
+    kill -0 $menu 2>/dev/null && echo "menu window still open after 44 s" || echo "menu window closed by itself"
+  else
   run apps "$MACHINE" open "$FIRST"
+  fi
   sleep "${SETTLE:-8}"
   echo "keyring: $(secret-tool lookup application vm-qontrol kind windows-apps account tester >/dev/null 2>&1 && echo has-the-password || echo empty)"
   pgrep -c freerdp | sed "s/^/clients: /"

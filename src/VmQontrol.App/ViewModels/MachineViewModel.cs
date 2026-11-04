@@ -31,6 +31,7 @@ public sealed partial class MachineViewModel : ObservableObject
         Logs = new LogViewModel(shell.Paths, Machine);
         Console.CopyRequested = text => shell.CopyToClipboard(text, "The console output is on the clipboard.");
         Snapshots = new SnapshotsViewModel(this, shell);
+        WindowsApps = new WindowsAppsViewModel(this, shell);
         _ = RefreshSuspendedAsync();
         _ = RefreshInstallAsync();
     }
@@ -43,10 +44,12 @@ public sealed partial class MachineViewModel : ObservableObject
 
     public SnapshotsViewModel Snapshots { get; }
 
+    public WindowsAppsViewModel WindowsApps { get; }
+
     private int _cores = 1;
     private long _memoryMiB = 1024;
 
-    /// <summary>0 Summary, 1 Snapshots, 2 Performance, 3 Console, 4 Log: work for a tab runs only while it is open.</summary>
+    /// <summary>0 Summary, 1 Snapshots, 2 Performance, 3 Console, 4 Log, 5 Windows apps: work for a tab runs only while it is open.</summary>
     [ObservableProperty]
     private int _tab;
 
@@ -59,6 +62,7 @@ public sealed partial class MachineViewModel : ObservableObject
         else Performance.Stop();
         if (Tab == 3 && IsSelected && _watcher?.Machine is { } r) _ = Console.ConnectAsync(r);
         if (Tab == 4) _ = Logs.LoadAsync();
+        if (Tab == 5) _ = WindowsApps.LoadAsync();
     }
 
     public LibraryEntry Entry { get; private set; }
@@ -840,7 +844,12 @@ public sealed partial class MachineViewModel : ObservableObject
     }
 
     /// <summary>Deletes this machine's files (worker thread; the caller confirmed, prunes shared disks and refreshes).</summary>
-    internal void DeleteFiles(IReadOnlyList<string> roots) => MachineLifecycle.Delete(Machine, Entry.Directory, IsQuickemu ? Entry.Path : null, roots);
+    internal void DeleteFiles(IReadOnlyList<string> roots)
+    {
+        MachineLifecycle.Delete(Machine, Entry.Directory, IsQuickemu ? Entry.Path : null, roots);
+        // Its Windows programs leave this computer's app menu with it.
+        Core.WindowsApps.WindowsAppsMenu.RemoveAll(Machine.Id, _shell.Paths.DesktopData);
+    }
 
     [RelayCommand]
     private async Task DeleteMachineAsync()
@@ -873,6 +882,7 @@ public sealed partial class MachineViewModel : ObservableObject
             await Task.Run(() =>
             {
                 MachineLifecycle.Delete(Machine, Entry.Directory, conf, roots);
+                Core.WindowsApps.WindowsAppsMenu.RemoveAll(Machine.Id, _shell.Paths.DesktopData);
                 MachineLifecycle.PruneBases(roots);
             }).ConfigureAwait(false);
             Ui.Post(() =>

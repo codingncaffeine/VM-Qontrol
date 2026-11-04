@@ -172,6 +172,8 @@ public sealed class MemoryHeadroomTests
         Assert.False(seen.after.PowerOnAfter);
         Assert.True(seen.after.LeanWindows);
         Assert.True(seen.after.MemoryGb < seen.before.MemoryGb, $"{seen.after.MemoryGb} < {seen.before.MemoryGb}");
+        // The settings are saved on a worker: read them once that save has landed (it raced the read under load).
+        Assert.True(AppSettings.WaitForSaves(TimeSpan.FromSeconds(5)));
         var saved = AppSettings.Load(profile.Paths);
         Assert.Equal(16, saved.KeepFreeGB);
         Assert.Equal("lighter", saved.NewMachineSize);

@@ -7,6 +7,9 @@ public static class Text
 {
     /// <summary>True when an int equals the parameter (which page of the wizard is showing).</summary>
     /// <summary>True for 0: a progress bar with nothing to show yet runs without a value.</summary>
+    /// <summary>"Close" once there is nothing left to wait for, else "Cancel".</summary>
+    public static readonly IValueConverter CloseOrCancel = new FuncValueConverter<bool, string>(done => done ? "Close" : "Cancel");
+
     public static readonly IValueConverter IsZero = new FuncValueConverter<double, bool>(v => v <= 0);
 
     public static readonly IValueConverter Is = new FuncValueConverter<int, object?, bool>((v, p) => p is not null && v.ToString(System.Globalization.CultureInfo.InvariantCulture) == p.ToString());

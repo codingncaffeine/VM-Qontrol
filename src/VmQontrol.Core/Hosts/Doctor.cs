@@ -70,6 +70,10 @@ public static class Doctor
         return DistroFamily.Unknown;
     }
 
+    /// <summary>The package names of a component on a distribution, or null when not known.</summary>
+    public static string? PackageNames(DistroFamily distro, string component) =>
+        Packages.TryGetValue(component, out var names) && names.TryGetValue(distro, out var pkg) ? pkg : null;
+
     /// <summary>The command that installs a component here, or a sentence when the distribution is not known.</summary>
     public static string InstallCommand(DistroFamily distro, string component)
     {

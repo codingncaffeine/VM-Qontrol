@@ -567,6 +567,105 @@
             </Border>
           </DockPanel>
         </TabItem>
+
+        <!-- D43: Windows programs as their own windows here (RemoteApp through FreeRDP, set up by the guest agent). -->
+        <TabItem x:Name="WindowsAppsTab" Header="Windows apps" IsVisible="{Binding FamilyWindows}">
+          <StackPanel DataContext="{Binding WindowsApps}" x:DataType="vm:WindowsAppsViewModel" Spacing="14">
+            <Border Classes="card feature">
+              <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+                <Path Classes="badgeicon" Width="22" Height="22" Stretch="Uniform" VerticalAlignment="Top" Margin="0,3,0,0" Data="{StaticResource IconApps}" />
+                <StackPanel Grid.Column="1" Spacing="6">
+                  <TextBlock x:Name="WindowsAppsStatus" Text="{Binding Status}" FontSize="{DynamicResource QFontTitle}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                  <TextBlock Text="{Binding Detail}" Classes="muted" TextWrapping="Wrap" />
+                  <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding Busy}" Margin="0,4,0,0">
+                    <TextBlock Text="{Binding Progress}" Classes="muted" VerticalAlignment="Center" />
+                  </StackPanel>
+                  <ProgressBar IsIndeterminate="True" Height="4" IsVisible="{Binding Busy}" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" Spacing="8" VerticalAlignment="Top">
+                  <Button x:Name="WindowsAppsTurnOn" Classes="primary" Content="Turn on Windows apps" Command="{Binding TurnOnCommand}" IsVisible="{Binding ShowIntro}" IsEnabled="{Binding CanTurnOn}"
+                          ToolTip.Tip="Powers the machine on if needed, turns Remote Desktop on inside Windows and reads its Start menu" />
+                  <Button Classes="tool" Command="{Binding RefreshCommand}" IsVisible="{Binding HasList}" IsEnabled="{Binding CanRefresh}"
+                          ToolTip.Tip="Read Windows' Start menu again (after installing a program)">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <Path Classes="icon" Data="{StaticResource IconRefresh}" />
+                      <TextBlock Text="Refresh the list" />
+                    </StackPanel>
+                  </Button>
+                  <Button x:Name="WindowsAppsTurnOff" Classes="tool" Content="Turn off" Command="{Binding TurnOffCommand}" IsVisible="{Binding HasList}" IsEnabled="{Binding CanRefresh}"
+                          HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                          ToolTip.Tip="Turns Remote Desktop off inside Windows, takes this machine's programs out of the app menu and forgets the kept password" />
+                </StackPanel>
+              </Grid>
+            </Border>
+
+            <Border x:Name="FreeRdpCard" Classes="card problem" IsVisible="{Binding HasFreeRdpMissing}">
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+                <StackPanel Spacing="6">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Path Classes="icon" Data="{StaticResource IconWarning}" Stroke="{DynamicResource QWarning}" />
+                    <TextBlock Text="One more part is needed: FreeRDP" FontWeight="SemiBold" />
+                  </StackPanel>
+                  <TextBlock Text="It draws each Windows program as a window of this desktop. Installing it takes your password once."
+                             Classes="muted" TextWrapping="Wrap" IsVisible="{Binding CanInstallFreeRdp}" />
+                  <TextBlock Text="It draws each Windows program as a window of this desktop. Install it with:" Classes="muted" TextWrapping="Wrap" IsVisible="{Binding ShowFreeRdpCommand}" />
+                  <SelectableTextBlock Text="{Binding FreeRdpMissing}" FontFamily="monospace" IsVisible="{Binding ShowFreeRdpCommand}" />
+                  <ProgressBar IsIndeterminate="True" Height="4" IsVisible="{Binding InstallingFreeRdp}" />
+                </StackPanel>
+                <Button x:Name="InstallFreeRdp" Grid.Column="1" Classes="primary" Content="Install FreeRDP" VerticalAlignment="Center"
+                        Command="{Binding InstallFreeRdpCommand}" IsVisible="{Binding CanInstallFreeRdp}" IsEnabled="{Binding !InstallingFreeRdp}"
+                        ToolTip.Tip="Installs your distribution's FreeRDP package; your password is asked for once" />
+              </Grid>
+            </Border>
+
+            <Border x:Name="WindowsAppsProblem" Classes="card problem" IsVisible="{Binding HasProblem}">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Path Classes="icon" Data="{StaticResource IconWarning}" Stroke="{DynamicResource QWarning}" VerticalAlignment="Top" Margin="0,2,0,0" />
+                <SelectableTextBlock Text="{Binding Problem}" TextWrapping="Wrap" />
+              </StackPanel>
+            </Border>
+
+            <StackPanel Spacing="10" IsVisible="{Binding HasList}">
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <TextBox x:Name="WindowsAppsSearch" Text="{Binding Search}" PlaceholderText="Find a program" />
+                <TextBlock Grid.Column="1" Text="{Binding CountText}" Classes="muted" VerticalAlignment="Center" />
+              </Grid>
+              <ItemsControl x:Name="WindowsAppsList" ItemsSource="{Binding Apps}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:WindowsAppItem">
+                    <Border Classes="card appTile" Width="300" Margin="0,0,10,10" Padding="14,12">
+                      <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="10">
+                        <Panel Width="40" Height="40" Grid.RowSpan="1">
+                          <Image Source="{Binding Icon}" Width="40" Height="40" IsVisible="{Binding HasIcon}" RenderOptions.BitmapInterpolationMode="HighQuality" />
+                          <Path Classes="icon" Data="{StaticResource IconApps}" Width="28" Height="28" IsVisible="{Binding !HasIcon}" />
+                        </Panel>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                          <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}" />
+                          <TextBlock Text="{Binding Kind}" Classes="muted" FontSize="{DynamicResource QFontSmall}" TextTrimming="PathSegmentEllipsis" ToolTip.Tip="{Binding Kind}" />
+                        </StackPanel>
+                        <Grid Grid.Row="1" Grid.ColumnSpan="2" ColumnDefinitions="Auto,*">
+                          <Button Classes="primary compact" Command="{Binding $parent[ItemsControl].((vm:WindowsAppsViewModel)DataContext).OpenCommand}" CommandParameter="{Binding}"
+                                  IsEnabled="{Binding !Opening}" ToolTip.Tip="Open it as its own window on this desktop (powers the machine on if needed)">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                              <Path Classes="icon" Data="{StaticResource IconOpen}" Width="13" Height="13" />
+                              <TextBlock Text="Open" />
+                            </StackPanel>
+                          </Button>
+                          <CheckBox Grid.Column="1" HorizontalAlignment="Right" IsChecked="{Binding InMenu}" Content="In app menu"
+                                    Command="{Binding $parent[ItemsControl].((vm:WindowsAppsViewModel)DataContext).ToggleMenuCommand}" CommandParameter="{Binding}"
+                                    ToolTip.Tip="Give it an entry in this computer's app menu, which opens it straight away" />
+                        </Grid>
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </StackPanel>
+        </TabItem>
       </TabControl>
     </StackPanel>
   </ScrollViewer>

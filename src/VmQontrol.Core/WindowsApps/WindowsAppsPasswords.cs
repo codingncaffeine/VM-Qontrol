@@ -61,7 +61,7 @@ public static class WindowsAppsPasswords
     /// stored or Windows refused it (asked at most twice). <paramref name="ask"/> gets the account and whether the last
     /// one was refused, and returns null when the person gave up.
     /// </summary>
-    public static async Task<WindowsAppsClient.OpenResult> OpenAsync(MachineConfig config, string machineDirectory, RunningMachine running, WindowsApp app,
+    public static async Task<WindowsAppsClient.OpenResult> OpenAsync(MachineConfig config, string machineDirectory, QontrolPaths paths, RunningMachine running, WindowsApp app,
         Func<string, bool, CancellationToken, Task<string?>> ask, CancellationToken ct)
     {
         string? given = null;
@@ -69,7 +69,7 @@ public static class WindowsAppsPasswords
         for (var round = 0; round < 3; round++)
         {
             var asked = false;
-            var result = await WindowsAppsClient.OpenAsync(config, running, app, async (account, token) =>
+            var result = await WindowsAppsClient.OpenAsync(config, paths, running, app, async (account, token) =>
             {
                 if (!refused && round == 0)
                 {
@@ -96,4 +96,46 @@ public static class WindowsAppsPasswords
     }
 
     private static string? ReadAccount(RunningMachine running) => WindowsAppsClient.ClientAccount(running.Paths);
+}
+
+/// <summary>Bringing a machine to the point where its Windows programs can open.</summary>
+public static class WindowsAppsPower
+{
+    /// <summary>
+    /// The running machine: started without a viewer when off (a suspended one carries on where it was), then waited on
+    /// until Windows' guest agent answers. <paramref name="progress"/> hears each step in words.
+    /// </summary>
+    public static async Task<(RunningMachine? Running, string? Why)> ReadyAsync(MachineConfig config, string machineDirectory, QontrolPaths paths,
+        Func<Hosts.HostCapabilities> host, IProgress<string> progress, CancellationToken ct)
+    {
+        if (!config.Guest.Os.StartsWith("windows", StringComparison.Ordinal))
+            return (null, $"{config.Name} is not a Windows machine.");
+        var running = MachineRunner.Find(config, paths);
+        if (running is null)
+        {
+            progress.Report(MachineSuspend.IsSuspended(machineDirectory) ? $"Resuming {config.Name}…" : $"Starting {config.Name}…");
+            try
+            {
+                running = await MachineRunner.StartAsync(config, machineDirectory, paths, host(), new StartOptions { Headless = true }, ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is IOException or InvalidOperationException or MachineBusyException)
+            {
+                return (null, $"{config.Name} could not start: {ex.Message}");
+            }
+        }
+
+        var agent = new GuestAgentClient(running.Paths.Agent);
+        var until = DateTime.UtcNow + TimeSpan.FromMinutes(4);
+        var said = false;
+        while (!await agent.PingAsync(TimeSpan.FromSeconds(3), ct).ConfigureAwait(false))
+        {
+            if (!MachineRunner.IsRunning(running)) return (null, $"{config.Name} stopped while Windows was starting.");
+            if (DateTime.UtcNow > until) return (null, "Windows' guest agent did not answer within four minutes. It comes with the guest tools (Settings, Guest tools).");
+            if (!said) progress.Report("Waiting for Windows…");
+            said = true;
+            await Task.Delay(TimeSpan.FromSeconds(2), ct).ConfigureAwait(false);
+        }
+
+        return (running, null);
+    }
 }

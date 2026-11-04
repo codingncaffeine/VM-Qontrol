@@ -278,7 +278,7 @@
             </ItemsControl.ItemTemplate>
           </ItemsControl>
           <TextBlock Text="{Binding Field}" FontWeight="SemiBold" />
-          <TextBox x:Name="PromptText" Text="{Binding Text}">
+          <TextBox x:Name="PromptText" Text="{Binding Text}" PasswordChar="{Binding SecretChar}" RevealPassword="False">
             <TextBox.KeyBindings>
               <KeyBinding Gesture="Enter" Command="{Binding ConfirmCommand}" />
             </TextBox.KeyBindings>

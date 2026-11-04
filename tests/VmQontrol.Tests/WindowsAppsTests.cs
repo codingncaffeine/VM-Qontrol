@@ -180,6 +180,52 @@ public sealed class WindowsAppsTests
         Assert.Null(WindowsAppsClient.EasyInstallPassword(config with { EasyInstall = null }, profile.Root, "tester"));
     }
 
+    /// <summary>
+    /// The menu entry follows the Desktop Entry spec: Exec quoted (a space, a dollar), then the string escapes; checked by
+    /// unquoting it the way the spec says a launcher does.
+    /// </summary>
+    [Fact]
+    public void A_menu_entry_quotes_its_program_as_the_desktop_entry_spec_says()
+    {
+        var config = new MachineConfig { Name = "Work; PC", Id = "0123456789abcdef0123456789abcdef", Guest = new GuestConfig { Os = "windows" } };
+        var app = new WindowsApp("Microsoft.Paint_8wekyb3d8bbwe!App", "Paint\nNew", null, "ef88144d7669.png");
+        var entry = WindowsAppsMenu.Entry(config, app, "/opt/VM Qontrol/$x/vmqontrol");
+        var exec = entry.Split('\n').Single(l => l.StartsWith("Exec=", StringComparison.Ordinal))[5..];
+
+        // The spec's string unescape, then its argument unquoting.
+        var unescaped = exec.Replace("\\\\", "\\", StringComparison.Ordinal);
+        var args = new List<string>();
+        var current = new System.Text.StringBuilder();
+        bool quoted = false, any = false;
+        for (var i = 0; i < unescaped.Length; i++)
+        {
+            var c = unescaped[i];
+            if (quoted && c == '\\' && i + 1 < unescaped.Length) { current.Append(unescaped[++i]); continue; }
+            if (c == '"') { quoted = !quoted; any = true; continue; }
+            if (c == ' ' && !quoted) { if (current.Length > 0 || any) args.Add(current.ToString()); current.Clear(); any = false; continue; }
+            current.Append(c);
+        }
+
+        if (current.Length > 0 || any) args.Add(current.ToString());
+        Assert.Equal(["/opt/VM Qontrol/$x/vmqontrol", WindowsAppsMenu.Argument, config.Id, app.Slug], args);
+        Assert.Contains("Name=Paint New\n", entry, StringComparison.Ordinal); // a line break in a name would end the entry: a space
+        Assert.Contains("Keywords=Windows;Work  PC;\n", entry, StringComparison.Ordinal);
+        Assert.Contains($"Icon={WindowsAppsMenu.EntryName(config, app)}\n", entry, StringComparison.Ordinal);
+        Assert.Contains("X-VMQontrol-Machine=0123456789abcdef0123456789abcdef\n", entry, StringComparison.Ordinal);
+    }
+
+    /// <summary>The one-prompt install runs the package manager itself (no shell), only on names from the table.</summary>
+    [Fact]
+    public void FreeRDP_installs_with_the_distributions_own_package_manager_and_nothing_else()
+    {
+        Assert.Equal(["/usr/bin/pacman", "-S", "--needed", "--noconfirm", "freerdp"], VmQontrol.Core.Hosts.PackageInstall.Command(VmQontrol.Core.Hosts.DistroFamily.Arch, "freerdp"));
+        Assert.Equal(["/usr/bin/env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y", "freerdp3-x11"],
+            VmQontrol.Core.Hosts.PackageInstall.Command(VmQontrol.Core.Hosts.DistroFamily.Debian, VmQontrol.Core.Hosts.Doctor.PackageNames(VmQontrol.Core.Hosts.DistroFamily.Debian, "freerdp")!));
+        Assert.Equal(["/sbin/apk", "add", "freerdp"], VmQontrol.Core.Hosts.PackageInstall.Command(VmQontrol.Core.Hosts.DistroFamily.Alpine, "freerdp"));
+        Assert.Null(VmQontrol.Core.Hosts.PackageInstall.Command(VmQontrol.Core.Hosts.DistroFamily.Arch, "freerdp; rm -rf /"));
+        Assert.Null(VmQontrol.Core.Hosts.PackageInstall.Command(VmQontrol.Core.Hosts.DistroFamily.Unknown, "freerdp"));
+    }
+
     [Fact]
     public void Windows_11_is_named_from_its_build()
     {

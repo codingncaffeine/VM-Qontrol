@@ -11,6 +11,14 @@ public sealed record QontrolPaths(string Config, string Data, string State, stri
 
     public string Logs => Path.Combine(State, "logs");
 
+    /// <summary>
+    /// Where this computer's app menu entries and their icons go (the XDG data home), or, for an isolated profile (a
+    /// trial or a test), a folder inside it: such a profile never changes the desktop.
+    /// </summary>
+    public string DesktopData => Isolated
+        ? Path.Combine(Data, "desktop")
+        : Environment.GetEnvironmentVariable("XDG_DATA_HOME") is { Length: > 0 } h ? h : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "share");
+
     public string SettingsFile => Path.Combine(Config, "settings.json");
 
     /// <summary>

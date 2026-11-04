@@ -38,6 +38,11 @@ public sealed partial class PromptViewModel(string title, IReadOnlyList<string> 
 
     public bool IsDanger { get; } = isDanger;
 
+    /// <summary>The answer is a password: shown as dots, never echoed.</summary>
+    public bool IsSecret { get; init; }
+
+    public char SecretChar => IsSecret ? '\u2022' : '\0';
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
     private string _text = text;
