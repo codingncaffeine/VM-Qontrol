@@ -8,7 +8,7 @@ namespace VmQontrol.Core.Import;
 /// </summary>
 public static class ForeignPaths
 {
-    private static readonly string[] DiskKinds = [".vmdk", ".vdi", ".vhd", ".vhdx", ".qcow2", ".qcow", ".img", ".raw", ".hdd", ".qed"];
+    private static readonly IReadOnlyList<string> DiskKinds = [.. ImportFormats.DiskExtensions, ".avhdx"];
     private static readonly string[] DiscKinds = [".iso"];
     private static readonly string[] SystemFolders = ["/etc", "/proc", "/sys", "/dev", "/boot", "/root", "/usr", "/bin", "/sbin", "/lib", "/lib64", "/var/log", "/var/spool", "/var/mail", "/var/cache", "/var/run"];
 

@@ -94,8 +94,12 @@ public sealed partial class ShellViewModel : ObservableObject
                     Wizard!.Step = 0;
                     tcs.SetResult(Wizard.UseIsoAsync(path));
                     return;
-                case Core.Media.DropKind.Import when Wizard is not null:
-                    Note("Close the New machine wizard first to import a machine.");
+                case Core.Media.DropKind.Import when Wizard is { ForExisting: true }:
+                    Note("Finish or close the Easy Install setup first, then drop the machine again.");
+                    break;
+                case Core.Media.DropKind.Import when Wizard is { } open:
+                    // A machine or a disk, not an installer: Import takes it from here.
+                    ImportFromWizard(open, path);
                     break;
                 case Core.Media.DropKind.Import:
                     OpenImport();
@@ -108,7 +112,7 @@ public sealed partial class ShellViewModel : ObservableObject
                     Note("An import is still copying; drop the file again when it has finished.");
                     break;
                 default:
-                    Note($"{Path.GetFileName(path)} is not something VM Qontrol opens: drop an installer disc (.iso), a machine from other software (.vmx, .vbox, .ova, .ovf) or a disk (.qcow2, .vmdk, .vdi, .vhdx).");
+                    Note($"{Path.GetFileName(path)} is not something VM Qontrol opens: drop an installer disc (.iso), a machine from other software ({Core.Import.ImportFormats.Names(Core.Import.ImportFormats.MachineExtensions)}) or a disk ({Core.Import.ImportFormats.Names(Core.Import.ImportFormats.DiskExtensions)}).");
                     break;
             }
 
@@ -789,6 +793,20 @@ public sealed partial class ShellViewModel : ObservableObject
             if (Wizard == wizard) Wizard = null;
         });
         Wizard = wizard;
+    }
+
+    /// <summary>
+    /// A machine file or disk given to the wizard (its disc box, or dropped on it): the wizard closes and Import opens
+    /// with the file read (or, for null, the machines virt-manager and GNOME Boxes keep, listed).
+    /// </summary>
+    public void ImportFromWizard(NewMachineViewModel wizard, string? path)
+    {
+        if (Wizard != wizard) return;
+        Wizard = null;
+        OpenImport();
+        if (ImportPage is not { } import) return;
+        if (path is null) import.LoadDomainsCommand.Execute(null);
+        else _ = import.ReadAsync(path);
     }
 
     /// <summary>The wizard's Easy Install pages for a machine that exists and is not installed yet.</summary>

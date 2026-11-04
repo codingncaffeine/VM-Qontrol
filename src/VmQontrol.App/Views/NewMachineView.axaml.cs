@@ -14,7 +14,7 @@ public partial class NewMachineView : UserControl
         InitializeComponent();
         this.FindControl<Button>("ChooseIso")!.Click += async (_, _) =>
         {
-            if (await PickFileAsync("Choose an installer disc image") is { } path && DataContext is NewMachineViewModel vm) await vm.UseIsoAsync(path);
+            if (await PickFileAsync("Choose an installer disc image") is { } path && DataContext is NewMachineViewModel vm) await vm.UseFileAsync(path);
         };
         this.FindControl<Button>("ChooseDrivers")!.Click += async (_, _) =>
         {
@@ -41,7 +41,7 @@ public partial class NewMachineView : UserControl
         drop.AddHandler(DragDrop.DropEvent, async (_, e) =>
         {
             e.Handled = true;
-            if (e.DataTransfer.TryGetFiles()?.FirstOrDefault()?.TryGetLocalPath() is { } path && DataContext is NewMachineViewModel vm) await vm.UseIsoAsync(path);
+            if (e.DataTransfer.TryGetFiles()?.FirstOrDefault()?.TryGetLocalPath() is { } path && DataContext is NewMachineViewModel vm) await vm.UseFileAsync(path);
         });
     }
 

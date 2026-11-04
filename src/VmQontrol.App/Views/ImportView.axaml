@@ -7,7 +7,7 @@
     <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,20">
       <TextBlock Text="Import a machine" Classes="hero" />
       <TextBlock Classes="muted" TextWrapping="Wrap"
-                 Text="Bring over a machine from VMware Workstation, VirtualBox, an OVF appliance, virt-manager, or a disk on its own. The original is only read: VM Qontrol works on its own copy." />
+                 Text="Bring over a machine from VMware, VirtualBox, Hyper-V, an OVF appliance, virt-manager or GNOME Boxes, or a disk on its own. The original is only read: VM Qontrol works on its own copy." />
     </StackPanel>
 
     <!-- Cancel / Back / Import -->
@@ -33,7 +33,7 @@
               <StackPanel Spacing="6">
                 <Path Classes="icon" Data="{StaticResource IconFolder}" Width="20" Height="20" HorizontalAlignment="Left" />
                 <TextBlock Text="A machine's file" FontWeight="SemiBold" />
-                <TextBlock Classes="muted" TextWrapping="Wrap" Text="VMware .vmx, VirtualBox .vbox, an appliance .ova or .ovf, a libvirt .xml, or a VM Qontrol export (.tar)." />
+                <TextBlock Classes="muted" TextWrapping="Wrap" Text="VMware .vmx, VirtualBox .vbox, an appliance .ova or .ovf, Hyper-V .vmcx, a libvirt .xml, or a VM Qontrol export (.tar). Its settings come with it." />
               </StackPanel>
             </Button>
             <Button x:Name="FromVirtManager" Classes="choice" Command="{Binding LoadDomainsCommand}" IsEnabled="{Binding !Busy}">
@@ -47,7 +47,7 @@
               <StackPanel Spacing="6">
                 <Path Classes="icon" Data="{StaticResource IconDisk}" Width="20" Height="20" HorizontalAlignment="Left" />
                 <TextBlock Text="A disk on its own" FontWeight="SemiBold" />
-                <TextBlock Classes="muted" TextWrapping="Wrap" Text=".vmdk, .vdi, .vhdx, .qcow2 or .img: a new machine is made around it." />
+                <TextBlock Classes="muted" TextWrapping="Wrap" Text=".vmdk, .vdi, .vhdx, .vhd, .qcow2, .img or .raw: a new machine is made around it, its firmware and system recognized from the disk." />
               </StackPanel>
             </Button>
           </UniformGrid>

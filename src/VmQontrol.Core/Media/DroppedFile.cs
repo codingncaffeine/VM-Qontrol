@@ -15,14 +15,13 @@ public enum DropKind
 /// <summary>Sorts a dropped file by what VM Qontrol can do with it (Workstation and VirtualBox take the same drops).</summary>
 public static class DroppedFile
 {
-    private static readonly string[] ImportExtensions = [".vmx", ".vbox", ".ovf", ".ova", ".xml", ".vmdk", ".vdi", ".vhd", ".vhdx", ".qcow2", ".tar"];
 
     /// <summary>From the name alone, for the hint while dragging (no file is opened on the interface thread).</summary>
     public static DropKind Guess(string path)
     {
         var ext = Path.GetExtension(path).ToLowerInvariant();
         return ext == ".iso" ? DropKind.Installer
-            : ext == ".img" || ImportExtensions.Contains(ext) ? DropKind.Import
+            : Import.ImportFormats.AllExtensions.Contains(ext) ? DropKind.Import
             : DropKind.None;
     }
 

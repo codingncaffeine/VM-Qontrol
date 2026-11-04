@@ -56,23 +56,80 @@ public static class MachineImporter
 
             case ".xml":
                 return LibvirtReader.Read(File.ReadAllText(file), file);
+            case ".vmcx":
+                return HyperV(file);
             default:
                 return BareDisk(file);
         }
     }
 
-    /// <summary>A disk on its own: the system is the person's to choose; UEFI unless they say otherwise.</summary>
-    public static ForeignMachine BareDisk(string disk) => new()
+    /// <summary>
+    /// A Hyper-V export (Virtual Machines/ID.vmcx beside Virtual Hard Disks/). The .vmcx is a binary format only Hyper-V
+    /// reads, so its disk is brought in and recognized from its partitions (a generation 2 machine is UEFI, generation 1
+    /// BIOS, and the partition table shows which).
+    /// </summary>
+    public static ForeignMachine HyperV(string vmcx)
     {
-        Kind = "disk",
-        Source = disk,
-        Name = Path.GetFileNameWithoutExtension(disk),
-        Guest = new GuestConfig { Os = "linux" },
-        Firmware = FirmwareKind.Uefi,
-        Disks = [new ForeignDisk(disk, DiskBus.Auto)],
-        Nics = [new NicConfig()],
-        Notes = ["A disk on its own says nothing about the machine it came from: check the system and the firmware below. A disk from an older BIOS machine needs BIOS firmware to start."],
-    };
+        var export = Path.GetDirectoryName(Path.GetDirectoryName(Path.GetFullPath(vmcx))) ?? "";
+        var disks = Path.Combine(export, "Virtual Hard Disks");
+        var found = Directory.Exists(disks)
+            ? Directory.EnumerateFiles(disks).Where(f => Path.GetExtension(f).ToLowerInvariant() is ".vhdx" or ".vhd" or ".avhdx").Where(f => !f.EndsWith(".avhdx", StringComparison.OrdinalIgnoreCase)).Order().ToList()
+            : [];
+        if (found.Count == 0)
+            return new ForeignMachine
+            {
+                Kind = "hyper-v",
+                Source = vmcx,
+                Name = Path.GetFileName(export),
+                Problems = [$"No disk was found in {disks}. Choose the machine's .vhdx disk itself instead."],
+            };
+        var machine = BareDisk(found[0]);
+        machine.Notes.Insert(0, "Hyper-V keeps its settings in a format only Hyper-V reads, so the processors and memory are VM Qontrol's recommendations.");
+        return machine with
+        {
+            Kind = "hyper-v",
+            Source = vmcx,
+            Name = Path.GetFileName(export) is { Length: > 0 } n ? n : machine.Name,
+            Disks = [.. found.Select(d => new ForeignDisk(d, DiskBus.Auto))],
+        };
+    }
+
+    /// <summary>
+    /// A disk on its own: recognized from its partition table (DiskProbe): firmware and the kind of system; Windows 11
+    /// when it starts with UEFI (it needs it), Windows 10 otherwise. The person can change both on the review page.
+    /// </summary>
+    public static ForeignMachine BareDisk(string disk)
+    {
+        var facts = DiskProbe.Probe(disk);
+        var guest = facts?.Os switch
+        {
+            "windows" => new GuestConfig { Os = "windows", Release = facts.Uefi == false ? "10" : "11" },
+            "bsd" => new GuestConfig { Os = "freebsd" },
+            _ => new GuestConfig { Os = "linux" },
+        };
+        var firmware = facts?.Uefi == false ? FirmwareKind.Bios : FirmwareKind.Uefi;
+        var notes = new List<string>();
+        if (facts is null)
+            notes.Add("The disk could not be read to recognize it: check the system and the firmware at the top. A disk from an older BIOS machine needs BIOS firmware to start.");
+        else if (facts.Os is "macos")
+            notes.Add($"This looks like a macOS disk ({facts.Evidence}). macOS machines are made by the New machine wizard's download; this disk may not start here.");
+        else
+            notes.Add($"Recognized from the disk: {facts.Evidence}, so {(facts.Os switch { "windows" => "Windows", "linux" => "Linux", "bsd" => "a BSD", _ => "an unknown system" })}"
+                + $"{(facts.Uefi is { } u ? $" starting with {(u ? "UEFI" : "BIOS")}" : "")}. Change the system or the firmware at the top if that is wrong.");
+        return new ForeignMachine
+        {
+            Kind = "disk",
+            Source = disk,
+            Name = Path.GetFileNameWithoutExtension(disk),
+            Guest = guest,
+            Firmware = firmware,
+            Tpm = guest is { Os: "windows", Release: "11" },
+            SecureBoot = false,
+            Disks = [new ForeignDisk(disk, DiskBus.Auto)],
+            Nics = [new NicConfig()],
+            Notes = notes,
+        };
+    }
 
     /// <summary>Copies the machine into a new folder in <paramref name="libraryRoot"/>. Call on a worker.</summary>
     public static async Task<(MachineConfig Machine, string Directory)> ImportAsync(ForeignMachine f, string libraryRoot, IProgress<ImportProgress> progress, CancellationToken ct)

@@ -9,12 +9,12 @@ public partial class ImportView : UserControl
     {
         InitializeComponent();
         this.FindControl<Button>("PickMachineFile")!.Click += async (_, _) =>
-            await PickAsync("Choose the machine to import", "Machines", ["*.vmx", "*.vbox", "*.ovf", "*.ova", "*.xml", "*.tar"]);
+            await PickAsync("Choose the machine to import", "Machines", Core.Import.ImportFormats.Patterns(Core.Import.ImportFormats.MachineExtensions));
         this.FindControl<Button>("PickDisk")!.Click += async (_, _) =>
-            await PickAsync("Choose the disk to import", "Disks", ["*.vmdk", "*.vdi", "*.vhd", "*.vhdx", "*.qcow2", "*.img", "*.raw"]);
+            await PickAsync("Choose the disk to import", "Disks", Core.Import.ImportFormats.Patterns(Core.Import.ImportFormats.DiskExtensions));
     }
 
-    private async Task PickAsync(string title, string kind, string[] patterns)
+    private async Task PickAsync(string title, string kind, IReadOnlyList<string> patterns)
     {
         if (DataContext is not ImportViewModel vm) return;
         try

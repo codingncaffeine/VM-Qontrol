@@ -209,6 +209,20 @@ public sealed partial class NewMachineViewModel : ObservableObject
 
     public bool IsFromTemplate => Source == SourceKind.Template;
 
+    /// <summary>Hands a machine file or disk to Import (the wizard closes; Import shows what was recognized).</summary>
+    public void ImportExisting(string? path) => _shell.ImportFromWizard(this, path);
+
+    /// <summary>
+    /// A file chosen or dropped as the installer disc: an installer goes on as before, a machine file or a disk is
+    /// handed to Import instead of being refused (people reach for this box with whatever they have).
+    /// </summary>
+    public async Task UseFileAsync(string path)
+    {
+        var kind = await Task.Run(() => Core.Media.DroppedFile.Classify(path)).ConfigureAwait(false);
+        if (kind == Core.Media.DropKind.Import && !ForExisting) Ui.Post(() => ImportExisting(path));
+        else await UseIsoAsync(path).ConfigureAwait(false);
+    }
+
     // From a template
     /// <summary>The library's templates, newest list from the shell when the wizard opened.</summary>
     public IReadOnlyList<MachineViewModel> Templates { get; }
