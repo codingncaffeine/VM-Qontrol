@@ -23,7 +23,7 @@
     <Company>VM Qontrol</Company>
     <Authors>codingncaffeine</Authors>
     <Copyright>Copyright (C) 2026 VM Qontrol contributors</Copyright>
-    <VersionPrefix>0.0.6</VersionPrefix>
+    <VersionPrefix>0.0.7</VersionPrefix>
   </PropertyGroup>
 
   <!-- VM Qontrol runs QEMU/KVM and is Linux-only (glibc and musl): Unix-only APIs need no per-call guards. -->

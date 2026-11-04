@@ -17,6 +17,9 @@
   <developer id="io.github.codingncaffeine"><name>codingncaffeine</name></developer>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="0.0.7" date="2026-11-03">
+      <description><p>Windows programs open as their own windows on this desktop (Pro, Enterprise and Education, through FreeRDP), downloads from Ubuntu, Debian, Fedora and Alpine are checked against their publishers' signatures, a bare disk is recognized from its partitions on import, and Hyper-V exports can be brought in.</p></description>
+    </release>
     <release version="0.0.6" date="2026-11-03">
       <description><p>Shared folders that appear in the machine by themselves (a drive in Windows, /mnt/shared in Linux), ready-made Linux machines from cloud images in seconds, machines saved when the computer shuts down, opening a machine's disk on this computer, a disks and discs manager, a tray icon, and a viewer that reopens at its last size.</p></description>
     </release>
