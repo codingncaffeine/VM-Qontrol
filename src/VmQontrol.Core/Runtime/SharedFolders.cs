@@ -15,6 +15,9 @@ public sealed record SharesReport(DateTimeOffset At, string Summary, bool Done, 
 {
     /// <summary>The guest user the files should belong to, as the guest reported it (Linux).</summary>
     public uint? Owner { get; init; }
+
+    /// <summary>The guest is Windows (its setup is not repeated within one power on).</summary>
+    public bool Windows { get; init; }
 }
 
 /// <summary>
@@ -241,9 +244,15 @@ public static class SharedFolders
             if (await agent.PingAsync(TimeSpan.FromSeconds(3), ct).ConfigureAwait(false))
             {
                 var report = await ConnectAsync(agent, shares, paths, ct, account).ConfigureAwait(false);
+                if (!report.Done)
+                {
+                    await Task.Delay(Poll, ct).ConfigureAwait(false);
+                    continue;
+                }
+
                 // A first boot may still be setting itself up (cloud-init starts the guest's own mounter after the agent
                 // answers): a folder not there yet is looked at again for a few minutes.
-                for (var retry = 0; retry < 18 && report.Shares.Any(x => x.Where is null) && MachineRunner.IsRunning(running); retry++)
+                for (var retry = 0; retry < 18 && !report.Windows && report.Shares.Any(x => x.Where is null) && MachineRunner.IsRunning(running); retry++)
                 {
                     await Task.Delay(Poll * 2.5, ct).ConfigureAwait(false);
                     report = await ConnectAsync(agent, shares, paths, ct, account).ConfigureAwait(false);
@@ -279,11 +288,14 @@ public static class SharedFolders
     public static async Task<SharesReport> ConnectAsync(GuestAgentClient agent, IReadOnlyList<ShareConfig> shares, QontrolPaths paths, CancellationToken ct, string? account = null)
     {
         var os = await agent.OsInfoAsync(TimeSpan.FromSeconds(10), ct).ConfigureAwait(false);
-        var id = os?["id"].Str() ?? "";
-        var kernel = os?["kernel-release"].Str() ?? "";
-        if (id == "mswindows") return await ConnectWindowsAsync(agent, shares, paths, ct).ConfigureAwait(false);
+        // No answer is not "Linux": the guest is busy or going down; the caller asks again.
+        if (os is null) return new SharesReport(DateTimeOffset.Now, "Waiting for the guest tools to answer in the machine.", false,
+            [.. shares.Select(s => new ShareState(s.Tag, DisplayName(s), null, "waiting for the guest tools"))]);
+        var id = os["id"].Str() ?? "";
+        var kernel = os["kernel-release"].Str() ?? "";
+        if (id == "mswindows") return await ConnectWindowsAsync(agent, shares, paths, ct).ConfigureAwait(false) with { Windows = true };
         if (id is "freebsd" or "netbsd" or "openbsd")
-            return Failed(shares, $"This system ({os?["pretty-name"].Str() ?? id}) has no virtio-fs support; the folders cannot appear in it.");
+            return Failed(shares, $"This system ({os["pretty-name"].Str() ?? id}) has no virtio-fs support; the folders cannot appear in it.");
         // Linux (every distribution's agent reports its os-release ID; an agent too old to report one runs Linux too).
         return await ConnectLinuxAsync(agent, shares, kernel, account, ct).ConfigureAwait(false);
     }
@@ -454,10 +466,10 @@ public static class SharedFolders
 
             # Mounted now and at every start (the launcher service may start after the task: it is waited for).
             $mount = @(
-                '$launchctl = ' + "'$launchctl'",
+                ('$launchctl = ' + "'$launchctl'"),
                 'for ($t = 0; $t -lt 60 -and (Get-Service WinFsp.Launcher -ErrorAction SilentlyContinue).Status -ne ''Running''; $t++) { Start-Service WinFsp.Launcher -ErrorAction SilentlyContinue; Start-Sleep 1 }',
                 ('foreach ($line in Get-Content ''' + $dir + '\shares.txt'') { $p = $line -split '' ''; & $launchctl start virtiofs "vmq$($p[1])" $p[0] "$($p[1]):" | Out-Null }')
-            )
+            ) # end of the mount script
             Set-Content "$dir\mount-shares.ps1" $mount
             $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$dir\mount-shares.ps1`""
             $trigger = New-ScheduledTaskTrigger -AtStartup

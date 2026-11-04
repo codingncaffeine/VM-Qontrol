@@ -64,6 +64,34 @@ public sealed class SharedFolderTests
         var output = await p.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken) + await p.StandardError.ReadToEndAsync(TestContext.Current.CancellationToken);
         await p.WaitForExitAsync(TestContext.Current.CancellationToken);
         Assert.True(p.ExitCode == 0, output);
+
+        // The mount script the setup writes at run time: built by PowerShell itself, three lines, and it parses too
+        // (a comma binding tighter than + once glued it into one line that never ran).
+        var setup = SharedFolders.WindowsScript([new ShareConfig { Path = "/home/ada/Work", Tag = "work" }]);
+        var from = setup.IndexOf("$mount = @(", StringComparison.Ordinal);
+        var to = setup.IndexOf("# end of the mount script", StringComparison.Ordinal);
+        var built = Path.Combine(profile.Root, "mount-shares.ps1");
+        var builder = Path.Combine(profile.Root, "build-mount.ps1");
+        await File.WriteAllTextAsync(builder, "$launchctl = 'C:\\W\\launchctl-x64.exe'; $dir = 'C:\\ProgramData\\VMQontrol'\n" + setup[from..to]
+            + "\nSet-Content $env:VMQ_OUT $mount\n", TestContext.Current.CancellationToken);
+        var run = new ProcessStartInfo(pwsh) { RedirectStandardOutput = true, RedirectStandardError = true };
+        foreach (var a in new[] { "-NoProfile", "-NonInteractive", "-File", builder }) run.ArgumentList.Add(a);
+        run.Environment["VMQ_OUT"] = built;
+        using (var b = Process.Start(run)!)
+        {
+            var said = await b.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken) + await b.StandardError.ReadToEndAsync(TestContext.Current.CancellationToken);
+            await b.WaitForExitAsync(TestContext.Current.CancellationToken);
+            Assert.True(b.ExitCode == 0, said);
+        }
+
+        var lines = (await File.ReadAllLinesAsync(built, TestContext.Current.CancellationToken)).Where(l => l.Trim().Length > 0).ToList();
+        Assert.Equal(3, lines.Count);
+        Assert.StartsWith("$launchctl = 'C:\\W\\launchctl-x64.exe'", lines[0], StringComparison.Ordinal);
+        start.Environment["VMQ_PS1"] = built;
+        using var q = Process.Start(start)!;
+        var parsed = await q.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken) + await q.StandardError.ReadToEndAsync(TestContext.Current.CancellationToken);
+        await q.WaitForExitAsync(TestContext.Current.CancellationToken);
+        Assert.True(q.ExitCode == 0, parsed);
     }
 
     public static TheoryData<string> Images => [.. CloudImages.All.Select(i => i.Id)];
