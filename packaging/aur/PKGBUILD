@@ -3,7 +3,7 @@
 # At release: set pkgver, put the tarball's sha256 in sha256sums, then push this and the generated .SRCINFO
 # (makepkg --printsrcinfo > .SRCINFO) to ssh://aur@aur.archlinux.org/vm-qontrol-bin.git
 pkgname=vm-qontrol-bin
-pkgver=0.0.5
+pkgver=0.0.6
 pkgrel=1
 pkgdesc="Create, run and fine-tune QEMU/KVM virtual machines: guided setup, unattended installs, settings that explain themselves"
 arch=('x86_64')

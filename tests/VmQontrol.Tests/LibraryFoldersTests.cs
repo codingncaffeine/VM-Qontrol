@@ -142,6 +142,9 @@ public sealed class LibraryFoldersTests
         Assert.Equal(seen.filed, seen.opened);
         Assert.Equal(["haiku", "[Unix]", "freebsd", "linux", "[Retro]"], seen.outOfFolder);
         Assert.Equal(["freebsd", "haiku", "linux", "[Old]"], seen.deleted);
+        // Folder changes are saved on a worker (the app waits for them as it exits): so does the test, or a busy computer
+        // reads the file before the last save lands.
+        Assert.True(AppSettings.WaitForSaves(TimeSpan.FromSeconds(5)));
         var saved = AppSettings.Load(profile.Paths);
         Assert.Equal(["Old"], saved.Groups);
         Assert.Empty(saved.GroupOf);

@@ -2,7 +2,7 @@
 # Maintainer: codingncaffeine <codingncaffeine@users.noreply.github.com>
 # Needs Alpine 3.23 or later (dotnet10-sdk is not in 3.22).
 pkgname=vm-qontrol
-pkgver=0.0.5
+pkgver=0.0.6
 pkgrel=0
 pkgdesc="Create, run and fine-tune QEMU/KVM virtual machines"
 url="https://github.com/codingncaffeine/VM-Qontrol"

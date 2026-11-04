@@ -172,6 +172,8 @@ public static class MachineRunner
             FirmwareMenu = options.FirmwareSetup && m.Firmware.Kind == FirmwareKind.Bios && m.Guest.Os != "macos",
             InstallSignal = Install.InstallSignal.Prepare(m, machineDirectory),
             ShareOwner = SharedFolders.ReadOwner(machineDirectory) ?? SharedFolders.GuestOwner,
+            // Tests: VMQONTROL_VIRTIOFSD_TRANSLATE=0 takes the older virtiofsd's way (no --translate-uid: Ubuntu 24.04's 1.10).
+            VirtiofsdTranslates = Environment.GetEnvironmentVariable("VMQONTROL_VIRTIOFSD_TRANSLATE") == "0" ? false : null,
         };
         var launch = QemuCommandBuilder.Build(m, context);
         if (launch.Errors.Count > 0) throw new StartRefusedException(launch.Errors);

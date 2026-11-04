@@ -47,16 +47,19 @@ open the app's welcome page, to see what is missing and the command that install
   shut-down dialog names them; after sleep, the guests' clocks are set right. No root and no system service.
 - **Open a machine's disk** in the file manager while it is off, read-only by default, through libguestfs: copy files
   out, or fix a machine that will not boot. The disk is read in a small helper machine, never by this computer's kernel.
+- **Shared folders that set themselves up**: share a folder and it appears in the machine on its own, a drive named
+  after it in Windows (WinFsp is installed for you) or `/mnt/shared/NAME` in Linux, mounted again at every start.
+  Files belong to the machine's account inside it and to you on this computer.
 - **Devices**: USB passthrough from a toolbar menu (no password), host drives (a disk, a partition or a CD/DVD drive,
-  read-only unless you allow writing), host serial ports, shared folders, PCI passthrough with CPU pinning and huge
-  pages for gaming and GPU work.
+  read-only unless you allow writing), host serial ports, PCI passthrough with CPU pinning and huge pages for gaming
+  and GPU work.
 - **Networking**: NAT with port forwarding and one-click SSH, bridged networking, private networks between machines
   with their own addresses (a virtual network editor), a network cable switch and traffic capture.
 - **Import** from quickemu, VMware, VirtualBox, OVA and libvirt; **export** as a portable folder, one .tar file, or a
   quickemu .conf.
 - **Keyboard first**: Ctrl+K finds every action by name; Ctrl+? lists the shortcuts (Ctrl+N new machine, Ctrl+B power
   on, Ctrl+E shut down, Ctrl+D settings, Ctrl+M snapshot…).
-- **`vmq`**, a command-line tool on the same engine: create, clone, start, shut down, suspend, import, run programs in a guest, copy files.
+- **`vmq`**, a command-line tool on the same engine: create, clone, start, shut down, suspend, import, share folders, run programs in a guest, copy files.
 - **A host check** that names anything missing and the command that installs it on your distribution.
 
 New here? [Getting started](docs/getting-started.md), [Troubleshooting](docs/troubleshooting.md), and the

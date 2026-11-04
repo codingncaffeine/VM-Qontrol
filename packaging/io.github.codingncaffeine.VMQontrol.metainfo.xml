@@ -17,6 +17,9 @@
   <developer id="io.github.codingncaffeine"><name>codingncaffeine</name></developer>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="0.0.6" date="2026-11-03">
+      <description><p>Shared folders that appear in the machine by themselves (a drive in Windows, /mnt/shared in Linux), ready-made Linux machines from cloud images in seconds, machines saved when the computer shuts down, opening a machine's disk on this computer, a disks and discs manager, a tray icon, and a viewer that reopens at its last size.</p></description>
+    </release>
     <release version="0.0.5" date="2026-11-03">
       <description><p>The first release: create, run and fine-tune QEMU/KVM machines with unattended installs, snapshots, USB and device handover, library folders and keyboard shortcuts.</p></description>
     </release>
