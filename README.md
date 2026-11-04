@@ -62,7 +62,8 @@ open the app's welcome page, to see what is missing and the command that install
 - **`vmq`**, a command-line tool on the same engine: create, clone, start, shut down, suspend, import, share folders, run programs in a guest, copy files.
 - **A host check** that names anything missing and the command that installs it on your distribution.
 
-New here? [Getting started](docs/getting-started.md), [Troubleshooting](docs/troubleshooting.md), and the
+New here? [Getting started](https://github.com/codingncaffeine/VM-Qontrol/wiki/Getting-Started),
+[Troubleshooting](https://github.com/codingncaffeine/VM-Qontrol/wiki/Troubleshooting), and the rest of the
 [wiki](https://github.com/codingncaffeine/VM-Qontrol/wiki).
 
 ## Requirements (Linux)

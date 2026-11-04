@@ -104,7 +104,7 @@ public static class Shortcuts
         return false;
     }
 
-    public const string HelpUrl = "https://github.com/codingncaffeine/VM-Qontrol/blob/main/docs/getting-started.md";
+    public const string HelpUrl = "https://github.com/codingncaffeine/VM-Qontrol/wiki/Getting-Started";
 
     private static void OpenHelp() => _ = Task.Run(() =>
     {
