@@ -306,7 +306,7 @@ public sealed class WizardWindowTests
             wizard.Locale = "en-US";
             Ui.Click(window, Named<RadioButton>(window, "SourceDownload"));
             Ui.PumpUntil(() => wizard.Systems.Any(s => s.Os == "windows"), "the catalog", 10);
-            Assert.Equal(["Windows", "Ubuntu"], wizard.Systems.Select(s => s.DisplayName)); // quickget's Windows is replaced, not doubled
+            Assert.Equal(["Windows", "Omarchy", "Ubuntu"], wizard.Systems.Select(s => s.DisplayName)); // quickget's Windows is replaced, not doubled; Omarchy is our own
             Assert.Equal("windows", wizard.Systems[0].Os); // the most asked-for download comes first
             var windows = wizard.Systems.Single(s => s.Os == "windows");
             Assert.Equal(["11", "10"], windows.Entries.Select(e => e.Release));

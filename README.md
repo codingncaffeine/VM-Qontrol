@@ -31,9 +31,9 @@ open the app's welcome page, to see what is missing and the command that install
   search, and power a whole folder on or off.
 - **A New machine wizard**: your own ISO, or a download. Windows 10 and 11 come straight from Microsoft's own catalog
   (the one its Media Creation Tool uses, checked against Microsoft's checksums and made into an installer disc);
-  other systems come from the quickget catalog; **Ready-made Linux** makes an Ubuntu, Debian, Fedora or Alpine machine
+  Omarchy comes from iso.omarchy.org; other systems come from the quickget catalog; **Ready-made Linux** makes an Ubuntu, Debian, Fedora or Alpine machine
   from its cloud image in seconds, with your account and SSH key. Downloads are checked against their publishers'
-  checksums, and against their signatures where the publisher signs (Ubuntu, Debian, Fedora, Alpine); every source is
+  checksums, and against their signatures where the publisher signs (Ubuntu, Debian, Fedora, Alpine, Omarchy); every source is
   listed on the wiki's [Download Sources and Verification](https://github.com/codingncaffeine/VM-Qontrol/wiki/Download-Sources-and-Verification)
   page. The system is detected from the media, and **Easy Install** sets up
   Windows and the major Linux distributions unattended. "Lean Windows" leaves out the bundled promotions, games and

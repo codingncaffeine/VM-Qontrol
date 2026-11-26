@@ -1,4 +1,5 @@
 using VmQontrol.Core.Downloads;
+using VmQontrol.Core.Media;
 
 namespace VmQontrol.Tests;
 
@@ -116,7 +117,7 @@ public sealed class SignatureTests
         foreach (var p in Signatures.All)
         {
             var binary = Signatures.Dearmor(Signatures.KeyText(p));
-            Assert.True(binary.Length > 500, p.KeyFile);
+            Assert.True(binary.Length > 300, p.KeyFile); // an ed25519 key with its user id and subkey is about 400 bytes
             Assert.True((binary[0] & 0xFC) == 0x98 || binary[0] == 0xC6, p.KeyFile); // an OpenPGP public-key packet (tag 6, old or new format)
             Assert.NotEmpty(p.Fingerprints);
         }
@@ -149,6 +150,20 @@ public sealed class SignatureTests
     /// copy, Debian unsigned), and the kept Ubuntu, Debian and Fedora installer discs in scratch/images checked against the
     /// signed lists where quickget downloads them, with a control: a disc under another disc's name is refused.
     /// </summary>
+    /// <summary>The wizard's Omarchy download for real: latest version, the disc, its .sha256 and Omarchy's signature.</summary>
+    [Trait("Tier", "Guest")]
+    [Fact]
+    public async Task The_real_Omarchy_disc_downloads_and_checks_out()
+    {
+        Assert.SkipWhen(Environment.GetEnvironmentVariable("VMQONTROL_OMARCHY_PROOF") != "1", "set VMQONTROL_OMARCHY_PROOF=1 (about 6.5 GB)");
+        Assert.SkipWhen(NoGpgv, "gpgv is not installed");
+        var library = Path.Combine(TestProfile.ScratchRoot, "images", "omarchy");
+        var iso = await OmarchyDownload.GetDiscAsync(library, new Progress<DownloadProgress>(), TestContext.Current.CancellationToken);
+        Assert.Matches(@"omarchy-[0-9.]+-x86\.iso$", iso);
+        Assert.True(new FileInfo(iso).Length > 1L << 30);
+        Assert.NotNull(IsoVolume.Read(iso));
+    }
+
     [Trait("Tier", "Guest")]
     [Fact]
     public async Task Real_downloads_check_out_against_their_publishers_signatures()

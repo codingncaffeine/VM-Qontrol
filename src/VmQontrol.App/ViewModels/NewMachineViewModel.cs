@@ -219,8 +219,9 @@ public sealed partial class NewMachineViewModel : ObservableObject
     public async Task UseFileAsync(string path)
     {
         var kind = await Task.Run(() => Core.Media.DroppedFile.Classify(path)).ConfigureAwait(false);
+        // The classification finished on a worker: everything after it touches the wizard, so it goes back to the window.
         if (kind == Core.Media.DropKind.Import && !ForExisting) Ui.Post(() => ImportExisting(path));
-        else await UseIsoAsync(path).ConfigureAwait(false);
+        else await (await Ui.InvokeAsync(() => UseIsoAsync(path)).ConfigureAwait(false)).ConfigureAwait(false);
     }
 
     // From a template
@@ -658,6 +659,10 @@ public sealed partial class NewMachineViewModel : ObservableObject
                 return new DiscDetection(false, GuestMapping.ToGuest(match.Os), $"{match.Os.Name}.{also}", [], match.Os.Name, linux);
             }
 
+            // Omarchy (Arch Linux underneath) labels its discs OMARCHY_<year><month>; osinfo-db has no entry for it.
+            if (volume.VolumeId.StartsWith("OMARCHY", StringComparison.OrdinalIgnoreCase))
+                return new DiscDetection(false, new GuestConfig { Os = "linux", OsInfoId = "http://archlinux.org/archlinux/rolling" }, "Omarchy, built on Arch Linux.", [], "Omarchy", linux);
+
             return new DiscDetection(false, new GuestConfig { Os = "linux" }, $"A disc labeled \"{volume.VolumeId}\". Its system is not known; choose it on the next page.", [], volume.VolumeId, linux);
         }
     }
@@ -725,7 +730,7 @@ public sealed partial class NewMachineViewModel : ObservableObject
         var icon = quickget.FirstOrDefault(s => s.Os == "windows")?.IconUrl ?? "";
         var windows = new CatalogSystem("windows", "Windows", icon,
             [new CatalogEntry("Windows", "windows", "11", "", icon, FromMicrosoft: true), new CatalogEntry("Windows", "windows", "10", "", icon, FromMicrosoft: true)]);
-        var systems = quickget.Where(s => s.Os != "windows").OrderBy(s => s.DisplayName, StringComparer.CurrentCultureIgnoreCase).Prepend(windows).ToList();
+        var systems = quickget.Where(s => s.Os is not ("windows" or "omarchy")).Append(OmarchyDownload.CatalogSystem).OrderBy(s => s.DisplayName, StringComparer.CurrentCultureIgnoreCase).Prepend(windows).ToList();
         Ui.Post(() =>
         {
             _allSystems = systems;
@@ -763,7 +768,7 @@ public sealed partial class NewMachineViewModel : ObservableObject
             _ => new GuestConfig { Os = "linux", Release = "" },
         };
         Detected(os, $"{value.DisplayName} {value.Label}, downloaded and checked by VM Qontrol.");
-        Name = $"{value.DisplayName} {value.Release}".Trim();
+        Name = value.Direct ? value.DisplayName : $"{value.DisplayName} {value.Release}".Trim();
         _microsoftFiles = [];
         Editions = [];
         WindowsDownloadNote = "";
@@ -917,6 +922,17 @@ public sealed partial class NewMachineViewModel : ObservableObject
                     Ui.Post(() => ProgressText = "Making the machine from the image…");
                     return (await CloudImages.CreateAsync(root, cloud, file, choices, token).ConfigureAwait(false)).Directory;
                 }).ConfigureAwait(false);
+            }
+            else if (Source == SourceKind.Download && Entry is { Direct: true })
+            {
+                // Omarchy's own disc, checked; from there the machine is made exactly as from a disc the person picked.
+                _download = new CancellationTokenSource();
+                var token = _download.Token;
+                var root = LibraryRoot;
+                var iso = await Task.Run(() => OmarchyDownload.GetDiscAsync(root, progress, token)).ConfigureAwait(false);
+                request = request with { InstallerIso = iso };
+                Ui.Post(() => ProgressText = "Creating the machine…");
+                dir = (await Task.Run(() => MachineFactory.Create(request)).ConfigureAwait(false)).Directory;
             }
             else if (Source == SourceKind.Download && Entry is { } entry)
             {

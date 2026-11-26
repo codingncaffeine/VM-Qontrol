@@ -46,6 +46,67 @@ public sealed class ImportFromWizardTests
 
     [Trait("Tier", "Window")]
     [Fact]
+    public async Task A_disc_image_chosen_in_the_wizard_is_read_without_a_crash()
+    {
+        using var profile = new TestProfile("wizard-iso");
+        Directory.CreateDirectory(profile.Paths.DefaultLibrary);
+        var iso = Path.Combine(profile.Root, "installer.iso");
+        VmQontrol.Core.Media.IsoWriter.Write(iso, "TESTDISC", new Dictionary<string, byte[]> { ["README.TXT"] = "x"u8.ToArray() });
+        var summary = await Ui.Run(() =>
+        {
+            var shell = new ShellViewModel(profile.Paths, AppSettings.Load(profile.Paths));
+            var window = new MainWindow { DataContext = shell, Width = 1320, Height = 900 };
+            window.Show();
+            _ = shell.StartAsync();
+            Ui.PumpUntil(() => shell.Welcome.Checked, "the host check");
+            Ui.Click(window, Named<Button>(window, "NewMachine"));
+            Ui.PumpUntil(() => shell.Wizard is not null, "the wizard");
+
+            // What "Choose disc image…" calls with the picked file: the classify runs on a worker, the wizard must
+            // still be changed on the window's thread (a worker setting IsoPath threw and closed the app).
+            var wizard = shell.Wizard!;
+            var task = wizard.UseFileAsync(iso);
+            Ui.PumpUntil(() => task.IsCompleted && !wizard.Detecting, "the disc read", 30);
+            if (task.Exception is { } ex) throw ex;
+            window.Close();
+            return (wizard.IsoPath, wizard.IsoSummary);
+        });
+
+        Assert.Equal(iso, summary.IsoPath);
+        Assert.Contains("TESTDISC", summary.IsoSummary, StringComparison.Ordinal);
+    }
+
+    [Trait("Tier", "Window")]
+    [Fact]
+    public async Task An_Omarchy_disc_is_named_by_its_label_whatever_the_file_is_called()
+    {
+        using var profile = new TestProfile("wizard-omarchy");
+        Directory.CreateDirectory(profile.Paths.DefaultLibrary);
+        var iso = Path.Combine(profile.Root, "my download.iso");
+        VmQontrol.Core.Media.IsoWriter.Write(iso, "OMARCHY_202611", new Dictionary<string, byte[]> { ["README.TXT"] = "x"u8.ToArray() }, keepLabelCase: true);
+        var seen = await Ui.Run(() =>
+        {
+            var shell = new ShellViewModel(profile.Paths, AppSettings.Load(profile.Paths));
+            var window = new MainWindow { DataContext = shell, Width = 1320, Height = 900 };
+            window.Show();
+            _ = shell.StartAsync();
+            Ui.PumpUntil(() => shell.Welcome.Checked, "the host check");
+            Ui.Click(window, Named<Button>(window, "NewMachine"));
+            Ui.PumpUntil(() => shell.Wizard is not null, "the wizard");
+            var wizard = shell.Wizard!;
+            var task = wizard.UseFileAsync(iso);
+            Ui.PumpUntil(() => task.IsCompleted && !wizard.Detecting, "the disc read", 30);
+            if (task.Exception is { } ex) throw ex;
+            window.Close();
+            return (wizard.IsoSummary, wizard.Name);
+        });
+
+        Assert.Equal("Omarchy, built on Arch Linux.", seen.IsoSummary);
+        Assert.Equal("Omarchy", seen.Name);
+    }
+
+    [Trait("Tier", "Window")]
+    [Fact]
     public async Task A_disk_in_the_wizards_disc_box_goes_to_import_recognized()
     {
         Assert.SkipWhen(!File.Exists(Sfdisk) || !File.Exists("/usr/bin/qemu-io"), "sfdisk and qemu-io are needed");

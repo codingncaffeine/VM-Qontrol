@@ -37,7 +37,10 @@ public static partial class Signatures
     /// <summary>The key Alpine's cloud page (https://alpinelinux.org/cloud/) names for its cloud images.</summary>
     public static readonly SigningPublisher AlpineCloud = new("Alpine", "alpine-cloud.asc", ["F26ADFADBAE702EF7AF637459DA7EF23BFFCDF22"]);
 
-    public static IReadOnlyList<SigningPublisher> All { get; } = [UbuntuCloud, UbuntuDiscs, Debian, Fedora, AlpineCloud];
+    /// <summary>Omarchy's release key, as its ISO README names it (signs each installer disc).</summary>
+    public static readonly SigningPublisher Omarchy = new("Omarchy", "omarchy.asc", ["40DFB630FF42BCFFB047046CF0134EE680CAC571"]);
+
+    public static IReadOnlyList<SigningPublisher> All { get; } = [UbuntuCloud, UbuntuDiscs, Debian, Fedora, AlpineCloud, Omarchy];
 
     /// <summary>The gpgv program; tests point it at a missing file to see the unchecked path.</summary>
     internal static string? GpgvOverride { get; set; }
