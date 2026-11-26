@@ -23,6 +23,9 @@ public sealed class LibraryMediaRow(MediaItem item)
 
     public bool IsDisc => Item.Kind == MediaKind.Disc;
 
+    /// <summary>Unused files, and discs a machine still holds (they come out of it, asked first).</summary>
+    public bool CanDelete => IsUnused || (IsInUse && IsDisc);
+
     public string StatusText => Item.Status switch { MediaStatus.Unused => "Unused", MediaStatus.Missing => "Missing", _ => "In use" };
 
     public string KindText => Item.Kind switch
@@ -100,6 +103,9 @@ public sealed partial class MediaViewModel : ObservableObject
     {
         Loading = true;
         var roots = _shell.LibraryRoots.ToList();
+        // Ready-made Linux keeps its downloaded cloud images here, outside the library: list them too.
+        var cloud = CloudImages.CacheFolder(_shell.Paths);
+        var scanRoots = roots.Append(cloud).ToList();
         var paths = _shell.Paths;
         var drivers = _shell.Settings.DriversIso;
         var items = await Task.Run(async () =>
@@ -108,7 +114,7 @@ public sealed partial class MediaViewModel : ObservableObject
             var shared = new List<string>();
             if (GuestToolsDownload.Existing(paths) is { } tools) shared.Add(tools);
             if (drivers is not null) shared.Add(drivers);
-            return await MediaInventory.ScanAsync(entries, roots, shared).ConfigureAwait(false);
+            return await MediaInventory.ScanAsync(entries, scanRoots, shared).ConfigureAwait(false);
         }).ConfigureAwait(false);
         Ui.Post(() =>
         {
@@ -134,6 +140,13 @@ public sealed partial class MediaViewModel : ObservableObject
     [RelayCommand]
     private async Task DeleteAsync(LibraryMediaRow row)
     {
+        if (row.IsInUse && row.IsDisc)
+        {
+            await _shell.DeleteDiscAsync(row.Item.Path).ConfigureAwait(false);
+            await RefreshAsync().ConfigureAwait(false);
+            return;
+        }
+
         if (!row.IsUnused) return;
         var notice = new NoticeViewModel($"Delete {row.Name}?",
             [$"No machine uses it; deleting frees {Formats.Bytes(row.Item.ActualBytes ?? 0)} on the drive. It cannot be undone.", row.Item.Path],

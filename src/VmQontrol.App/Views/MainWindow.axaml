@@ -460,7 +460,7 @@
                         <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6" VerticalAlignment="Top">
                           <Button Classes="tool" Content="Show" ToolTip.Tip="Open its folder in the file manager" IsVisible="{Binding !IsMissing}"
                                   Command="{Binding $parent[ItemsControl].((vm:MediaViewModel)DataContext).ShowInFolderCommand}" CommandParameter="{Binding}" />
-                          <Button Classes="tool danger" Content="Delete…" ToolTip.Tip="No machine uses it: delete it to free the drive (asks first)" IsVisible="{Binding IsUnused}"
+                          <Button Classes="tool danger" Content="Delete…" ToolTip.Tip="Delete it to free the drive (asks first; a disc comes out of the machines that hold it)" IsVisible="{Binding CanDelete}"
                                   Command="{Binding $parent[ItemsControl].((vm:MediaViewModel)DataContext).DeleteCommand}" CommandParameter="{Binding}" />
                         </StackPanel>
                       </Grid>

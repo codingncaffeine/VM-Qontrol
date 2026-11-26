@@ -36,7 +36,14 @@ public sealed partial class MediaRow(MediaConfig media) : ObservableObject
 
     public string FileName => Path.GetFileName(File);
 
-    partial void OnFileChanged(string value) => OnPropertyChanged(nameof(FileName));
+    /// <summary>An .iso disc image (not a cloud-init seed or a machine's own working file): one that can be deleted to free the drive.</summary>
+    public bool IsDiscFile => Role is MediaRole.Installer or MediaRole.Drivers && File.EndsWith(".iso", StringComparison.OrdinalIgnoreCase);
+
+    partial void OnFileChanged(string value)
+    {
+        OnPropertyChanged(nameof(FileName));
+        OnPropertyChanged(nameof(IsDiscFile));
+    }
 
     public MediaConfig ToConfig() => new() { Role = Role, File = File, Connect = Enum.Parse<Connect>(Connect.Value!) };
 
@@ -990,6 +997,15 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     [RelayCommand]
     private void RemoveMedia(MediaRow row) => Media.Remove(row);
+
+    /// <summary>Deletes the disc's file from the drive (asked first, with what is lost) and takes it out of the machine.</summary>
+    [RelayCommand]
+    private async Task DeleteDiscFileAsync(MediaRow row)
+    {
+        if (row.File.Length == 0) return;
+        var full = Path.IsPathRooted(row.File) ? row.File : Path.Combine(_machine.Folder, row.File);
+        if (await _machine.DeleteDiscAsync(full).ConfigureAwait(false)) Ui.Post(() => Media.Remove(row));
+    }
 
     /// <summary>Puts a disc in a drive; in a running machine the drive changes at once.</summary>
     public async Task ChangeDiscAsync(MediaRow row, string file)

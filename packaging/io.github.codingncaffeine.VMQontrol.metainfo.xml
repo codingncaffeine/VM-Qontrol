@@ -18,7 +18,7 @@
   <content_rating type="oars-1.1" />
   <releases>
     <release version="0.0.8" date="2026-11-25">
-      <description><p>Choosing an installer disc image in the New machine wizard no longer closes the app, and Omarchy can be downloaded from the wizard, checked against its published checksum and Omarchy's signature.</p></description>
+      <description><p>Choosing an installer disc image in the New machine wizard no longer closes the app, Omarchy can be downloaded from the wizard, checked against its published checksum and Omarchy's signature, and a disc image a machine was made from can be deleted from the machine's settings or from Disks and discs, which now also lists downloaded cloud images.</p></description>
     </release>
     <release version="0.0.7" date="2026-11-03">
       <description><p>Windows programs open as their own windows on this desktop (Pro, Enterprise and Education, through FreeRDP), downloads from Ubuntu, Debian, Fedora and Alpine are checked against their publishers' signatures, a bare disk is recognized from its partitions on import, and Hyper-V exports can be brought in.</p></description>

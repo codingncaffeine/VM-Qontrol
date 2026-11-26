@@ -464,7 +464,8 @@
                         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                           <Button Classes="tool" Content="Change disc…" Tag="change" />
                           <Button Classes="tool" Content="Eject" ToolTip.Tip="{Binding EjectTip}" Command="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).EjectCommand}" CommandParameter="{Binding}" />
-                          <Button Classes="tool danger" Content="Remove" Command="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).RemoveMediaCommand}" CommandParameter="{Binding}" />
+                          <Button Classes="tool danger" Content="Remove" ToolTip.Tip="Take the disc out of this machine; the file stays on the drive" Command="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).RemoveMediaCommand}" CommandParameter="{Binding}" />
+                          <Button Classes="tool danger" Content="Delete file…" ToolTip.Tip="Delete the disc image from the drive to free space (asks first)" IsVisible="{Binding IsDiscFile}" Command="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).DeleteDiscFileCommand}" CommandParameter="{Binding}" />
                         </StackPanel>
                       </Grid>
                     </Border>

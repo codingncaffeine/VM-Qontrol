@@ -126,4 +126,59 @@ public sealed class MediaWindowTests
         Assert.False(File.Exists(leftover));
         Assert.True(File.Exists(Path.Combine(web, "disk0.qcow2"))); // control: the machine's disk stays
     }
+
+    /// <summary>A downloaded installer disc a machine still holds: Delete… says what is lost, takes it out of the machine, deletes it.</summary>
+    [Trait("Tier", "Window")]
+    [Fact]
+    public async Task A_disc_a_machine_holds_is_deleted_after_a_warning_and_comes_out_of_the_machine()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var profile = new TestProfile("media-disc");
+        var lib = profile.Paths.DefaultLibrary;
+        var vm = Path.Combine(lib, "Omarchy");
+        Directory.CreateDirectory(vm);
+        Directory.CreateDirectory(Path.Combine(lib, ".discs"));
+        var iso = Path.Combine(lib, ".discs", "omarchy-4.5.0-x86.iso");
+        VmQontrol.Core.Media.IsoWriter.Write(iso, "OMARCHY_202611", new Dictionary<string, byte[]> { ["README.TXT"] = "x"u8.ToArray() });
+        await QemuImg.CreateAsync(Path.Combine(vm, "disk0.qcow2"), "qcow2", 20, ct: ct);
+        MachineStore.Save(new MachineConfig
+        {
+            Name = "Omarchy", Disks = [new DiskConfig { File = "disk0.qcow2" }],
+            Media = [new MediaConfig { Role = MediaRole.Installer, File = iso }],
+        }, Path.Combine(vm, "vm.json"));
+
+        var seen = await Ui.Run(() =>
+        {
+            var shell = new VmQontrol.App.ViewModels.ShellViewModel(profile.Paths, VmQontrol.Core.AppSettings.Load(profile.Paths)) { WatchUsb = false };
+            var window = new VmQontrol.App.Views.MainWindow { DataContext = shell, Width = 1320, Height = 900 };
+            window.Show();
+            _ = shell.StartAsync();
+            Ui.PumpUntil(() => shell.Machines.Count == 1, "the library");
+            Ui.Click(window, Named<Avalonia.Controls.Button>(window, "OpenMedia"));
+            Ui.PumpUntil(() => shell.Media is { Loading: false }, "the list", 20);
+            shell.Media!.Filter = VmQontrol.App.ViewModels.MediaViewModel.FilterOptions.First(o => o.Value == "disc");
+            Ui.Pump(0.3);
+            var rows = shell.Media.Shown.Select(r => $"{r.Name}|{r.StatusText}|{r.UsedByText}").ToList();
+            var delete = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(Named<Avalonia.Controls.ItemsControl>(window, "MediaList"))
+                .OfType<Avalonia.Controls.Button>().First(b => (b.Content as string) == "Delete…" && b.IsEffectivelyVisible);
+            Ui.Click(window, delete);
+            Ui.PumpUntil(() => shell.Notice is not null, "the warning");
+            var warning = string.Join(" ", shell.Notice!.Lines);
+            var stillThere = File.Exists(iso);
+            Ui.Click(window, Named<Avalonia.Controls.Button>(window, "NoticeConfirm"));
+            Ui.PumpUntil(() => !File.Exists(iso) && shell.Media is { Loading: false, Empty: true }, "the disc deleted", 20);
+            var media = shell.Machines[0].Machine.Media.Count;
+            window.Close();
+            return (rows, warning, stillThere, media);
+        });
+
+        Assert.Equal(["omarchy-4.5.0-x86.iso|In use|Used by Omarchy"], seen.rows);
+        Assert.Contains("download it again", seen.warning, StringComparison.Ordinal);
+        Assert.Contains("comes out of Omarchy", seen.warning, StringComparison.Ordinal);
+        Assert.True(seen.stillThere); // nothing deleted before the answer
+        Assert.False(File.Exists(iso));
+        Assert.Equal(0, seen.media);
+        Assert.Empty(MachineStore.Load(Path.Combine(vm, "vm.json")).Media); // saved, not only shown
+        Assert.True(File.Exists(Path.Combine(vm, "disk0.qcow2"))); // control: the machine's disk stays
+    }
 }

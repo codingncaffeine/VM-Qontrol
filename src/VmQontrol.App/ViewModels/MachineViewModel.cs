@@ -506,6 +506,23 @@ public sealed partial class MachineViewModel : ObservableObject
 
     public void OpenNetworks() => _shell.OpenNetworks();
 
+    private string FullPath(string file) => Path.GetFullPath(Path.IsPathRooted(file) ? file : Path.Combine(Folder, file));
+
+    /// <summary>The machine names this disc or disk image (a full path).</summary>
+    public bool UsesFile(string full) => Machine.Media.Any(m => m.File.Length > 0 && FullPath(m.File) == full);
+
+    /// <summary>Takes a disc image out of the machine's settings, saved with its history (the file is deleted by the caller). Call on a worker.</summary>
+    public void DropFile(string full)
+    {
+        var before = Machine;
+        var after = before with { Media = before.Media.Where(m => m.File.Length == 0 || FullPath(m.File) != full).ToList() };
+        var target = IsQuickemu ? Path.Combine(HistoryDirectory, MachineStore.FileName) : Path.Combine(Folder, MachineStore.FileName);
+        SettingsHistory.Save(before, after, target, HistoryDirectory);
+        Ui.Post(() => Reload(after));
+    }
+
+    public Task<bool> DeleteDiscAsync(string file) => _shell.DeleteDiscAsync(file);
+
     /// <summary>Saves whether the machine connects a host drive at power on, and whether it may write to it. Call on a worker.</summary>
     public void SetHostDrive(HostDrive drive, bool on, bool writable)
     {

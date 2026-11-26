@@ -1088,6 +1088,52 @@ public sealed partial class ShellViewModel : ObservableObject
         m.RevealGuestTools();
     }
 
+    /// <summary>
+    /// Deletes a disc image file, asked first: it comes out of every machine that names it, and the question says what
+    /// is lost (a download to repeat for the next machine of that system, an install that cannot finish without it).
+    /// Refused while a machine using it runs. True when the file is gone.
+    /// </summary>
+    public async Task<bool> DeleteDiscAsync(string file)
+    {
+        var full = Path.GetFullPath(file);
+        var users = Machines.Where(m => m.UsesFile(full)).ToList();
+        var name = Path.GetFileName(full);
+        if (users.FirstOrDefault(m => !m.IsOff) is { } running)
+        {
+            Show(new NoticeViewModel($"{name} is in use", [$"{running.Name} is running with this disc. Shut it down first, then delete the disc."], isError: true));
+            return false;
+        }
+
+        var size = File.Exists(full) ? new FileInfo(full).Length : 0;
+        var system = users.FirstOrDefault()?.GuestLabel;
+        var lines = new List<string>
+        {
+            $"This frees {Formats.Bytes(size)} on the drive. If you make another {system ?? "machine"} machine from this disc later, you will need to download it again (or choose another copy).",
+        };
+        if (users.Count > 0) lines.Add($"It comes out of {string.Join(", ", users.Select(u => u.Name))}; the machine{(users.Count == 1 ? "" : "s")} and {(users.Count == 1 ? "its" : "their")} disks are kept.");
+        foreach (var u in users.Where(u => u.Install.Stage == Core.Install.InstallStage.Installing))
+            lines.Add($"{u.Name} has not finished installing. Without this disc it cannot finish.");
+        lines.Add(full);
+        var notice = new NoticeViewModel($"Delete {name}?", lines, confirm: "Delete", isDanger: true);
+        Show(notice);
+        if (!await notice.Answer.ConfigureAwait(false)) return false;
+        try
+        {
+            await Task.Run(() =>
+            {
+                foreach (var u in users) u.DropFile(full);
+                File.Delete(full);
+            }).ConfigureAwait(false);
+            Ui.Post(() => Note($"{name} was deleted."));
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Ui.Post(() => Show(new NoticeViewModel($"{name} could not be deleted", [ex.Message], isError: true)));
+            return false;
+        }
+    }
+
     public void Note(string text)
     {
         Status = text;
